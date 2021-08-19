@@ -1,0 +1,8 @@
+/home/vchavauty/Documents/Code/Shrimp/build/CMakeFiles/rebuild_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/CMakeFiles/edit_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/CMakeFiles/rebuild_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/CMakeFiles/edit_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/CMakeFiles/Shrimp.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/Core/CMakeFiles/rebuild_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/Core/CMakeFiles/edit_cache.dir
+/home/vchavauty/Documents/Code/Shrimp/build/src/Core/CMakeFiles/Core.dir
