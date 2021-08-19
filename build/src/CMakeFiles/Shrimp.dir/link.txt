@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/Shrimp.dir/main.cpp.o -o Shrimp  Core/libCore.a 

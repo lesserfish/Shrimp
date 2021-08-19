@@ -1,2 +1,0 @@
-/usr/bin/ar qc libCore.a CMakeFiles/Core.dir/ArgsParser.cpp.o
-/usr/bin/ranlib libCore.a
