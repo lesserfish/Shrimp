@@ -3,21 +3,27 @@
 #include <vector>
 
 namespace Core{
+
+    enum parseOutput
+    {
+        po_SUCCESS,
+        po_MISSING_REQUIRED_PARAMETER,
+        po_ADDITIONAL_PARAMETER_GIVEN,
+        po_MISSING_INPUT
+    };
     class ArgsParser
     {
         public:
             ArgsParser();
             ~ArgsParser();
-            int Parse(int argc, char **argv);
-            void generateArgument(const char *&, const char*);
-            void generateArgument(const char *&, const char*, bool);
-            void generateArgument(const char *&, const char*, bool, bool, const char* = "");
+            void generateArgument(const char *&output, const char *name, bool required = false, bool requiresInput = true, const char *defaultInput = "");
+            int Parse(int argc, char **argv, bool assertArgument = false);
         private:
 
         struct Argument
         {
             const char *&output;
-            const char* value;
+            const char* name;
             bool required;
             bool requiresInput;
             const char *defaultInput;

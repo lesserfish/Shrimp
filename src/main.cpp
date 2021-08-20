@@ -10,11 +10,11 @@ void Test(int argc, char **argv)
 
     Core::ArgsParser argParser;
 
-    argParser.generateArgument(Windows, "-windows");
-    argParser.generateArgument(Linux, "-linux", false, false, "Maconha");
-    argParser.generateArgument(Test, "-test", true, true);
-
-    assert(argParser.Parse(argc, argv));
+    argParser.generateArgument(Windows, "-windows");  // required = false; requires input = true; default input = ""; 
+    argParser.generateArgument(Linux, "-linux", false, false, "Maconha"); // required = false; requires input = true; default input = "Maconha";
+    argParser.generateArgument(Test, "-test", true, true); // required = true; requires input = true; default input = "";
+    argParser.generateArgument(Windows, "-windows_overload", false, false, "Windows has been overloaded!");
+    assert(argParser.Parse(argc, argv, true) == Core::parseOutput::po_SUCCESS);
 
     std::cout << "Evaluating: " << std::endl;
     std::cout << "Windows: " << Windows << std::endl;
