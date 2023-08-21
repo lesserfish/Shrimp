@@ -1,7 +1,5 @@
 module Main where
-
-import Shrimp.Memory
-import Shrimp.CPU
+import Shrimp.Bus
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
