@@ -116,41 +116,46 @@ data ADDR_MODE =    IMPLICIT
 joinBytes :: Word8 -> Word8 -> Word16
 joinBytes hb lb = fromIntegral hb `shiftL` 8 .|. fromIntegral lb
 
-getAddr :: AbstractBus a => ADDR_MODE -> a -> MOS6502 -> (a, MOS6502, Word16)
-getAddr IMMEDIATE bus mos6502 = (out_bus, out_mos6502, addr) where
-    addr = pc . mosRegisters $ mos6502
-    out_mos6502 = mos6502 {mosRegisters = (mosRegisters mos6502){pc = addr + 1}}
-    out_bus = bus
+getAddr :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) Word16
 
-getAddr ABSOLUTE bus mos6502 = (out_bus, out_mos6502, addr) where
-    cPC = pc . mosRegisters $ mos6502
-    (bus', hb) = readByte cPC bus
-    (bus'', lb) = readByte (cPC + 1) bus'
-    addr = joinBytes hb lb 
-    mos6502' = mos6502 {mosRegisters = (mosRegisters mos6502){pc = addr + 2}}
-    out_mos6502 = mos6502'
-    out_bus = bus''
+getAddr IMPLICIT = return 0
+getAddr ACCUMULATOR = return 0
+getAddr IMMEDIATE = do
+    (mos6502, bus) <- get
+    let addr = pc . mosRegisters $ mos6502
+    let mos6502' = mos6502 {mosRegisters = (mosRegisters mos6502){pc = addr + 1}}
+    put (mos6502', bus)
+    return addr
+
+getAddr ABSOLUTE = do
+    (mos6502, bus) <- get
+    let cPC = pc . mosRegisters $ mos6502
+    let (bus', hb) = readByte cPC bus
+    let (bus'', lb) = readByte (cPC + 1) bus'
+    let addr = joinBytes hb lb 
+    let mos6502' = mos6502 {mosRegisters = (mosRegisters mos6502){pc = addr + 2}}
+    put (mos6502, bus'')
+    return addr
 
     
 opADC :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
 opADC addr_mode (mos6502, bus) = (mos6502', bus') where
-    (bus', mos6502', addr) = getAddr addr_mode bus mos6502
-    (bus'', byte) = readByte addr bus'
-    cAcc = acc . mosRegisters $ mos6502
-    overflow = (toInteger cAcc) + (toInteger byte) > 0xFF :: Bool
+    (addr, (mos6502', bus')) = runState (getAddr addr_mode) (mos6502, bus)  -- Get the address
+    (bus'', byte) = readByte addr bus'                                      -- Read the address
+    cAcc = acc . mosRegisters $ mos6502                                     -- Get the accumulator value
+    overflow = (toInteger cAcc) + (toInteger byte) > 0xFF :: Bool           -- Check for overflow
     mos6502'' = execState (
-                ( setFlagIf (cAcc == 0) ZERO True ) 
-            >>  ( setFlagIf overflow OVERFLOW True ) 
-            >>  ( mapReg ACC (+ byte) ) 
-            >>  ( mapReg PC ((+1) :: Word16 -> Word16))) mos6502   -- Move PC one byte
+                ( setFlagIf (cAcc == 0) ZERO True )                         -- Sets Zero flag if Accumulator is 0
+            >>  ( setFlagIf overflow OVERFLOW True )                        -- Sets overflow flag if necessary
+            >>  ( mapReg ACC (+ byte) )) mos6502                            -- Add byte to the accumulator
 
 opINX :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
 opINX IMPLICIT (mos6502, bus) = (mos6502', bus') where
-    cIdx = idx . mosRegisters $ mos6502
+    cIdx = idx . mosRegisters $ mos6502                                     -- Get the current Index X
     bus' = bus
     mos6502' = execState (
-            (setFlagIf (cIdx == 0) ZERO True)                   -- Sets ZERO Flag if IDX == 0
-        >>  (setFlagIf (testBit cIdx 6) NEGATIVE True)          -- Sets NEGATIVE Flag is bit 7 of IDX is set
-        >>  (mapReg IDX ((+1) :: Word8 -> Word8))) mos6502    -- Adds 1 to IDX in the Registes
+            (setFlagIf (cIdx == 0) ZERO True)                               -- Sets ZERO Flag if IDX == 0
+        >>  (setFlagIf (testBit cIdx 6) NEGATIVE True)                      -- Sets NEGATIVE Flag is bit 7 of IDX is set
+        >>  (mapReg IDX ((+1) :: Word8 -> Word8))) mos6502                  -- Adds 1 to IDX in the Registes
 opINX addr_mode _ = error ("Incompatible addressing mode: INX and " ++ show addr_mode)
 
