@@ -43,9 +43,9 @@ class RegisterType a where
 
 instance RegisterType Word16 where
   readRegister PC = RegisterValue pc
-  readRegister _ = error "Attempted to read Word16 as another type"
+  readRegister _ = error "Attempted to read Word8 as Word16"
   writeRegister PC val regs = regs { pc = val }
-  writeRegister _ _ _ = error "Attempted to Write to Word16 with another type"
+  writeRegister _ _ _ = error "Attempted to Write Word8 to Word16"
   
 instance RegisterType Word8 where
   readRegister SP = RegisterValue sp
@@ -53,14 +53,14 @@ instance RegisterType Word8 where
   readRegister IDX = RegisterValue idx
   readRegister IDY = RegisterValue idy
   readRegister PS = RegisterValue ps
-  readRegister _ = error "Attempted to read Word8 as another type"
+  readRegister _ = error "Attempted to read Word16 as Word8"
   
   writeRegister SP val regs = regs { sp = val }
   writeRegister ACC val regs = regs { acc = val }
   writeRegister IDX val regs = regs { idx = val }
   writeRegister IDY val regs = regs { idy = val }
   writeRegister PS val regs = regs { ps = val }
-  writeRegister _ _ _ = error "Attempted to write Word8 with another type"
+  writeRegister _ _ _ = error "Attempted to write Word16 to Word8"
 
 mapReg :: (RegisterType a) => REGISTER -> (a -> a) -> State MOS6502 ()
 mapReg reg func = do
@@ -76,13 +76,19 @@ mapReg reg func = do
 setReg :: (RegisterType a) => REGISTER -> a -> State MOS6502 ()
 setReg reg value = mapReg reg (\_ -> value)
 
+getReg :: (RegisterType a) => REGISTER -> State MOS6502 a
+getReg reg = do
+    mos6502 <- get
+    let registers = mosRegisters mos6502
+    let RegisterValue getter = readRegister reg
+    let regval = getter registers
+    return regval
+
 getFlag :: FLAG -> MOS6502 -> Bool
 getFlag flag = undefined
 
 setFlag :: FLAG -> Bool -> State MOS6502 ()
-setFlag flag value = do
-    cpu <- get
-    put cpu
+setFlag flag value = undefined
 
 setFlagIf :: Bool -> FLAG -> Bool -> State MOS6502 ()
 setFlagIf condition flag value = do
@@ -96,8 +102,8 @@ pushCPU :: (MOS6502, Bus) -> Bus
 pushCPU (cpu, bus) = bus {busCPU = cpu}
 
 instance AbstractBus Bus where
-    writeByte addr byte bus = bus
-    readByte addr bus = (bus, 0)
+    writeByte addr byte bus = undefined
+    readByte addr bus = undefined
 
 data ADDR_MODE =    IMPLICIT
                 |   ACCUMULATOR
@@ -115,6 +121,9 @@ data ADDR_MODE =    IMPLICIT
 
 joinBytes :: Word8 -> Word8 -> Word16
 joinBytes hb lb = fromIntegral hb `shiftL` 8 .|. fromIntegral lb
+
+getBit :: Bits a => a -> Int -> Bool
+getBit byte position = (byte .&. (1 `shiftL` position)) /= 0
 
 getAddr :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) Word16
 
@@ -139,23 +148,25 @@ getAddr ABSOLUTE = do
 
     
 opADC :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
-opADC addr_mode (mos6502, bus) = (mos6502', bus') where
+opADC addr_mode (mos6502, bus) = (mos6502'', bus'') where
     (addr, (mos6502', bus')) = runState (getAddr addr_mode) (mos6502, bus)  -- Get the address
-    (bus'', byte) = readByte addr bus'                                      -- Read the address
-    cAcc = acc . mosRegisters $ mos6502                                     -- Get the accumulator value
-    overflow = (toInteger cAcc) + (toInteger byte) > 0xFF :: Bool           -- Check for overflow
-    mos6502'' = execState (
-                ( setFlagIf (cAcc == 0) ZERO True )                         -- Sets Zero flag if Accumulator is 0
-            >>  ( setFlagIf overflow OVERFLOW True )                        -- Sets overflow flag if necessary
-            >>  ( mapReg ACC (+ byte) )) mos6502                            -- Add byte to the accumulator
+    (bus'', byte) = readByte addr bus'
+    old_acc = acc . mosRegisters $ mos6502                                  -- Get the accumulator value
+    mos6502'' = execState ( do
+        mapReg ACC (+ byte)                                                 -- Add corresponding byte to Accumulator
+        acc <- getReg ACC :: State MOS6502 Word8                            -- Get the updated Accumulator
+        setFlag ZERO (acc == 0)                                             -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                    -- Sets the Negative flag is the result is negative
+        setFlag OVERFLOW (xor (getBit acc 7) (getBit old_acc 7))            -- Sets the Overflow negative if the seventh bit changes
+        ) mos6502'
 
 opINX :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
-opINX IMPLICIT (mos6502, bus) = (mos6502', bus') where
-    cIdx = idx . mosRegisters $ mos6502                                     -- Get the current Index X
-    bus' = bus
-    mos6502' = execState (
-            (setFlagIf (cIdx == 0) ZERO True)                               -- Sets ZERO Flag if IDX == 0
-        >>  (setFlagIf (testBit cIdx 6) NEGATIVE True)                      -- Sets NEGATIVE Flag is bit 7 of IDX is set
-        >>  (mapReg IDX ((+1) :: Word8 -> Word8))) mos6502                  -- Adds 1 to IDX in the Registes
+opINX IMPLICIT (mos6502, bus) = (mos6502', bus) where
+    mos6502' = execState ( do
+        mapReg IDX (+ (1 :: Word8))                                         -- Increases the X Register by one
+        idx <- getReg IDX :: State MOS6502 Word8                            -- Gets the updated X Register
+        setFlag ZERO (idx == 0)                                             -- Sets the Zero flag is the result is equal to 0
+        setFlag NEGATIVE (testBit idx 7)                                    -- Sets the Negative flag is the result is negative
+        ) mos6502
 opINX addr_mode _ = error ("Incompatible addressing mode: INX and " ++ show addr_mode)
 
