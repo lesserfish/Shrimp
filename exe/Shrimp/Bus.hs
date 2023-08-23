@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Shrimp.Bus where
 import Data.Word
 import Data.Int
@@ -127,78 +125,78 @@ joinBytes hb lb = fromIntegral hb `shiftL` 8 .|. fromIntegral lb
 
 getAddr :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) Word16
 
-getAddr IMPLICIT = return 0
-getAddr ACCUMULATOR = return 0
+getAddr IMPLICIT = return 0                                                     -- Implicit does not require getAddr
+getAddr ACCUMULATOR = return 0                                                  -- Accumulator does not require getAddr
 
 getAddr IMMEDIATE = do
-    addr <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
+    addr <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16           -- The current position of the PC is precisely the address we are interested in
     setReg PC (addr + 1)
     return addr
 
 getAddr ZEROPAGE = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    lb <- mReadByte cPC
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- In Zero Page mode, PC contains the low byte of the address we are interested in
+    lb <- mReadByte cPC                                                         -- Get the low byte
     let addr = joinBytes 0x00 lb
     setReg PC (cPC + 1)
     return addr
 
 getAddr ZEROPAGE_X = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            
     cIdx <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8
-    lb <- mReadByte cPC
-    let addr = (joinBytes 0x00 lb) + (joinBytes 0x00 cIdx)
+    lb <- mReadByte cPC                                                         -- Get the low byte of the address
+    let addr = (joinBytes 0x00 lb) + (joinBytes 0x00 cIdx)                      -- Add IDX to the address
     setReg PC (cPC + 1)
     return addr
 
 getAddr ZEROPAGE_Y = do
     cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
     cIdy <- getReg IDY :: AbstractBus a1 => State (MOS6502, a1) Word8
-    lb <- mReadByte cPC
-    let addr = (joinBytes 0x00 lb) + (joinBytes 0x00 cIdy)
+    lb <- mReadByte cPC                                                         -- Get the low byte of the address
+    let addr = (joinBytes 0x00 lb) + (joinBytes 0x00 cIdy)                      -- Add IDY to the address
     setReg PC (cPC + 1)
     return addr
 
 getAddr RELATIVE = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    offset <- mReadByte cPC
-    let addr = if (testBit offset 7)  -- Test if the offset represents a positive or a negative number
-                then cPC + 1 - (joinBytes 0x00 offset) -- If it represents a negative number, subtract it from cPC + 1
-                else cPC + 1 + (joinBytes 0x00 offset) -- If it represents a positive number, add it to cPC + 1
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- Get the current position of PC
+    offset <- mReadByte cPC                                                     -- Get the offset byte
+    let addr = if (testBit offset 7)                                            -- Test if the offset represents a positive or a negative number
+                then cPC + 1 - (joinBytes 0x00 offset)                          -- If it represents a negative number, subtract it from cPC + 1
+                else cPC + 1 + (joinBytes 0x00 offset)                          -- If it represents a positive number, add it to cPC + 1
     setReg PC (cPC + 1)
     return addr
 
 getAddr ABSOLUTE = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    lb <- mReadByte cPC
-    hb <- mReadByte (cPC + 1)
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- PC holds the start address of where the actual address resides in memory
+    lb <- mReadByte cPC                                                         -- Load the low byte of the address location
+    hb <- mReadByte (cPC + 1)                                                   -- Load the high byte of the address location
     let addr = joinBytes hb lb
     setReg PC (cPC + 2)
     return addr
 
 getAddr ABSOLUTE_X = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    cIdx <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8
-    lb <- mReadByte cPC
-    hb <- mReadByte (cPC + 1)
-    let addr = (joinBytes hb lb) + (joinBytes 0x00 cIdx)
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- PC holds the start address ofwhere the actual address resides in memory
+    cIdx <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8           -- IDX is then added to the result
+    lb <- mReadByte cPC                                                         -- Load the low byte of the address location
+    hb <- mReadByte (cPC + 1)                                                   -- Load the high byte of the address location
+    let addr = (joinBytes hb lb) + (joinBytes 0x00 cIdx)                        -- Add the resulting 2-byte with the IDX register
     setReg PC (cPC + 2)
     return addr
 
 getAddr ABSOLUTE_Y = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    cIdy <- getReg IDY :: AbstractBus a1 => State (MOS6502, a1) Word8
-    lb <- mReadByte cPC
-    hb <- mReadByte (cPC + 1)
-    let addr = (joinBytes hb lb) + (joinBytes 0x00 cIdy)
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- PC holds the start address ofwhere the actual address resides in memory
+    cIdy <- getReg IDY :: AbstractBus a1 => State (MOS6502, a1) Word8           -- IDX is then added to the result
+    lb <- mReadByte cPC                                                         -- Load the low byte of the address location
+    hb <- mReadByte (cPC + 1)                                                   -- Load the high byte of the address location
+    let addr = (joinBytes hb lb) + (joinBytes 0x00 cIdy)                        -- Add the resulting 2-byte with the IDY register
     setReg PC (cPC + 2)
     return addr
 
 getAddr INDIRECT = do
-    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    addr_lb <- mReadByte cPC
-    addr_hb <- mReadByte (cPC + 1)
+    cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- PC Holds the start address of of where the actual address resides in memory
+    addr_lb <- mReadByte cPC                                                    -- Load the low byte of the address location
+    addr_hb <- mReadByte (cPC + 1)                                              -- Load the high byte of the address location
     let addr1 = joinBytes addr_hb addr_lb
-    lb <- mReadByte addr1
+    lb <- mReadByte addr1                                                       -- Get the actual address from that location
     hb <- mReadByte (addr1 + 1) 
     let addr = joinBytes hb lb
     setReg PC (cPC + 2)
@@ -206,11 +204,11 @@ getAddr INDIRECT = do
 
 getAddr INDEXED_INDIRECT = do
     cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16
-    table_start <- mReadByte cPC                                               -- PC Holds the start address of a memory table
-    table_offset <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8  -- IDX Holds the offset from the start of the memory table
-    let table_addr = table_start + table_offset                                -- Get table_addr = table_start + offset (Word8)
-    lb <- mReadByte (joinBytes 0x00 table_addr)                                -- Read low byte
-    hb <- mReadByte (joinBytes 0x00 (table_addr + 1))                          -- Read high byte
+    table_start <- mReadByte cPC                                                -- PC Holds the start address of a memory table
+    table_offset <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8   -- IDX Holds the offset from the start of the memory table
+    let table_addr = table_start + table_offset                                 -- Get table_addr = table_start + offset (Word8)
+    lb <- mReadByte (joinBytes 0x00 table_addr)                                 -- Read low byte
+    hb <- mReadByte (joinBytes 0x00 (table_addr + 1))                           -- Read high byte
     let addr = joinBytes hb lb
     setReg PC (cPC + 1)
     return addr
