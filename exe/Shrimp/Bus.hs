@@ -77,6 +77,10 @@ mapReg reg func = do
 setReg :: (AbstractBus a, RegisterType b) => REGISTER -> b -> State (MOS6502, a) ()
 setReg reg value = mapReg reg (\_ -> value)
 
+setRegIf :: (AbstractBus a, RegisterType b) => Bool -> REGISTER -> b -> State (MOS6502, a) ()
+setRegIf condition reg value = if condition then setReg reg value else return ()
+
+
 getReg :: (AbstractBus a, RegisterType b) => REGISTER -> State (MOS6502, a) b
 getReg reg = do
     (mos6502, _) <- get
@@ -85,7 +89,7 @@ getReg reg = do
     let regval = getter registers
     return regval
 
-getFlag :: FLAG -> MOS6502 -> Bool
+getFlag :: AbstractBus a => FLAG -> State (MOS6502, a) Bool
 getFlag flag = undefined
 
 setFlag :: AbstractBus a => FLAG -> Bool -> State (MOS6502, a) ()
@@ -234,9 +238,29 @@ mWriteByte addr byte = do
     let bus' = writeByte addr byte bus
     put (mos6502, bus')
 
-opADC :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
-opADC addr_mode (mos6502, bus) = (mos6502', bus') where
-    (mos6502', bus') = execState ( do
+-- INSTRUCTIONS:
+--
+-- opXXX IMPLICIT = error "Operation XXX does not support IMPLICIT addressing mode"
+-- opXXX ACCUMULATOR = error "Operation XXX does not support ACCUMULATOR addressing mode"
+-- opXXX IMMEDIATE = error "Operation XXX does not support IMMEDIATE addressing mode"
+-- opXXX ZEROPAGE = error "Operation XXX does not support ZEROPAGE addressing mode"
+-- opXXX ZEROPAGE_X = error "Operation XXX does not support ZEROPAGE_X addressing mode"
+-- opXXX ZEROPAGE_Y = error "Operation XXX does not support ZEROPAGE_Y addressing mode"
+-- opXXX RELATIVE = error "Operation XXX does not support RELATIVE addressing mode"
+-- opXXX ABSOLUTE = error "Operation XXX does not support ABSOLUTE addressing mode"
+-- opXXX ABSOLUTE_X = error "Operation XXX does not support ABSOLUTE_X addressing mode"
+-- opXXX ABSOLUTE_Y = error "Operation XXX does not support ABSOLUTE_Y addressing mode"
+-- opXXX INDIRECT = error "Operation XXX does not support INDIRECT addressing mode"
+-- opXXX INDEXED_INDIRECT = error "Operation XXX does not support INDEXED_INDIRECT addressing mode"
+-- opXXX INDIRECT_INDEXED = error "Operation XXX does not support INDIRECT_INDEXED addressing mode"
+
+opADC :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opADC IMPLICIT = error "Operation ADC does not support IMPLICIT addressing mode"
+opADC ACCUMULATOR = error "Operation ADC does not support ACCUMULATOR addressing mode"
+opADC ZEROPAGE_Y = error "Operation ADC does not support ZEROPAGE_Y addressing mode"
+opADC RELATIVE = error "Operation ADC does not support RELATIVE addressing mode"
+opADC INDIRECT = error "Operation ADC does not support INDIRECT addressing mode"
+opADC addr_mode = do
         old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
         addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
         byte <- mReadByte addr                                                  -- Read byte from the Bus
@@ -245,15 +269,194 @@ opADC addr_mode (mos6502, bus) = (mos6502', bus') where
         setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
         setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
         setFlag OVERFLOW (xor (testBit acc 7) (testBit old_acc 7))              -- Sets the Overflow negative if the seventh bit changes
-        ) (mos6502, bus)
 
-opINX :: AbstractBus a => ADDR_MODE -> (MOS6502, a) -> (MOS6502, a)
-opINX IMPLICIT (mos6502, bus) = (mos6502', bus') where
-    (mos6502', bus') = execState ( do
+opAND :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opAND IMPLICIT = error "Operation AND does not support IMPLICIT addressing mode"
+opAND ACCUMULATOR = error "Operation AND does not support ACCUMULATOR addressing mode"
+opAND ZEROPAGE_Y = error "Operation AND does not support ZEROPAGE_Y addressing mode"
+opAND RELATIVE = error "Operation AND does not support RELATIVE addressing mode"
+opAND INDIRECT = error "Operation AND does not support INDIRECT addressing mode"
+opAND addr_mode = do
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
+        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                  -- Read byte from the Bus
+        mapReg ACC (.&. byte)                                                   -- AND the corresponding byte to Accumulator
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
+        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+
+opASL :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opASL IMPLICIT = error "Operation ASL does not support IMPLICIT addressing mode"
+opASL IMMEDIATE = error "Operation ASL does not support IMMEDIATE addressing mode"
+opASL ZEROPAGE_Y = error "Operation ASL does not support ZEROPAGE_Y addressing mode"
+opASL RELATIVE = error "Operation ASL does not support RELATIVE addressing mode"
+opASL ABSOLUTE_Y = error "Operation ASL does not support ABSOLUTE_Y addressing mode"
+opASL INDIRECT = error "Operation ASL does not support INDIRECT addressing mode"
+opASL INDEXED_INDIRECT = error "Operation ASL does not support INDEXED_INDIRECT addressing mode"
+opASL INDIRECT_INDEXED = error "Operation ASL does not support INDIRECT_INDEXED addressing mode"
+opASL ACCUMULATOR = do
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
+        let carry_flag = testBit old_acc 7                                      -- Carry flag is set to contents of old bit 7
+        mapReg ACC ((\x -> shiftL x 1) :: Word8 -> Word8)                       -- Shifts byte one bit to the left
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
+        setFlag CARRY carry_flag                                                -- Sets the Carry flag
+        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+opASL addr_mode = do
+        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                  -- Read byte from the Bus
+        let carry_flag = testBit byte 7                                         -- Carry flag is set to contents of old bit 7
+        let new_byte = shiftL byte 1 :: Word8                                   -- Perform the L Shift
+        mWriteByte addr new_byte                                                -- Write new byte to same address
+        setFlag CARRY carry_flag                                                -- Sets the Carry flag
+        setFlag ZERO (new_byte == 0)                                            -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit new_byte 7)                                   -- Sets the Negative flag is the result is negative
+
+opBCC :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opBCC IMPLICIT = error "Operation BCC does not support IMPLICIT addressing mode"
+opBCC ACCUMULATOR = error "Operation BCC does not support ACCUMULATOR addressing mode"
+opBCC IMMEDIATE = error "Operation BCC does not support IMMEDIATE addressing mode"
+opBCC ZEROPAGE = error "Operation BCC does not support ZEROPAGE addressing mode"
+opBCC ZEROPAGE_X = error "Operation BCC does not support ZEROPAGE_X addressing mode"
+opBCC ZEROPAGE_Y = error "Operation BCC does not support ZEROPAGE_Y addressing mode"
+opBCC ABSOLUTE = error "Operation BCC does not support ABSOLUTE addressing mode"
+opBCC ABSOLUTE_X = error "Operation BCC does not support ABSOLUTE_X addressing mode"
+opBCC ABSOLUTE_Y = error "Operation BCC does not support ABSOLUTE_Y addressing mode"
+opBCC INDIRECT = error "Operation BCC does not support INDIRECT addressing mode"
+opBCC INDEXED_INDIRECT = error "Operation BCC does not support INDEXED_INDIRECT addressing mode"
+opBCC INDIRECT_INDEXED = error "Operation BCC does not support INDIRECT_INDEXED addressing mode"
+opBCC RELATIVE = do
+        carry_flag <- getFlag CARRY                                             -- Get carry flag
+        addr <- getAddr RELATIVE                                                -- Get jump address
+        setRegIf (not carry_flag) PC addr                                       -- Jump if Carry flag is clear
+
+opBCS :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opBCS IMPLICIT = error "Operation BCS does not support IMPLICIT addressing mode"
+opBCS ACCUMULATOR = error "Operation BCS does not support ACCUMULATOR addressing mode"
+opBCS IMMEDIATE = error "Operation BCS does not support IMMEDIATE addressing mode"
+opBCS ZEROPAGE = error "Operation BCS does not support ZEROPAGE addressing mode"
+opBCS ZEROPAGE_X = error "Operation BCS does not support ZEROPAGE_X addressing mode"
+opBCS ZEROPAGE_Y = error "Operation BCS does not support ZEROPAGE_Y addressing mode"
+opBCS ABSOLUTE = error "Operation BCS does not support ABSOLUTE addressing mode"
+opBCS ABSOLUTE_X = error "Operation BCS does not support ABSOLUTE_X addressing mode"
+opBCS ABSOLUTE_Y = error "Operation BCS does not support ABSOLUTE_Y addressing mode"
+opBCS INDIRECT = error "Operation BCS does not support INDIRECT addressing mode"
+opBCS INDEXED_INDIRECT = error "Operation BCS does not support INDEXED_INDIRECT addressing mode"
+opBCS INDIRECT_INDEXED = error "Operation BCS does not support INDIRECT_INDEXED addressing mode"
+opBCS RELATIVE = do
+        carry_flag <- getFlag CARRY                                             -- Get carry flag
+        addr <- getAddr RELATIVE                                                -- Get jump address
+        setRegIf carry_flag PC addr                                             -- Jump if Carry flag is set
+
+opBEQ :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opBEQ IMPLICIT = error "Operation BEQ does not support IMPLICIT addressing mode"
+opBEQ ACCUMULATOR = error "Operation BEQ does not support ACCUMULATOR addressing mode"
+opBEQ IMMEDIATE = error "Operation BEQ does not support IMMEDIATE addressing mode"
+opBEQ ZEROPAGE = error "Operation BEQ does not support ZEROPAGE addressing mode"
+opBEQ ZEROPAGE_X = error "Operation BEQ does not support ZEROPAGE_X addressing mode"
+opBEQ ZEROPAGE_Y = error "Operation BEQ does not support ZEROPAGE_Y addressing mode"
+opBEQ ABSOLUTE = error "Operation BEQ does not support ABSOLUTE addressing mode"
+opBEQ ABSOLUTE_X = error "Operation BEQ does not support ABSOLUTE_X addressing mode"
+opBEQ ABSOLUTE_Y = error "Operation BEQ does not support ABSOLUTE_Y addressing mode"
+opBEQ INDIRECT = error "Operation BEQ does not support INDIRECT addressing mode"
+opBEQ INDEXED_INDIRECT = error "Operation BEQ does not support INDEXED_INDIRECT addressing mode"
+opBEQ INDIRECT_INDEXED = error "Operation BEQ does not support INDIRECT_INDEXED addressing mode"
+opBEQ RELATIVE = do
+        zero_flag <- getFlag ZERO                                               -- Get Zero flag
+        addr <- getAddr RELATIVE                                                -- Get jump address
+        setRegIf zero_flag PC addr                                              -- Jump if Zero flag is set
+
+opEOR :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opEOR IMPLICIT = error "Operation EOR does not support IMPLICIT addressing mode"
+opEOR ACCUMULATOR = error "Operation EOR does not support ACCUMULATOR addressing mode"
+opEOR ZEROPAGE_Y = error "Operation EOR does not support ZEROPAGE_Y addressing mode"
+opEOR RELATIVE = error "Operation EOR does not support RELATIVE addressing mode"
+opEOR INDIRECT = error "Operation EOR does not support INDIRECT addressing mode"
+opEOR addr_mode = do
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
+        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                  -- Read byte from the Bus
+        mapReg ACC (`xor` byte)                                                 -- XOR the corresponding byte to Accumulator
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
+        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+
+opINX :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opINX ACCUMULATOR = error "Operation INX does not support ACCUMULATOR addressing mode"
+opINX IMMEDIATE = error "Operation INX does not support IMMEDIATE addressing mode"
+opINX ZEROPAGE = error "Operation INX does not support ZEROPAGE addressing mode"
+opINX ZEROPAGE_X = error "Operation INX does not support ZEROPAGE_X addressing mode"
+opINX ZEROPAGE_Y = error "Operation INX does not support ZEROPAGE_Y addressing mode"
+opINX RELATIVE = error "Operation INX does not support RELATIVE addressing mode"
+opINX ABSOLUTE = error "Operation INX does not support ABSOLUTE addressing mode"
+opINX ABSOLUTE_X = error "Operation INX does not support ABSOLUTE_X addressing mode"
+opINX ABSOLUTE_Y = error "Operation INX does not support ABSOLUTE_Y addressing mode"
+opINX INDIRECT = error "Operation INX does not support INDIRECT addressing mode"
+opINX INDEXED_INDIRECT = error "Operation INX does not support INDEXED_INDIRECT addressing mode"
+opINX INDIRECT_INDEXED = error "Operation INX does not support INDIRECT_INDEXED addressing mode"
+opINX IMPLICIT  =  do
         mapReg IDX (+ (1 :: Word8))                                             -- Increases the X Register by one
         idx <- getReg IDX :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Gets the updated X Register
         setFlag ZERO (idx == 0)                                                 -- Sets the Zero flag is the result is equal to 0
         setFlag NEGATIVE (testBit idx 7)                                        -- Sets the Negative flag is the result is negative
-        ) (mos6502, bus)
-opINX addr_mode _ = error ("Incompatible addressing mode: INX and " ++ show addr_mode)
 
+opINY :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opINY ACCUMULATOR = error "Operation INY does not support ACCUMULATOR addressing mode"
+opINY IMMEDIATE = error "Operation INY does not support IMMEDIATE addressing mode"
+opINY ZEROPAGE = error "Operation INY does not support ZEROPAGE addressing mode"
+opINY ZEROPAGE_X = error "Operation INY does not support ZEROPAGE_X addressing mode"
+opINY ZEROPAGE_Y = error "Operation INY does not support ZEROPAGE_Y addressing mode"
+opINY RELATIVE = error "Operation INY does not support RELATIVE addressing mode"
+opINY ABSOLUTE = error "Operation INY does not support ABSOLUTE addressing mode"
+opINY ABSOLUTE_X = error "Operation INY does not support ABSOLUTE_X addressing mode"
+opINY ABSOLUTE_Y = error "Operation INY does not support ABSOLUTE_Y addressing mode"
+opINY INDIRECT = error "Operation INY does not support INDIRECT addressing mode"
+opINY INDEXED_INDIRECT = error "Operation INY does not support INDEXED_INDIRECT addressing mode"
+opINY INDIRECT_INDEXED = error "Operation INY does not support INDIRECT_INDEXED addressing mode"
+opINY IMPLICIT  =  do
+        mapReg IDY (+ (1 :: Word8))                                             -- Increases the X Register by one
+        idy <- getReg IDY :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Gets the updated X Register
+        setFlag ZERO (idy == 0)                                                 -- Sets the Zero flag is the result is equal to 0
+        setFlag NEGATIVE (testBit idy 7)                                        -- Sets the Negative flag is the result is negative
+
+opLSR :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opLSR IMPLICIT = error "Operation LSR does not support IMPLICIT addressing mode"
+opLSR IMMEDIATE = error "Operation LSR does not support IMMEDIATE addressing mode"
+opLSR ZEROPAGE_Y = error "Operation LSR does not support ZEROPAGE_Y addressing mode"
+opLSR RELATIVE = error "Operation LSR does not support RELATIVE addressing mode"
+opLSR ABSOLUTE_Y = error "Operation LSR does not support ABSOLUTE_Y addressing mode"
+opLSR INDIRECT = error "Operation LSR does not support INDIRECT addressing mode"
+opLSR INDEXED_INDIRECT = error "Operation LSR does not support INDEXED_INDIRECT addressing mode"
+opLSR INDIRECT_INDEXED = error "Operation LSR does not support INDIRECT_INDEXED addressing mode"
+opLSR ACCUMULATOR = do
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
+        let carry_flag = testBit old_acc 0                                      -- Carry flag is set to contents of old bit 0
+        mapReg ACC ((\x -> shiftR x 1) :: Word8 -> Word8)                       -- Shifts byte one bit to the right
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
+        setFlag CARRY carry_flag                                                -- Sets the Carry flag
+        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+opLSR addr_mode = do
+        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                  -- Read byte from the Bus
+        let carry_flag = testBit byte 0                                         -- Carry flag is set to contents of old bit 0
+        let new_byte = shiftR byte 1 :: Word8                                   -- Perform the R Shift
+        mWriteByte addr new_byte                                                -- Write new byte to same address
+        setFlag CARRY carry_flag                                                -- Sets the Carry flag
+        setFlag ZERO (new_byte == 0)                                            -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit new_byte 7)                                   -- Sets the Negative flag is the result is negative
+
+opORA :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
+opORA IMPLICIT = error "Operation ORA does not support IMPLICIT addressing mode"
+opORA ACCUMULATOR = error "Operation ORA does not support ACCUMULATOR addressing mode"
+opORA ZEROPAGE_Y = error "Operation ORA does not support ZEROPAGE_Y addressing mode"
+opORA RELATIVE = error "Operation ORA does not support RELATIVE addressing mode"
+opORA INDIRECT = error "Operation ORA does not support INDIRECT addressing mode"
+opORA addr_mode = do
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
+        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                  -- Read byte from the Bus
+        mapReg ACC (.|. byte)                                                   -- OR the corresponding byte to Accumulator
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
+        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
