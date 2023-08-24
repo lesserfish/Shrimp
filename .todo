@@ -23,10 +23,10 @@
     CMP
     CPX
     CPY
-DEC
-DEX
-DEY
-INC
+    DEC
+    DEX
+    DEY
+    INC
 JMP
 JSR
 LDA
