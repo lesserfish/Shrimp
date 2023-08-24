@@ -127,6 +127,23 @@ data ADDR_MODE =    IMPLICIT
 joinBytes :: Word8 -> Word8 -> Word16
 joinBytes hb lb = fromIntegral hb `shiftL` 8 .|. fromIntegral lb
 
+b0 x = testBit x 0
+b1 x = testBit x 1
+b2 x = testBit x 2
+b3 x = testBit x 3
+b4 x = testBit x 4
+b5 x = testBit x 5
+b6 x = testBit x 6
+b7 x = testBit x 7
+b8 x = testBit x 8
+b9 x = testBit x 9
+b10 x = testBit x 10
+b11 x = testBit x 11
+b12 x = testBit x 12
+b13 x = testBit x 13
+b14 x = testBit x 14
+b15 x = testBit x 15
+
 getAddr :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) Word16
 
 getAddr IMPLICIT = return 0                                                     -- Implicit does not require getAddr
@@ -163,7 +180,7 @@ getAddr ZEROPAGE_Y = do
 getAddr RELATIVE = do
     cPC <- getReg PC :: AbstractBus a1 => State (MOS6502, a1) Word16            -- Get the current position of PC
     offset <- mReadByte cPC                                                     -- Get the offset byte
-    let addr = if (testBit offset 7)                                            -- Test if the offset represents a positive or a negative number
+    let addr = if (b7 offset)                                            -- Test if the offset represents a positive or a negative number
                 then cPC + 1 - (joinBytes 0x00 offset)                          -- If it represents a negative number, subtract it from cPC + 1
                 else cPC + 1 + (joinBytes 0x00 offset)                          -- If it represents a positive number, add it to cPC + 1
     setReg PC (cPC + 1)
@@ -261,14 +278,17 @@ opADC ZEROPAGE_Y = error "Operation ADC does not support ZEROPAGE_Y addressing m
 opADC RELATIVE = error "Operation ADC does not support RELATIVE addressing mode"
 opADC INDIRECT = error "Operation ADC does not support INDIRECT addressing mode"
 opADC addr_mode = do
-        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8    -- Get the Accumulator registers prior to changes
-        addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
-        byte <- mReadByte addr                                                  -- Read byte from the Bus
-        mapReg ACC (+ byte)                                                     -- Add corresponding byte to Accumulator
-        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
-        setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
-        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
-        setFlag OVERFLOW (xor (testBit acc 7) (testBit old_acc 7))              -- Sets the Overflow negative if the seventh bit changes
+        old_acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8                        -- Get the Accumulator registers prior to changes
+        carry_flag <- getFlag $ CARRY                                                               -- Get the Accumulator registers prior to changes
+        let carry = if carry_flag then 1 else 0 :: Word8
+        addr <- getAddr addr_mode                                                                   -- Get the address given the addressing mode
+        byte <- mReadByte addr                                                                      -- Read byte from the Bus
+        let operand = byte + carry
+        mapReg ACC (+ operand)                                                                      -- Add corresponding byte to Accumulator
+        acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8                            -- Get the updated Accumulator
+        setFlag ZERO (acc == 0)                                                                     -- Sets the Zero flag if the result is equal to 0
+        setFlag NEGATIVE (b7 acc)                                                                   -- Sets the Negative flag is the result is negative
+        setFlag OVERFLOW ((b7 acc) `xor` (b7 old_acc) && not ((b7 old_acc) `xor` (b7 operand)))     -- Sets the Overflow flag
 
 opAND :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
 opAND IMPLICIT = error "Operation AND does not support IMPLICIT addressing mode"
@@ -435,7 +455,7 @@ opLSR ACCUMULATOR = do
         acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
         setFlag CARRY carry_flag                                                -- Sets the Carry flag
         setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
-        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+        setFlag NEGATIVE (b7 acc)                                               -- Sets the Negative flag is the result is negative
 opLSR addr_mode = do
         addr <- getAddr addr_mode                                               -- Get the address given the addressing mode
         byte <- mReadByte addr                                                  -- Read byte from the Bus
@@ -444,7 +464,7 @@ opLSR addr_mode = do
         mWriteByte addr new_byte                                                -- Write new byte to same address
         setFlag CARRY carry_flag                                                -- Sets the Carry flag
         setFlag ZERO (new_byte == 0)                                            -- Sets the Zero flag if the result is equal to 0
-        setFlag NEGATIVE (testBit new_byte 7)                                   -- Sets the Negative flag is the result is negative
+        setFlag NEGATIVE (b7 new_byte)                                          -- Sets the Negative flag is the result is negative
 
 opORA :: AbstractBus a => ADDR_MODE -> State (MOS6502, a) ()
 opORA IMPLICIT = error "Operation ORA does not support IMPLICIT addressing mode"
@@ -459,4 +479,4 @@ opORA addr_mode = do
         mapReg ACC (.|. byte)                                                   -- OR the corresponding byte to Accumulator
         acc <- getReg ACC :: AbstractBus a1 => State (MOS6502, a1) Word8        -- Get the updated Accumulator
         setFlag ZERO (acc == 0)                                                 -- Sets the Zero flag if the result is equal to 0
-        setFlag NEGATIVE (testBit acc 7)                                        -- Sets the Negative flag is the result is negative
+        setFlag NEGATIVE (b7 acc)                                        -- Sets the Negative flag is the result is negative
