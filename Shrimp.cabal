@@ -1,0 +1,28 @@
+cabal-version:      3.0
+name:               Shrimp
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            GPL-2.0-or-later
+license-file:       LICENSE
+author:             lesserfish
+maintainer:         lesserfish@pm.me
+-- copyright:
+category:           Game
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+ghc-options: -Wall
+
+executable Shrimp
+  import:           warnings
+  main-is:          Main.hs
+  other-modules:    Shrimp.Bus
+                   -- Add other necessary modules here
+  -- other-extensions:
+  build-depends:    base >= 4.18.0.0,
+                    mtl >= 2.3.1
+  hs-source-dirs:   exe
+  default-language: Haskell2010
