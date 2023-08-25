@@ -165,19 +165,6 @@ setFlagIf :: (AbstractBus a) => Bool -> FLAG -> Bool -> State (MOS6502, a) ()
 setFlagIf condition flag value = do
     if condition then (setFlag flag value) else return ()
 
-data Bus = Bus
-    { busCPU :: MOS6502
-    , busRAM :: [Word8]
-    }
-    deriving (Show)
-
-pushCPU :: (MOS6502, Bus) -> Bus
-pushCPU (cpu, bus) = bus{busCPU = cpu}
-
-instance AbstractBus Bus where
-    writeByte addr byte bus = undefined
-    readByte addr bus = undefined
-
 data ADDR_MODE
     = IMPLICIT
     | ACCUMULATOR
