@@ -1,4 +1,4 @@
-module Shrimp.Bus where
+module Shrimp.MOS6502 where
 
 import Control.Monad.ST (ST)
 import Control.Monad.State
@@ -8,10 +8,7 @@ import Data.Word
 import GHC.IO.Device (SeekMode (AbsoluteSeek))
 import GHC.IO.Exception (stackOverflow)
 import GHC.StableName (StableName)
-
-class AbstractBus a where
-    writeByte :: Word16 -> Word8 -> a -> a
-    readByte :: Word16 -> a -> (a, Word8)
+import Shrimp.AbstractBus
 
 data REGISTER
     = PC

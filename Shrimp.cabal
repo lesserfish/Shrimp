@@ -19,7 +19,7 @@ ghc-options: -Wall
 executable Shrimp
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Shrimp.Bus
+  other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
