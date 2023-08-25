@@ -1,10 +1,12 @@
 module Shrimp.Bus where
 
+import Control.Monad.ST (ST)
 import Control.Monad.State
 import Data.Bits
 import Data.Int
 import Data.Word
 import GHC.IO.Exception (stackOverflow)
+import GHC.StableName (StableName)
 
 class AbstractBus a where
     writeByte :: Word16 -> Word8 -> a -> a
@@ -239,7 +241,7 @@ getAddr ABSOLUTE_Y = do
     return addr
 getAddr INDIRECT = do
     cPC <- getReg PC :: (AbstractBus a1) => State (MOS6502, a1) Word16 -- PC Holds the start address of of where the actual address resides in memory
-    (pchb, pclb) <- splitBytes cPC
+    let (pchb, pclb) = splitBytes cPC
 
     -- There is a BUG in the MOS 6502 where, if the indirect vector falls on a page boundary (i.e. 0xXXFF) then the LSB is fetched correctly from the address 0xXXFF
     -- But the MSB is taken incorrectly from 0xXX00.
@@ -851,9 +853,9 @@ opJSR INDIRECT_INDEXED = error "Operation JSR does not support INDIRECT_INDEXED 
 opJSR addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     pc <- getReg PC :: (AbstractBus a1) => State (MOS6502, a1) Word16
-    -- There is a peculiarity in the MOS 6502 where JSR will,
+    -- There is a peculiarity in the MOS 6502 where JSR will
     -- instead of pushing the position of the next address to stack, it will
-    -- push the location prior to that address.
+    -- push the location prior to that address instead.
     let (hb, lb) = splitBytes (pc - 1)
     mWriteStack lb
     mWriteStack hb
@@ -960,3 +962,397 @@ opORA addr_mode = do
     acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8 -- Get the updated Accumulator
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+
+opPHA :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opPHA ACCUMULATOR = error "Operation PHA does not support ACCUMULATOR addressing mode"
+opPHA IMMEDIATE = error "Operation PHA does not support IMMEDIATE addressing mode"
+opPHA ZEROPAGE = error "Operation PHA does not support ZEROPAGE addressing mode"
+opPHA ZEROPAGE_X = error "Operation PHA does not support ZEROPAGE_X addressing mode"
+opPHA ZEROPAGE_Y = error "Operation PHA does not support ZEROPAGE_Y addressing mode"
+opPHA RELATIVE = error "Operation PHA does not support RELATIVE addressing mode"
+opPHA ABSOLUTE = error "Operation PHA does not support ABSOLUTE addressing mode"
+opPHA ABSOLUTE_X = error "Operation PHA does not support ABSOLUTE_X addressing mode"
+opPHA ABSOLUTE_Y = error "Operation PHA does not support ABSOLUTE_Y addressing mode"
+opPHA INDIRECT = error "Operation PHA does not support INDIRECT addressing mode"
+opPHA INDEXED_INDIRECT = error "Operation PHA does not support INDEXED_INDIRECT addressing mode"
+opPHA INDIRECT_INDEXED = error "Operation PHA does not support INDIRECT_INDEXED addressing mode"
+opPHA IMPLICIT = do
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    mWriteStack acc
+
+opPHP :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opPHP ACCUMULATOR = error "Operation PHP does not support ACCUMULATOR addressing mode"
+opPHP IMMEDIATE = error "Operation PHP does not support IMMEDIATE addressing mode"
+opPHP ZEROPAGE = error "Operation PHP does not support ZEROPAGE addressing mode"
+opPHP ZEROPAGE_X = error "Operation PHP does not support ZEROPAGE_X addressing mode"
+opPHP ZEROPAGE_Y = error "Operation PHP does not support ZEROPAGE_Y addressing mode"
+opPHP RELATIVE = error "Operation PHP does not support RELATIVE addressing mode"
+opPHP ABSOLUTE = error "Operation PHP does not support ABSOLUTE addressing mode"
+opPHP ABSOLUTE_X = error "Operation PHP does not support ABSOLUTE_X addressing mode"
+opPHP ABSOLUTE_Y = error "Operation PHP does not support ABSOLUTE_Y addressing mode"
+opPHP INDIRECT = error "Operation PHP does not support INDIRECT addressing mode"
+opPHP INDEXED_INDIRECT = error "Operation PHP does not support INDEXED_INDIRECT addressing mode"
+opPHP INDIRECT_INDEXED = error "Operation PHP does not support INDIRECT_INDEXED addressing mode"
+opPHP IMPLICIT = do
+    ps <- getReg PS :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    mWriteStack ps
+
+opPLA :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opPLA ACCUMULATOR = error "Operation PLA does not support ACCUMULATOR addressing mode"
+opPLA IMMEDIATE = error "Operation PLA does not support IMMEDIATE addressing mode"
+opPLA ZEROPAGE = error "Operation PLA does not support ZEROPAGE addressing mode"
+opPLA ZEROPAGE_X = error "Operation PLA does not support ZEROPAGE_X addressing mode"
+opPLA ZEROPAGE_Y = error "Operation PLA does not support ZEROPAGE_Y addressing mode"
+opPLA RELATIVE = error "Operation PLA does not support RELATIVE addressing mode"
+opPLA ABSOLUTE = error "Operation PLA does not support ABSOLUTE addressing mode"
+opPLA ABSOLUTE_X = error "Operation PLA does not support ABSOLUTE_X addressing mode"
+opPLA ABSOLUTE_Y = error "Operation PLA does not support ABSOLUTE_Y addressing mode"
+opPLA INDIRECT = error "Operation PLA does not support INDIRECT addressing mode"
+opPLA INDEXED_INDIRECT = error "Operation PLA does not support INDEXED_INDIRECT addressing mode"
+opPLA INDIRECT_INDEXED = error "Operation PLA does not support INDIRECT_INDEXED addressing mode"
+opPLA IMPLICIT = do
+    acc <- mReadStack
+    setReg ACC acc
+    setFlag ZERO (acc == 0)
+    setFlag NEGATIVE (b7 acc)
+
+opPLP :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opPLP ACCUMULATOR = error "Operation PLP does not support ACCUMULATOR addressing mode"
+opPLP IMMEDIATE = error "Operation PLP does not support IMMEDIATE addressing mode"
+opPLP ZEROPAGE = error "Operation PLP does not support ZEROPAGE addressing mode"
+opPLP ZEROPAGE_X = error "Operation PLP does not support ZEROPAGE_X addressing mode"
+opPLP ZEROPAGE_Y = error "Operation PLP does not support ZEROPAGE_Y addressing mode"
+opPLP RELATIVE = error "Operation PLP does not support RELATIVE addressing mode"
+opPLP ABSOLUTE = error "Operation PLP does not support ABSOLUTE addressing mode"
+opPLP ABSOLUTE_X = error "Operation PLP does not support ABSOLUTE_X addressing mode"
+opPLP ABSOLUTE_Y = error "Operation PLP does not support ABSOLUTE_Y addressing mode"
+opPLP INDIRECT = error "Operation PLP does not support INDIRECT addressing mode"
+opPLP INDEXED_INDIRECT = error "Operation PLP does not support INDEXED_INDIRECT addressing mode"
+opPLP INDIRECT_INDEXED = error "Operation PLP does not support INDIRECT_INDEXED addressing mode"
+opPLP IMPLICIT = do
+    ps <- mReadStack
+    setReg PS ps
+
+opROL :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opROL IMPLICIT = error "Operation ROL does not support IMPLICIT addressing mode"
+opROL IMMEDIATE = error "Operation ROL does not support IMMEDIATE addressing mode"
+opROL ZEROPAGE_Y = error "Operation ROL does not support ZEROPAGE_Y addressing mode"
+opROL RELATIVE = error "Operation ROL does not support RELATIVE addressing mode"
+opROL ABSOLUTE_Y = error "Operation ROL does not support ABSOLUTE_Y addressing mode"
+opROL INDIRECT = error "Operation ROL does not support INDIRECT addressing mode"
+opROL INDEXED_INDIRECT = error "Operation ROL does not support INDEXED_INDIRECT addressing mode"
+opROL INDIRECT_INDEXED = error "Operation ROL does not support INDIRECT_INDEXED addressing mode"
+opROL ACCUMULATOR = do
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    carry_flag <- getFlag CARRY
+    let new_carry = b7 acc
+    let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
+    let acc' = (shiftL acc 1) .|. bit0
+    setReg ACC acc'
+    setFlag ZERO (acc' == 0)
+    setFlag NEGATIVE (b7 acc')
+    setFlag CARRY new_carry
+opROL addr_mode = do
+    addr <- getAddr addr_mode
+    byte <- mReadByte addr
+    carry_flag <- getFlag CARRY
+    let new_carry = b7 byte
+    let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
+    let byte' = (shiftL byte 1) .|. bit0
+    mWriteByte addr byte'
+    setFlag ZERO (byte' == 0)
+    setFlag NEGATIVE (b7 byte')
+    setFlag CARRY new_carry
+
+opROR :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opROR IMPLICIT = error "Operation ROR does not support IMPLICIT addressing mode"
+opROR IMMEDIATE = error "Operation ROR does not support IMMEDIATE addressing mode"
+opROR ZEROPAGE_Y = error "Operation ROR does not support ZEROPAGE_Y addressing mode"
+opROR RELATIVE = error "Operation ROR does not support RELATIVE addressing mode"
+opROR ABSOLUTE_Y = error "Operation ROR does not support ABSOLUTE_Y addressing mode"
+opROR INDIRECT = error "Operation ROR does not support INDIRECT addressing mode"
+opROR INDEXED_INDIRECT = error "Operation ROR does not support INDEXED_INDIRECT addressing mode"
+opROR INDIRECT_INDEXED = error "Operation ROR does not support INDIRECT_INDEXED addressing mode"
+opROR ACCUMULATOR = do
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    carry_flag <- getFlag CARRY
+    let new_carry = b0 acc
+    let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
+    let acc' = (shiftR acc 1) .|. bit0
+    setReg ACC acc'
+    setFlag ZERO (acc' == 0)
+    setFlag NEGATIVE (b7 acc')
+    setFlag CARRY new_carry
+opROR addr_mode = do
+    addr <- getAddr addr_mode
+    byte <- mReadByte addr
+    carry_flag <- getFlag CARRY
+    let new_carry = b0 byte
+    let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
+    let byte' = (shiftR byte 1) .|. bit0
+    mWriteByte addr byte'
+    setFlag ZERO (byte' == 0)
+    setFlag NEGATIVE (b7 byte')
+    setFlag CARRY new_carry
+
+opRTI :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opRTI ACCUMULATOR = error "Operation RTI does not support ACCUMULATOR addressing mode"
+opRTI IMMEDIATE = error "Operation RTI does not support IMMEDIATE addressing mode"
+opRTI ZEROPAGE = error "Operation RTI does not support ZEROPAGE addressing mode"
+opRTI ZEROPAGE_X = error "Operation RTI does not support ZEROPAGE_X addressing mode"
+opRTI ZEROPAGE_Y = error "Operation RTI does not support ZEROPAGE_Y addressing mode"
+opRTI RELATIVE = error "Operation RTI does not support RELATIVE addressing mode"
+opRTI ABSOLUTE = error "Operation RTI does not support ABSOLUTE addressing mode"
+opRTI ABSOLUTE_X = error "Operation RTI does not support ABSOLUTE_X addressing mode"
+opRTI ABSOLUTE_Y = error "Operation RTI does not support ABSOLUTE_Y addressing mode"
+opRTI INDIRECT = error "Operation RTI does not support INDIRECT addressing mode"
+opRTI INDEXED_INDIRECT = error "Operation RTI does not support INDEXED_INDIRECT addressing mode"
+opRTI INDIRECT_INDEXED = error "Operation RTI does not support INDIRECT_INDEXED addressing mode"
+opRTI IMPLICIT = do
+    ps <- mReadStack
+    pclb <- mReadStack
+    pchb <- mReadStack
+    let pc = joinBytes pchb pclb
+    setReg PS ps
+    setReg PC pc
+
+opRTS :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opRTS ACCUMULATOR = error "Operation RTS does not support ACCUMULATOR addressing mode"
+opRTS IMMEDIATE = error "Operation RTS does not support IMMEDIATE addressing mode"
+opRTS ZEROPAGE = error "Operation RTS does not support ZEROPAGE addressing mode"
+opRTS ZEROPAGE_X = error "Operation RTS does not support ZEROPAGE_X addressing mode"
+opRTS ZEROPAGE_Y = error "Operation RTS does not support ZEROPAGE_Y addressing mode"
+opRTS RELATIVE = error "Operation RTS does not support RELATIVE addressing mode"
+opRTS ABSOLUTE = error "Operation RTS does not support ABSOLUTE addressing mode"
+opRTS ABSOLUTE_X = error "Operation RTS does not support ABSOLUTE_X addressing mode"
+opRTS ABSOLUTE_Y = error "Operation RTS does not support ABSOLUTE_Y addressing mode"
+opRTS INDIRECT = error "Operation RTS does not support INDIRECT addressing mode"
+opRTS INDEXED_INDIRECT = error "Operation RTS does not support INDEXED_INDIRECT addressing mode"
+opRTS INDIRECT_INDEXED = error "Operation RTS does not support INDIRECT_INDEXED addressing mode"
+opRTS IMPLICIT = do
+    pclb <- mReadStack
+    pchb <- mReadStack
+    let pc = (joinBytes pchb pclb) + 1 -- Read JSR to understand this addition
+    setReg PC pc
+
+opSBC :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSBC IMPLICIT = error "Operation SBC does not support IMPLICIT addressing mode"
+opSBC ACCUMULATOR = error "Operation SBC does not support ACCUMULATOR addressing mode"
+opSBC ZEROPAGE_Y = error "Operation SBC does not support ZEROPAGE_Y addressing mode"
+opSBC RELATIVE = error "Operation SBC does not support RELATIVE addressing mode"
+opSBC INDIRECT = error "Operation SBC does not support INDIRECT addressing mode"
+opSBC addr_mode = do
+    old_acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    carry_flag <- getFlag $ CARRY
+    let carry = if carry_flag then 1 else 0 :: Word8
+    addr <- getAddr addr_mode
+    byte <- mReadByte addr
+    let operand = byte + (1 - carry) -- I don't know why it is (1 - carry) instead of (carry) but according to nesdev.org, it is.
+    mapReg ACC (\x -> x - (operand :: Word8))
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
+    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag OVERFLOW ((b7 old_acc) `xor` (b7 acc) && (b7 old_acc) `xor` (b7 operand)) -- Sets the Overflow flag
+
+opSEC :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSEC ACCUMULATOR = error "Operation SEC does not support ACCUMULATOR addressing mode"
+opSEC IMMEDIATE = error "Operation SEC does not support IMMEDIATE addressing mode"
+opSEC ZEROPAGE = error "Operation SEC does not support ZEROPAGE addressing mode"
+opSEC ZEROPAGE_X = error "Operation SEC does not support ZEROPAGE_X addressing mode"
+opSEC ZEROPAGE_Y = error "Operation SEC does not support ZEROPAGE_Y addressing mode"
+opSEC RELATIVE = error "Operation SEC does not support RELATIVE addressing mode"
+opSEC ABSOLUTE = error "Operation SEC does not support ABSOLUTE addressing mode"
+opSEC ABSOLUTE_X = error "Operation SEC does not support ABSOLUTE_X addressing mode"
+opSEC ABSOLUTE_Y = error "Operation SEC does not support ABSOLUTE_Y addressing mode"
+opSEC INDIRECT = error "Operation SEC does not support INDIRECT addressing mode"
+opSEC INDEXED_INDIRECT = error "Operation SEC does not support INDEXED_INDIRECT addressing mode"
+opSEC INDIRECT_INDEXED = error "Operation SEC does not support INDIRECT_INDEXED addressing mode"
+opSEC IMPLICIT = do
+    setFlag CARRY True
+
+opSED :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSED ACCUMULATOR = error "Operation SED does not support ACCUMULATOR addressing mode"
+opSED IMMEDIATE = error "Operation SED does not support IMMEDIATE addressing mode"
+opSED ZEROPAGE = error "Operation SED does not support ZEROPAGE addressing mode"
+opSED ZEROPAGE_X = error "Operation SED does not support ZEROPAGE_X addressing mode"
+opSED ZEROPAGE_Y = error "Operation SED does not support ZEROPAGE_Y addressing mode"
+opSED RELATIVE = error "Operation SED does not support RELATIVE addressing mode"
+opSED ABSOLUTE = error "Operation SED does not support ABSOLUTE addressing mode"
+opSED ABSOLUTE_X = error "Operation SED does not support ABSOLUTE_X addressing mode"
+opSED ABSOLUTE_Y = error "Operation SED does not support ABSOLUTE_Y addressing mode"
+opSED INDIRECT = error "Operation SED does not support INDIRECT addressing mode"
+opSED INDEXED_INDIRECT = error "Operation SED does not support INDEXED_INDIRECT addressing mode"
+opSED INDIRECT_INDEXED = error "Operation SED does not support INDIRECT_INDEXED addressing mode"
+opSED IMPLICIT = do
+    setFlag DECIMAL_MODE True
+
+opSEI :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSEI ACCUMULATOR = error "Operation SEI does not support ACCUMULATOR addressing mode"
+opSEI IMMEDIATE = error "Operation SEI does not support IMMEDIATE addressing mode"
+opSEI ZEROPAGE = error "Operation SEI does not support ZEROPAGE addressing mode"
+opSEI ZEROPAGE_X = error "Operation SEI does not support ZEROPAGE_X addressing mode"
+opSEI ZEROPAGE_Y = error "Operation SEI does not support ZEROPAGE_Y addressing mode"
+opSEI RELATIVE = error "Operation SEI does not support RELATIVE addressing mode"
+opSEI ABSOLUTE = error "Operation SEI does not support ABSOLUTE addressing mode"
+opSEI ABSOLUTE_X = error "Operation SEI does not support ABSOLUTE_X addressing mode"
+opSEI ABSOLUTE_Y = error "Operation SEI does not support ABSOLUTE_Y addressing mode"
+opSEI INDIRECT = error "Operation SEI does not support INDIRECT addressing mode"
+opSEI INDEXED_INDIRECT = error "Operation SEI does not support INDEXED_INDIRECT addressing mode"
+opSEI INDIRECT_INDEXED = error "Operation SEI does not support INDIRECT_INDEXED addressing mode"
+opSEI IMPLICIT = do
+    setFlag INTERRUPT_DISABLE True
+
+opSTA :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSTA IMPLICIT = error "Operation STA does not support IMPLICIT addressing mode"
+opSTA ACCUMULATOR = error "Operation STA does not support ACCUMULATOR addressing mode"
+opSTA IMMEDIATE = error "Operation STA does not support IMMEDIATE addressing mode"
+opSTA ZEROPAGE_Y = error "Operation STA does not support ZEROPAGE_Y addressing mode"
+opSTA RELATIVE = error "Operation STA does not support RELATIVE addressing mode"
+opSTA INDIRECT = error "Operation STA does not support INDIRECT addressing mode"
+opSTA addr_mode = do
+    addr <- getAddr addr_mode
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    mWriteByte addr acc
+
+opSTX :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSTX IMPLICIT = error "Operation STX does not support IMPLICIT addressing mode"
+opSTX ACCUMULATOR = error "Operation STX does not support ACCUMULATOR addressing mode"
+opSTX IMMEDIATE = error "Operation STX does not support IMMEDIATE addressing mode"
+opSTX ZEROPAGE_X = error "Operation STX does not support ZEROPAGE_X addressing mode"
+opSTX RELATIVE = error "Operation STX does not support RELATIVE addressing mode"
+opSTX ABSOLUTE_X = error "Operation STX does not support ABSOLUTE_X addressing mode"
+opSTX ABSOLUTE_Y = error "Operation STX does not support ABSOLUTE_Y addressing mode"
+opSTX INDIRECT = error "Operation STX does not support INDIRECT addressing mode"
+opSTX INDEXED_INDIRECT = error "Operation STX does not support INDEXED_INDIRECT addressing mode"
+opSTX INDIRECT_INDEXED = error "Operation STX does not support INDIRECT_INDEXED addressing mode"
+opSTX addr_mode = do
+    addr <- getAddr addr_mode
+    regx <- getReg IDX :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    mWriteByte addr regx
+
+opSTY :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opSTY IMPLICIT = error "Operation STY does not support IMPLICIT addressing mode"
+opSTY ACCUMULATOR = error "Operation STY does not support ACCUMULATOR addressing mode"
+opSTY IMMEDIATE = error "Operation STY does not support IMMEDIATE addressing mode"
+opSTY ZEROPAGE_Y = error "Operation STY does not support ZEROPAGE_X addressing mode"
+opSTY RELATIVE = error "Operation STY does not support RELATIVE addressing mode"
+opSTY ABSOLUTE_X = error "Operation STY does not support ABSOLUTE_X addressing mode"
+opSTY ABSOLUTE_Y = error "Operation STY does not support ABSOLUTE_Y addressing mode"
+opSTY INDIRECT = error "Operation STY does not support INDIRECT addressing mode"
+opSTY INDEXED_INDIRECT = error "Operation STY does not support INDEXED_INDIRECT addressing mode"
+opSTY INDIRECT_INDEXED = error "Operation STY does not support INDIRECT_INDEXED addressing mode"
+opSTY addr_mode = do
+    addr <- getAddr addr_mode
+    regy <- getReg IDY :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    mWriteByte addr regy
+
+opTAX :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opTAX ACCUMULATOR = error "Operation TAX does not support ACCUMULATOR addressing mode"
+opTAX IMMEDIATE = error "Operation TAX does not support IMMEDIATE addressing mode"
+opTAX ZEROPAGE = error "Operation TAX does not support ZEROPAGE addressing mode"
+opTAX ZEROPAGE_X = error "Operation TAX does not support ZEROPAGE_X addressing mode"
+opTAX ZEROPAGE_Y = error "Operation TAX does not support ZEROPAGE_Y addressing mode"
+opTAX RELATIVE = error "Operation TAX does not support RELATIVE addressing mode"
+opTAX ABSOLUTE = error "Operation TAX does not support ABSOLUTE addressing mode"
+opTAX ABSOLUTE_X = error "Operation TAX does not support ABSOLUTE_X addressing mode"
+opTAX ABSOLUTE_Y = error "Operation TAX does not support ABSOLUTE_Y addressing mode"
+opTAX INDIRECT = error "Operation TAX does not support INDIRECT addressing mode"
+opTAX INDEXED_INDIRECT = error "Operation TAX does not support INDEXED_INDIRECT addressing mode"
+opTAX INDIRECT_INDEXED = error "Operation TAX does not support INDIRECT_INDEXED addressing mode"
+opTAX IMPLICIT = do
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg IDX acc
+    setFlag ZERO (acc == 0)
+    setFlag NEGATIVE (b7 acc)
+
+opTAY :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opTAY ACCUMULATOR = error "Operation TAY does not support ACCUMULATOR addressing mode"
+opTAY IMMEDIATE = error "Operation TAY does not support IMMEDIATE addressing mode"
+opTAY ZEROPAGE = error "Operation TAY does not support ZEROPAGE addressing mode"
+opTAY ZEROPAGE_X = error "Operation TAY does not support ZEROPAGE_X addressing mode"
+opTAY ZEROPAGE_Y = error "Operation TAY does not support ZEROPAGE_Y addressing mode"
+opTAY RELATIVE = error "Operation TAY does not support RELATIVE addressing mode"
+opTAY ABSOLUTE = error "Operation TAY does not support ABSOLUTE addressing mode"
+opTAY ABSOLUTE_X = error "Operation TAY does not support ABSOLUTE_X addressing mode"
+opTAY ABSOLUTE_Y = error "Operation TAY does not support ABSOLUTE_Y addressing mode"
+opTAY INDIRECT = error "Operation TAY does not support INDIRECT addressing mode"
+opTAY INDEXED_INDIRECT = error "Operation TAY does not support INDEXED_INDIRECT addressing mode"
+opTAY INDIRECT_INDEXED = error "Operation TAY does not support INDIRECT_INDEXED addressing mode"
+opTAY IMPLICIT = do
+    acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg IDY acc
+    setFlag ZERO (acc == 0)
+    setFlag NEGATIVE (b7 acc)
+
+opTSX :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opTSX ACCUMULATOR = error "Operation TSX does not support ACCUMULATOR addressing mode"
+opTSX IMMEDIATE = error "Operation TSX does not support IMMEDIATE addressing mode"
+opTSX ZEROPAGE = error "Operation TSX does not support ZEROPAGE addressing mode"
+opTSX ZEROPAGE_X = error "Operation TSX does not support ZEROPAGE_X addressing mode"
+opTSX ZEROPAGE_Y = error "Operation TSX does not support ZEROPAGE_Y addressing mode"
+opTSX RELATIVE = error "Operation TSX does not support RELATIVE addressing mode"
+opTSX ABSOLUTE = error "Operation TSX does not support ABSOLUTE addressing mode"
+opTSX ABSOLUTE_X = error "Operation TSX does not support ABSOLUTE_X addressing mode"
+opTSX ABSOLUTE_Y = error "Operation TSX does not support ABSOLUTE_Y addressing mode"
+opTSX INDIRECT = error "Operation TSX does not support INDIRECT addressing mode"
+opTSX INDEXED_INDIRECT = error "Operation TSX does not support INDEXED_INDIRECT addressing mode"
+opTSX INDIRECT_INDEXED = error "Operation TSX does not support INDIRECT_INDEXED addressing mode"
+opTSX IMPLICIT = do
+    sp <- getReg SP :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg IDX sp
+    setFlag ZERO (sp == 0)
+    setFlag NEGATIVE (b7 sp)
+
+opTXA :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opTXA ACCUMULATOR = error "Operation TXA does not support ACCUMULATOR addressing mode"
+opTXA IMMEDIATE = error "Operation TXA does not support IMMEDIATE addressing mode"
+opTXA ZEROPAGE = error "Operation TXA does not support ZEROPAGE addressing mode"
+opTXA ZEROPAGE_X = error "Operation TXA does not support ZEROPAGE_X addressing mode"
+opTXA ZEROPAGE_Y = error "Operation TXA does not support ZEROPAGE_Y addressing mode"
+opTXA RELATIVE = error "Operation TXA does not support RELATIVE addressing mode"
+opTXA ABSOLUTE = error "Operation TXA does not support ABSOLUTE addressing mode"
+opTXA ABSOLUTE_X = error "Operation TXA does not support ABSOLUTE_X addressing mode"
+opTXA ABSOLUTE_Y = error "Operation TXA does not support ABSOLUTE_Y addressing mode"
+opTXA INDIRECT = error "Operation TXA does not support INDIRECT addressing mode"
+opTXA INDEXED_INDIRECT = error "Operation TXA does not support INDEXED_INDIRECT addressing mode"
+opTXA INDIRECT_INDEXED = error "Operation TXA does not support INDIRECT_INDEXED addressing mode"
+opTXA IMPLICIT = do
+    xreg <- getReg IDX :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg ACC xreg
+    setFlag ZERO (xreg == 0)
+    setFlag NEGATIVE (b7 xreg)
+
+opTXS ACCUMULATOR = error "Operation TXS does not support ACCUMULATOR addressing mode"
+opTXS IMMEDIATE = error "Operation TXS does not support IMMEDIATE addressing mode"
+opTXS ZEROPAGE = error "Operation TXS does not support ZEROPAGE addressing mode"
+opTXS ZEROPAGE_X = error "Operation TXS does not support ZEROPAGE_X addressing mode"
+opTXS ZEROPAGE_Y = error "Operation TXS does not support ZEROPAGE_Y addressing mode"
+opTXS RELATIVE = error "Operation TXS does not support RELATIVE addressing mode"
+opTXS ABSOLUTE = error "Operation TXS does not support ABSOLUTE addressing mode"
+opTXS ABSOLUTE_X = error "Operation TXS does not support ABSOLUTE_X addressing mode"
+opTXS ABSOLUTE_Y = error "Operation TXS does not support ABSOLUTE_Y addressing mode"
+opTXS INDIRECT = error "Operation TXS does not support INDIRECT addressing mode"
+opTXS INDEXED_INDIRECT = error "Operation TXS does not support INDEXED_INDIRECT addressing mode"
+opTXS INDIRECT_INDEXED = error "Operation TXS does not support INDIRECT_INDEXED addressing mode"
+opTXS IMPLICIT = do
+    xreg <- getReg IDX :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg SP xreg
+
+opTYA :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
+opTYA ACCUMULATOR = error "Operation TYA does not support ACCUMULATOR addressing mode"
+opTYA IMMEDIATE = error "Operation TYA does not support IMMEDIATE addressing mode"
+opTYA ZEROPAGE = error "Operation TYA does not support ZEROPAGE addressing mode"
+opTYA ZEROPAGE_X = error "Operation TYA does not support ZEROPAGE_X addressing mode"
+opTYA ZEROPAGE_Y = error "Operation TYA does not support ZEROPAGE_Y addressing mode"
+opTYA RELATIVE = error "Operation TYA does not support RELATIVE addressing mode"
+opTYA ABSOLUTE = error "Operation TYA does not support ABSOLUTE addressing mode"
+opTYA ABSOLUTE_X = error "Operation TYA does not support ABSOLUTE_X addressing mode"
+opTYA ABSOLUTE_Y = error "Operation TYA does not support ABSOLUTE_Y addressing mode"
+opTYA INDIRECT = error "Operation TYA does not support INDIRECT addressing mode"
+opTYA INDEXED_INDIRECT = error "Operation TYA does not support INDEXED_INDIRECT addressing mode"
+opTYA INDIRECT_INDEXED = error "Operation TYA does not support INDIRECT_INDEXED addressing mode"
+opTYA IMPLICIT = do
+    yreg <- getReg IDY :: (AbstractBus a1) => State (MOS6502, a1) Word8
+    setReg ACC yreg
+    setFlag ZERO (yreg == 0)
+    setFlag NEGATIVE (b7 yreg)
