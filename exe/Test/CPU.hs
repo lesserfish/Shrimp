@@ -68,7 +68,7 @@ loadMemory (y : ys) = memory // memdata
 loadCPU :: CPUState -> MOS6502
 loadCPU (CPUState rpc rs ra rx ry rp _) = MOS6502 reg 0 0
   where
-    reg = Registers (rpc + 1) rs ra rx ry rp
+    reg = Registers rpc rs ra rx ry rp
 
 loadBarebones :: CPUState -> Barebones
 loadBarebones cpustate = Barebones (loadCPU cpustate) (loadMemory . ram $ cpustate) []
