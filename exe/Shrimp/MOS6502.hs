@@ -352,7 +352,7 @@ tick :: (AbstractBus a) => State (MOS6502, a) ()
 tick = do
     (mos6502, bus) <- get
     let c = cycles mos6502
-    if c >= 0
+    if c > 0
         then do
             updateCycles (-1)
         else do
