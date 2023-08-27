@@ -219,6 +219,15 @@ b14 x = testBit x 14
 
 b15 x = testBit x 15
 
+addBCD :: Word8 -> Word8 -> Word8
+addBCD x y = result
+  where
+    xl = x .&. 0x0F
+    xh = (shiftR x 4)
+    yl = y .&. 0x0F
+    yh = (shiftR y 4)
+    rl = xl + yl
+
 getAddr :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) Word16
 getAddr IMPLICIT = return 0 -- Implicit does not require getAddr
 getAddr ACCUMULATOR = return 0 -- Accumulator does not require getAddr
@@ -857,7 +866,15 @@ opADC addr_mode = do
     byte <- mReadByte addr -- Read byte from the Bus
     if decimal_flag
         then do
-            return ()
+            let bcd_byte = encodeBCD byte
+            let bcd_carry = encodeBCD carry
+            let bcd_acc = encodeBCD acc
+            let iresult = (fromIntegral bcd_byte) + (fromIntegral bcd_carry) + (fromIntegral bcd_acc) :: Int
+            let result = decodeBCD (bcd_byte + bcd_carry + bcd_acc)
+            setReg ACC result
+            setFlag ZERO (result == 0) -- Sets the Zero flag if the result is equal to 0
+            setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
+            setFlag CARRY (iresult > 0xFF) -- Sets the carry flag is the result is greather than 255
         else do
             let operand = byte + carry
             mapReg ACC (+ operand) -- Add corresponding byte to Accumulator
