@@ -1052,12 +1052,12 @@ opBRK IMPLICIT = do
     ps <- getReg PS :: (AbstractBus a1) => State (MOS6502, a1) Word8 -- Get the Processor Status register
     mWriteStack pchb -- Write the high byte of the PC to the stack
     mWriteStack pclb -- Write the low byte of the PC to the stack
-    mWriteStack ps -- Write the PS to the stack
+    mWriteStack (setBit ps 4) -- Write the PS to the stack with fourth bit set.
     irq_lb <- mReadByte 0xFFFE -- Get the IRQ interrupt vector
     irq_hb <- mReadByte 0xFFFF --
     let jmp_addr = joinBytes irq_hb irq_lb
     setReg PC jmp_addr -- Jump to the address
-    setFlag BREAK_CMD True -- Set the Break flag
+    setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 
 opBVC :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
 opBVC IMPLICIT = error "Operation BVC does not support IMPLICIT addressing mode"

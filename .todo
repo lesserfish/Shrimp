@@ -1,2 +1,7 @@
 Write automatic testing
 Fix bugs
+
+
+Bug 1:
+    The break bit of the MOS 6502 is always one.
+    However, when the PS register is pushed to stack on a BRK instruction, it is pushed with the BRK bit set as one.

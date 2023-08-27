@@ -81,3 +81,8 @@ tickBarebones barebones = barebones'
   where
     barebones' = join result
     result = execState tick (bCpu barebones, barebones)
+
+(.**.) :: (a -> a) -> Int -> (a -> a)
+(.**.) f n x
+    | n == 1 = f x
+    | otherwise = f . (f .**. (n - 1)) $ x
