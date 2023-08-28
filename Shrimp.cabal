@@ -19,10 +19,23 @@ ghc-options: -Wall
 executable Shrimp
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Shrimp.Bus
+  other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
                     mtl >= 2.3.1
   hs-source-dirs:   exe
   default-language: Haskell2010
+test-suite Shrimp-Test
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   exe
+    main-is:          Test/Main.hs
+    other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Test.CPU
+    build-depends:    base >=4.16.4.0,
+                      hspec >= 2.11.1,
+                      aeson >= 2.1.2.1,
+                      mtl >= 2.3.1,
+                      bytestring >= 0.11.4.0,
+                      filepath >= 1.4.100.1,
+                      array >= 0.5.5.0
