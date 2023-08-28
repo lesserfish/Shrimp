@@ -10,6 +10,7 @@ import Data.Word
 import GHC.Generics
 import Shrimp.AbstractBus
 import Shrimp.MOS6502
+import Text.Printf
 
 data CPUState = CPUState
     { pc :: Word16
@@ -20,7 +21,7 @@ data CPUState = CPUState
     , p :: Word8
     , ram :: [(Word16, Word8)]
     }
-    deriving (Generic, Show, FromJSON)
+    deriving (Generic, FromJSON)
 
 data Test = Test
     { name :: String
@@ -37,10 +38,57 @@ data Barebones = Barebones
     }
 
 showMem :: Array Word16 Word8 -> String
-showMem mem = show (filter (\(_, x) -> x /= 0) (assocs mem))
+showMem mem = showRam (filter (\(_, x) -> x /= 0) (assocs mem))
+
+showRam' :: [(Word16, Word8)] -> String
+showRam' [] = ""
+showRam' (y : ys) = (printf "(%04x , %02x)" addr value) ++ rest
+  where
+    (addr, value) = y
+    rest = showRam' ys
+
+showRam :: [(Word16, Word8)] -> String
+showRam y = "[" ++ showRam' y ++ "]"
+
+showLog' :: [(Word16, Word8, String)] -> String
+showLog' [] = ""
+showLog' (y : ys) = (printf "(%04x , %02x, " addr value) ++ str ++ ")" ++ rest
+  where
+    (addr, value, str) = y
+    rest = showLog' ys
+
+showLog :: [(Word16, Word8, String)] -> String
+showLog y = "[" ++ showLog' y ++ "]"
+
+instance Show CPUState where
+    show cpustate =
+        "CPU:"
+            ++ "\npc: \t"
+            ++ showWord16 (Test.CPU.pc cpustate)
+            ++ "\ns: \t"
+            ++ showWord8 (s cpustate)
+            ++ "\na: \t"
+            ++ showWord8 (a cpustate)
+            ++ "\nx: \t"
+            ++ showWord8 (x cpustate)
+            ++ "\ny: \t"
+            ++ showWord8 (y cpustate)
+            ++ "\np: \t"
+            ++ showWord8 (p cpustate)
+            ++ "\n"
+            ++ (showRam . ram $ cpustate)
+            ++ "\n"
 
 instance Show Barebones where
-    show barebones = show (bCpu barebones) ++ "\nLog: " ++ show (bLog barebones) ++ "\nRam: " ++ showMem (bRam barebones)
+    show barebones =
+        show (bCpu barebones)
+            ++ "\nLog: "
+            ++ showLog (bLog barebones)
+            ++ "\nRam: "
+            ++ showMem (bRam barebones)
+            ++ "\nCycles: "
+            ++ showLog (bLog $ barebones)
+
 pushLog :: (Word16, Word8, String) -> Barebones -> Barebones
 pushLog info barebones = barebones{bLog = (bLog barebones) ++ [info]}
 
