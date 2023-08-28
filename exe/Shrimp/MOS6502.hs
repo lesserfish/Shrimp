@@ -219,6 +219,22 @@ b14 x = testBit x 14
 
 b15 x = testBit x 15
 
+encodeBCD :: Word8 -> Word8
+encodeBCD word = result
+  where
+    lb = word .&. 0x0F
+    hb = (shiftR word 4)
+    result = mod (lb + 10 * hb .&. 0xFF) 100
+
+decodeBCD :: Word8 -> Word8
+decodeBCD word = result
+  where
+    ld = word `mod` 10
+    hd = word `div` 10
+    lb = ld
+    hb = (shiftL hd 4) .&. 0xF0
+    result = lb + hb
+
 getAddr :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) Word16
 getAddr IMPLICIT = return 0 -- Implicit does not require getAddr
 getAddr ACCUMULATOR = return 0 -- Accumulator does not require getAddr
@@ -851,22 +867,36 @@ opADC INDIRECT = error "Operation ADC does not support INDIRECT addressing mode"
 opADC addr_mode = do
     acc <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8 -- Get the Accumulator registers prior to changes
     carry_flag <- getFlag $ CARRY -- Get the Accumulator registers prior to changes
-    decimal_flag <- getFlag $ DECIMAL_MODE
     let carry = if carry_flag then 1 else 0 :: Word8
+    decimal_flag <- getFlag $ DECIMAL_MODE
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     byte <- mReadByte addr -- Read byte from the Bus
+    let iacc = fromIntegral acc :: Int
+    let ibyte = fromIntegral byte :: Int
+    let icarry = fromIntegral carry :: Int
+    let result = iacc + ibyte + icarry
+    setFlag ZERO (result == 0) -- Sets the Zero flag if the result is equal to 0
     if decimal_flag
         then do
-            return ()
+            let l = (acc .&. 15) + (byte .&. 15) + carry
+            let h1 = (shiftR acc 4) .&. 15
+            let h2 = (shiftR byte 4) .&. 15
+            let h = h1 + h2
+            let s1 = if b3 h1 then h1 - 0x0f else h1
+            let s2 = if b3 h2 then h2 - 0x0f else h2
+            let (l', h') = if l > 9 then ((l + 6) .&. 15, h + 1) else (l, h)
+            let h'' = if h' > 9 then (h' + 6) .&. 15 else h'
+            setFlag CARRY (h' > 9)
+            let r = (shiftL h'' 4) .|. l'
+            setFlag OVERFLOW (not (b7 (iacc `xor` ibyte)) && (b7 (iacc `xor` result)))
+            setFlag NEGATIVE (b7 r)
+            setReg ACC r
         else do
-            let operand = byte + carry
-            mapReg ACC (+ operand) -- Add corresponding byte to Accumulator
-            let iresult = (fromIntegral byte) + (fromIntegral carry) + (fromIntegral acc) :: Int
-            result <- getReg ACC :: (AbstractBus a1) => State (MOS6502, a1) Word8 -- Get the updated Accumulator
-            setFlag ZERO (result == 0) -- Sets the Zero flag if the result is equal to 0
-            setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
-            setFlag OVERFLOW ((b7 acc) `xor` (b7 result) && (b7 operand) `xor` (b7 result)) -- Sets the Overflow flag
-            setFlag CARRY (iresult > 0xFF) -- Sets the carry flag is the result is greather than 255
+            setFlag NEGATIVE (b7 result)
+            setFlag OVERFLOW (not (b7 (iacc `xor` ibyte)) && (b7 (iacc `xor` result)))
+            setFlag CARRY (result > 0xFF)
+            let acc' = fromIntegral (result .&. 0xFF) :: Word8
+            setReg ACC acc'
 
 opAND :: (AbstractBus a) => ADDR_MODE -> State (MOS6502, a) ()
 opAND IMPLICIT = error "Operation AND does not support IMPLICIT addressing mode"

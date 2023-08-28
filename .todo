@@ -4,3 +4,10 @@ Fix bugs
 
 Bug 1:
     Binary Coded Decimal (BCD) show be used in arithmetic operations when the decimal bit is set.
+    Currently, the biggest problem lies in decodeBSD.
+    For example, the BCD Sum of 0xD7 + 0x9B + 0x01 is 
+        (encodeBCD 0xD7) + (encodeBCD 0x9B) + (encodeBCD 0x01) = 39
+    The correct value for accumulator is 0xD9 = 217. The current implementation of decodeBSD gives 217.
+    But
+    encodeBSD 0xD9 = encodeBSD 217 = 39
+    Why would the CPU give 0xD9?
