@@ -5,3 +5,4 @@ import Data.Word
 class AbstractBus a where
     writeByte :: Word16 -> Word8 -> a -> a
     readByte :: Word16 -> a -> (a, Word8)
+    peek :: Word16 -> a -> Word8

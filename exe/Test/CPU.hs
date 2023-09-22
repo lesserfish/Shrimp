@@ -102,6 +102,9 @@ instance AbstractBus Barebones where
         ram' = (bRam barebones) // [(addr, byte)]
         barebones' = barebones{bRam = ram'}
         barebones'' = pushLog (addr, byte, "write") barebones'
+    peek addr barebones = byte
+      where
+        byte = (bRam barebones) ! addr
 
 emptyArray :: Int -> Array Word16 Word8
 emptyArray size = listArray (0, fromIntegral size - 1) (replicate (fromIntegral size) 0)
