@@ -19,12 +19,13 @@ ghc-options: -Wall
 executable Shrimp
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Shrimp.Loader
+  other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Shrimp.Mapper.Mapper, Shrimp.Mapper.AbstractMapper, Shrimp.Mapper.Mapper0, Shrimp.Cartridge
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
                     mtl >= 2.3.1,
-                    bytestring >= 0.11.4.0
+                    bytestring >= 0.11.4.0,
+                    array >= 0.5.5.0
   hs-source-dirs:   exe
   default-language: Haskell2010
 test-suite Shrimp-Test

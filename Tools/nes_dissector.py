@@ -19,6 +19,7 @@ file.seek(initial_position)
 magic_number = file.read(4)
 prg_size = file.read(1)[0]
 chr_size = file.read(1)[0]
+chr_ram = (chr_size == 0)
 flag6 = file.read(1)[0]
 mirroring = flag6 & 0b00000001
 battery =   flag6 & 0b00000010
@@ -54,6 +55,7 @@ padding = file.read(5)
 print("Magic Number: {}".format(magic_number))
 print("PRG Rom size: {}".format(prg_size))
 print("CHR Rom size: {}".format(chr_size))
+print("Mapper uses CHR RAM: {}".format(chr_ram))
 print("Mirroring: {}".format(mirroring))
 print("Battery: {}".format(battery))
 print("Trainer: {}".format(trainer))
@@ -75,6 +77,9 @@ if trainer == 1:
 prg_data = file.read(16 * 1024 * prg_size)
 chr_data = file.read(8 * 1024 * chr_size)
 
+print(len(prg_data))
+print(len(chr_data))
+
 current_position = file.tell()
 print("Bytes left in ROM: {}".format(total_size - current_position))
 file.close()
@@ -95,7 +100,8 @@ pygame.init()
 screen = pygame.display.set_mode((screen_width, screen_height))
 image_surface = pygame.Surface((w, h))
 
-pixcolor = [(255, 255, 255), (122, 122, 122), (0, 0, 0), (255, 0, 0)]
+pixcolor = [(255, 255, 255), (122, 122, 122), (80, 80, 80), (0, 0, 0)]
+#pixcolor = [(255, 12, 35), (12, 12, 22), (10, 111, 140), (210, 210, 1)]
 
 for table_idx in range(0, 2):
     for tilex in range(0, 16):
@@ -106,7 +112,9 @@ for table_idx in range(0, 2):
                 tile_hsb = chr_data[table_idx * 0x1000 + tile_offset + px + 0x0008]
 
                 for py in range(0, 8):
-                    pixel = ((tile_lsb >> py) & 0x01) + ((tile_hsb >> py) & 0x01)
+                    pl = ((tile_lsb >> py) & 0x01) 
+                    ph = ((tile_hsb >> py) & 0x01)
+                    pixel = (pl << 1) + ph
 
                     x = tilex * 8 + (7 - py) + table_idx * 16*8
                     y = tiley * 8 + px
