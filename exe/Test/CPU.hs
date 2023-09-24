@@ -60,6 +60,12 @@ showLog' (y : ys) = (printf "(%04x , %02x, " addr value) ++ str ++ ")" ++ rest
 showLog :: [(Word16, Word8, String)] -> String
 showLog y = "[" ++ showLog' y ++ "]"
 
+showWord16 :: Word16 -> String
+showWord16 word = show word ++ (printf "\t(0x%04x)" word)
+
+showWord8 :: Word8 -> String
+showWord8 word = show word ++ (printf "\t(0x%02x)\t(%08b)" word word)
+
 instance Show CPUState where
     show cpustate =
         "CPU:"
@@ -92,17 +98,17 @@ instance Show Barebones where
 pushLog :: (Word16, Word8, String) -> Barebones -> Barebones
 pushLog info barebones = barebones{bLog = (bLog barebones) ++ [info]}
 
-instance AbstractBus Barebones where
-    readByte addr barebones = (barebones', byte)
+instance CPUBus Barebones where
+    cpuReadByte addr barebones = (barebones', byte)
       where
         byte = (bRam barebones) ! addr
         barebones' = pushLog (addr, byte, "read") barebones
-    writeByte addr byte barebones = barebones''
+    cpuWriteByte addr byte barebones = barebones''
       where
         ram' = (bRam barebones) // [(addr, byte)]
         barebones' = barebones{bRam = ram'}
         barebones'' = pushLog (addr, byte, "write") barebones'
-    peek addr barebones = byte
+    cpuPeek addr barebones = byte
       where
         byte = (bRam barebones) ! addr
 

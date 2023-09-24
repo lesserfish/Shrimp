@@ -1,6 +1,3 @@
-1. Write Proper BUS
-It should
-1. Map the entire memory address of the NES to the corresponding part
-2. Create the PPU. We should start by
-    1. Reading the namespace table and Pattern table from Mapper
-    2. Seeing the sprites
+1. Write Cartridge readCPU, writeCPU, readPPU, writePPU
+2. Create the NES data type, it should include a cycle which calls PPU cycle three times for every cpu cycle.
+3. Create the PPU data type.
