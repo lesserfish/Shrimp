@@ -36,7 +36,7 @@ exec = execState
 cpuReadRAM :: Word16 -> State NES Word8
 cpuReadRAM addr = do
     nes <- get
-    let real_addr = addr .&. 0x07FF -- Mirroring
+    let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     let byte = Memory.readByte (cpuRAM nes) real_addr
     return byte
 
@@ -44,7 +44,7 @@ cpuReadRAM addr = do
 cpuReadPPU :: Word16 -> State NES Word8
 cpuReadPPU addr = do
     nes <- get
-    let real_addr = addr .&. 0x0007 -- Mirroring
+    let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
     let (byte, out) = runState (PPU.cpuRead real_addr) (ppu nes, nes)
     let nes' = flattenPPU out
     put nes'
@@ -72,7 +72,7 @@ cpuReadCart addr = do
 cpuWriteRAM :: Word16 -> Word8 -> State NES ()
 cpuWriteRAM addr byte = do
     nes <- get
-    let real_addr = addr .&. 0x07FF -- Mirroring
+    let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     let ram' = Memory.writeByte (cpuRAM nes) real_addr byte
     let nes' = nes{cpuRAM = ram'}
     put nes'
@@ -81,7 +81,7 @@ cpuWriteRAM addr byte = do
 cpuWritePPU :: Word16 -> Word8 -> State NES ()
 cpuWritePPU addr byte = do
     nes <- get
-    let real_addr = addr .&. 0x0007 -- Mirroring
+    let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
     let out = execState (PPU.cpuWrite real_addr byte) (ppu nes, nes)
     let nes' = flattenPPU out
     put nes'
