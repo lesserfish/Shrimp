@@ -3,6 +3,7 @@ module Shrimp.MOS6502 (
     tick,
     execute,
     Registers (..),
+    Context (..),
 ) where
 
 import Control.Monad.ST (ST)
@@ -56,10 +57,13 @@ instance Show Registers where
             ++ "\np: \t"
             ++ showWord8 (ps reg)
 
+data Context = Context deriving (Show)
+
 data MOS6502 = MOS6502
     { mosRegisters :: Registers
     , clock :: Int
     , cycles :: Int
+    , context :: Context
     }
     deriving (Show)
 

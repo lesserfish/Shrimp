@@ -2,34 +2,35 @@ module Shrimp.Cartridge (
     Cartridge (..),
     emptyCartridge,
     loadCartridge,
+    cpuWrite,
+    cpuRead,
+    ppuWrite,
+    ppuRead,
 ) where
 
 import Control.Monad.State
-import Data.Array
 import Data.Bits
 import qualified Data.ByteString as BS
 import Data.Char
 import Data.Word
 import Shrimp.INES
+import Shrimp.Mapper.AbstractMapper
 import Shrimp.Mapper.Mapper
 import Shrimp.Mapper.Mapper0
+import qualified Shrimp.Memory as Memory
 import System.IO
 
 data Cartridge = Cartridge
     { cHeader :: Header
-    , cPRGData :: Array Word16 Word8
-    , cCHRData :: Array Word16 Word8
+    , cPRGData :: Memory.RAM
+    , cCHRData :: Memory.RAM
     , cMapper :: Mapper
     }
     deriving (Show)
 
--- A default empty Array of size N
-emptyArray :: Int -> Array Word16 Word8
-emptyArray size = listArray (0, fromIntegral size - 1) (replicate (fromIntegral size) 0)
-
 -- A default empty cartridge
 emptyCartridge :: Cartridge
-emptyCartridge = Cartridge{cHeader = emptyHeader, cPRGData = emptyArray 1, cCHRData = emptyArray 1, cMapper = Mapper (Mapper0 0 0)}
+emptyCartridge = Cartridge{cHeader = emptyHeader, cPRGData = Memory.noRAM, cCHRData = Memory.noRAM, cMapper = Mapper (Mapper0 0 0)}
 
 -- Reads a singly byte from file and return a Word8
 readByteFromFile :: Handle -> IO Word8
@@ -63,7 +64,7 @@ loadCPRG file = do
     let size = (fromIntegral prgBanks) * 16 * 1024 :: Int
     liftIO . putStrLn $ "Reading " ++ (show size) ++ " bytes of PRG data"
     prgData <- liftIO $ readBytesFromFile file size
-    let prgArray = listArray (0, fromIntegral size - 1) prgData :: Array Word16 Word8
+    let prgArray = Memory.fromList prgData
     let cartridge' = cartridge{cPRGData = prgArray}
     put cartridge'
 
@@ -77,7 +78,7 @@ loadCCHR file = do
     let size = (fromIntegral chrBanks) * 8 * 1024 :: Int
     liftIO . putStrLn $ "Reading " ++ (show size) ++ " bytes of CHR data"
     charData <- liftIO $ readBytesFromFile file size
-    let charArray = listArray (0, fromIntegral size - 1) charData :: Array Word16 Word8
+    let charArray = Memory.fromList charData
     let cartridge' = cartridge{cCHRData = charArray}
     put cartridge'
 
@@ -115,3 +116,33 @@ loadCartridge filepath = do
     file <- openBinaryFile filepath ReadMode
     cartridge <- execStateT (loadCartridgeT file) emptyCartridge
     return cartridge
+
+cpuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
+cpuRead cart addr = (cartridge', byte)
+  where
+    (mapper', addr') = cpuRMap (cMapper cart) addr
+    byte = Memory.readByte (cPRGData cart) addr'
+    cartridge' = cart{cMapper = mapper'}
+
+-- TODO: Is Write allowd? Is PRG ROM or RAM?
+cpuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
+cpuWrite cart addr byte = cartridge'
+  where
+    (mapper', addr') = cpuWMap (cMapper cart) addr
+    prg' = Memory.writeByte (cPRGData cart) addr' byte
+    cartridge' = cart{cMapper = mapper', cPRGData = prg'}
+
+ppuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
+ppuRead cart addr = (cartridge', byte)
+  where
+    (mapper', addr') = ppuRMap (cMapper cart) addr
+    byte = Memory.readByte (cCHRData cart) addr'
+    cartridge' = cart{cMapper = mapper'}
+
+-- TODO: Is Write allowd? Is CHR ROM or RAM?
+ppuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
+ppuWrite cart addr byte = cartridge'
+  where
+    (mapper', addr') = ppuWMap (cMapper cart) addr
+    chr' = Memory.writeByte (cCHRData cart) addr' byte
+    cartridge' = cart{cMapper = mapper', cCHRData = chr'}

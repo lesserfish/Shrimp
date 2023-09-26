@@ -28,13 +28,15 @@ executable Shrimp
                     Shrimp.NES, 
                     Shrimp.R2C02, 
                     Shrimp.Interface,
-                    Shrimp.INES
+                    Shrimp.INES,
+                    Shrimp.Memory
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
                     mtl >= 2.3.1,
                     bytestring >= 0.11.4.0,
-                    array >= 0.5.5.0
+                    array >= 0.5.5.0,
+                    vector >= 0.13.0.0
   hs-source-dirs:   exe
   default-language: Haskell2010
 test-suite Shrimp-Test
