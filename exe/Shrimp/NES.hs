@@ -1,6 +1,7 @@
 module Shrimp.NES where
 
 import Control.Monad.State
+import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
 import qualified Shrimp.Cartridge as Cart
@@ -35,21 +36,23 @@ exec = execState
 cpuReadRAM :: Word16 -> State NES Word8
 cpuReadRAM addr = do
     nes <- get
-    let byte = Memory.readByte (cpuRAM nes) addr
+    let real_addr = addr .&. 0x07FF -- Mirroring
+    let byte = Memory.readByte (cpuRAM nes) real_addr
     return byte
 
 -- PPU
 cpuReadPPU :: Word16 -> State NES Word8
 cpuReadPPU addr = do
     nes <- get
-    let (byte, out) = runState (PPU.cpuRead addr) (ppu nes, nes)
+    let real_addr = addr .&. 0x0007 -- Mirroring
+    let (byte, out) = runState (PPU.cpuRead real_addr) (ppu nes, nes)
     let nes' = flattenPPU out
     put nes'
     return byte
 
 -- APU
 cpuReadAPU :: Word16 -> State NES Word8
-cpuReadAPU addr = return 0 -- TODO: Imeplement APU Support
+cpuReadAPU addr = return 0 -- TODO: Implement APU Support
 
 -- Controls
 cpuReadControl :: Word16 -> State NES Word8
@@ -59,7 +62,7 @@ cpuReadControl addr = return 0 -- TODO: Implement Control Support
 cpuReadCart :: Word16 -> State NES Word8
 cpuReadCart addr = do
     nes <- get
-    let (cart', byte) = Cart.cpuRead (cartridge nes) addr
+    let (cart', byte) = Cart.cpuRead (cartridge nes) addr -- The mapper fixes the address by itself
     let nes' = nes{cartridge = cart'}
     put nes'
     return byte
@@ -69,7 +72,8 @@ cpuReadCart addr = do
 cpuWriteRAM :: Word16 -> Word8 -> State NES ()
 cpuWriteRAM addr byte = do
     nes <- get
-    let ram' = Memory.writeByte (cpuRAM nes) addr byte
+    let real_addr = addr .&. 0x07FF -- Mirroring
+    let ram' = Memory.writeByte (cpuRAM nes) real_addr byte
     let nes' = nes{cpuRAM = ram'}
     put nes'
 
@@ -77,7 +81,8 @@ cpuWriteRAM addr byte = do
 cpuWritePPU :: Word16 -> Word8 -> State NES ()
 cpuWritePPU addr byte = do
     nes <- get
-    let out = execState (PPU.cpuWrite addr byte) (ppu nes, nes)
+    let real_addr = addr .&. 0x0007 -- Mirroring
+    let out = execState (PPU.cpuWrite real_addr byte) (ppu nes, nes)
     let nes' = flattenPPU out
     put nes'
 
@@ -93,7 +98,7 @@ cpuWriteControl addr byte = return () -- TODO: Implement Control Support
 cpuWriteCart :: Word16 -> Word8 -> State NES ()
 cpuWriteCart addr byte = do
     nes <- get
-    let cart' = Cart.cpuWrite (cartridge nes) addr byte
+    let cart' = Cart.cpuWrite (cartridge nes) addr byte -- The mapper fixes the address by itself
     let nes' = nes{cartridge = cart'}
     put nes'
 
