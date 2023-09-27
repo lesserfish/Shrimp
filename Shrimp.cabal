@@ -29,7 +29,8 @@ executable Shrimp
                     Shrimp.R2C02, 
                     Shrimp.Interface,
                     Shrimp.INES,
-                    Shrimp.Memory
+                    Shrimp.Memory,
+                    Shrimp.Frontend.GUI
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,

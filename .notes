@@ -1,7 +1,0 @@
-We should have:
-    - A Bus class, which will contain the basic interface of a memory bus.
-    - The CPU 6502 should contain the registers, clock and instructions. It should communicate with memory only though an instance of the memory bus class
-    - The PPU should be its own thing. It should communicate with memory only thrugh instances of the memory bus class.
-    - The CPUBus, should be an instance of the Bus Class. This should contain the memory, the cartridge and the PPU, which it will use to effectively find the correct memory address for the CPU
-    - The PPUBus, should be an instance of the Bus Class. This should contain the memory, the cartridge, which will effectively find the correct memory address for the PPU.
-    - We will talk about Cartridges and Mappers later

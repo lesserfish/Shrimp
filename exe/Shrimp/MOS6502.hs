@@ -2,6 +2,7 @@ module Shrimp.MOS6502 (
     MOS6502 (..),
     tick,
     execute,
+    reset,
     Registers (..),
     Context (..),
 ) where
@@ -389,6 +390,18 @@ mReadStack = do
     sp <- getReg SP :: (CPUBus a1) => State (MOS6502, a1) Word8 -- Get the Stack Pointer
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
     mReadByte addr -- Read byte
+
+resetCycles :: (CPUBus a) => State (MOS6502, a) ()
+resetCycles = do
+    (mos6502, bus) <- get
+    let mos6502' = mos6502{cycles = 0}
+    put (mos6502', bus)
+
+resetClock :: (CPUBus a) => State (MOS6502, a) ()
+resetClock = do
+    (mos6502, bus) <- get
+    let mos6502' = mos6502{clock = 0}
+    put (mos6502', bus)
 
 updateCycles :: (CPUBus a) => Int -> State (MOS6502, a) ()
 updateCycles offset = do
@@ -871,6 +884,57 @@ execute 0x98 = do
     opTYA IMPLICIT
 execute opcode = error (show opcode ++ ": Unknown opcode")
 
+iIRQ :: (CPUBus a) => State (MOS6502, a) ()
+iIRQ = do
+    interrupt_disable <- getFlag INTERRUPT_DISABLE
+    if interrupt_disable
+        then do
+            return ()
+        else do
+            pc <- getReg PC :: (CPUBus a1) => State (MOS6502, a1) Word16 -- Get the PC register
+            let pushed_pc = pc + 1 -- Currently, PC points to the byte NEXT to the BRK instruction. But for some ill reason, the 6502 will push the byte after that one to the stack instead.
+            let (pchb, pclb) = splitBytes (pushed_pc) --
+            ps <- getReg PS :: (CPUBus a1) => State (MOS6502, a1) Word8 -- Get the Processor Status register
+            mWriteStack pchb -- Write the high byte of the PC to the stack
+            mWriteStack pclb -- Write the low byte of the PC to the stack
+            mWriteStack (setBit ps 0) -- Write the PS to the stack with fourth bit (B flag) unset. (see: https://www.pagetable.com/?p=410)
+            irq_lb <- mReadByte 0xFFFE -- Get the IRQ interrupt vector
+            irq_hb <- mReadByte 0xFFFF --
+            let jmp_addr = joinBytes irq_hb irq_lb
+            setReg PC jmp_addr -- Jump to the address
+            setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
+
+iNMI :: (CPUBus a) => State (MOS6502, a) () -- Non-Maskable Interrupt
+iNMI = do
+    pc <- getReg PC :: (CPUBus a1) => State (MOS6502, a1) Word16 -- Get the PC register
+    let pushed_pc = pc + 1 -- Currently, PC points to the byte NEXT to the BRK instruction. But for some ill reason, the 6502 will push the byte after that one to the stack instead.
+    let (pchb, pclb) = splitBytes (pushed_pc) --
+    ps <- getReg PS :: (CPUBus a1) => State (MOS6502, a1) Word8 -- Get the Processor Status register
+    mWriteStack pchb -- Write the high byte of the PC to the stack
+    mWriteStack pclb -- Write the low byte of the PC to the stack
+    mWriteStack (setBit ps 0) -- Write the PS to the stack with fourth bit (B flag) unset. (see: https://www.pagetable.com/?p=410)
+    irq_lb <- mReadByte 0xFFFA -- Get the NMI interrupt vector
+    irq_hb <- mReadByte 0xFFFB --
+    let jmp_addr = joinBytes irq_hb irq_lb
+    setReg PC jmp_addr -- Jump to the address
+    setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
+
+reset :: (CPUBus a) => State (MOS6502, a) () -- Non-Maskable Interrupt
+reset = do
+    irq_lb <- mReadByte 0xFFFC -- Get the NMI interrupt vector
+    irq_hb <- mReadByte 0xFFFD --
+    let jmp_addr = joinBytes irq_hb irq_lb
+    setReg PC jmp_addr -- Set the PC Register
+    setReg SP (0xFD :: Word8) -- Set the Stack Pointer
+    setReg ACC (0x00 :: Word8) -- Set the Accumulator
+    setReg IDX (0x00 :: Word8) -- Set the X register
+    setReg IDY (0x00 :: Word8) -- Set the Y register
+    setReg PS (setBit 0x00 5 :: Word8) -- Set the Status Flag. (UNUSED flag set to 1)
+    resetClock
+    resetCycles
+
+-- TODO: Reset CPU Context
+
 -- INSTRUCTIONS:
 --
 -- opXXX IMPLICIT = error "Operation XXX does not support IMPLICIT addressing mode"
@@ -1119,7 +1183,7 @@ opBRK IMPLICIT = do
     ps <- getReg PS :: (CPUBus a1) => State (MOS6502, a1) Word8 -- Get the Processor Status register
     mWriteStack pchb -- Write the high byte of the PC to the stack
     mWriteStack pclb -- Write the low byte of the PC to the stack
-    mWriteStack (setBit ps 4) -- Write the PS to the stack with fourth bit set.
+    mWriteStack (setBit ps 4) -- Write the PS to the stack with fourth bit (B flag) set.
     irq_lb <- mReadByte 0xFFFE -- Get the IRQ interrupt vector
     irq_hb <- mReadByte 0xFFFF --
     let jmp_addr = joinBytes irq_hb irq_lb

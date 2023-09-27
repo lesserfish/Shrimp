@@ -6,6 +6,7 @@ module Shrimp.Cartridge (
     cpuRead,
     ppuWrite,
     ppuRead,
+    reset,
 ) where
 
 import Control.Monad.State
@@ -14,7 +15,7 @@ import qualified Data.ByteString as BS
 import Data.Char
 import Data.Word
 import Shrimp.INES
-import Shrimp.Mapper.AbstractMapper
+import qualified Shrimp.Mapper.AbstractMapper as AMapper
 import Shrimp.Mapper.Mapper
 import Shrimp.Mapper.Mapper0
 import qualified Shrimp.Memory as Memory
@@ -120,29 +121,35 @@ loadCartridge filepath = do
 cpuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
 cpuRead cart addr = (cartridge', byte)
   where
-    (mapper', addr') = cpuRMap (cMapper cart) addr
+    (mapper', addr') = AMapper.cpuRMap (cMapper cart) addr
     byte = Memory.readByte (cPRGData cart) addr'
     cartridge' = cart{cMapper = mapper'}
 
--- TODO: Is Write allowd? Is PRG ROM or RAM?
+-- TODO: Is Write allowed? Is PRG ROM or RAM?
 cpuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
 cpuWrite cart addr byte = cartridge'
   where
-    (mapper', addr') = cpuWMap (cMapper cart) addr
+    (mapper', addr') = AMapper.cpuWMap (cMapper cart) addr
     prg' = Memory.writeByte (cPRGData cart) addr' byte
     cartridge' = cart{cMapper = mapper', cPRGData = prg'}
 
 ppuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
 ppuRead cart addr = (cartridge', byte)
   where
-    (mapper', addr') = ppuRMap (cMapper cart) addr
+    (mapper', addr') = AMapper.ppuRMap (cMapper cart) addr
     byte = Memory.readByte (cCHRData cart) addr'
     cartridge' = cart{cMapper = mapper'}
 
--- TODO: Is Write allowd? Is CHR ROM or RAM?
+-- TODO: Is Write allowed? Is CHR ROM or RAM?
 ppuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
 ppuWrite cart addr byte = cartridge'
   where
-    (mapper', addr') = ppuWMap (cMapper cart) addr
+    (mapper', addr') = AMapper.ppuWMap (cMapper cart) addr
     chr' = Memory.writeByte (cCHRData cart) addr' byte
     cartridge' = cart{cMapper = mapper', cCHRData = chr'}
+
+reset :: Cartridge -> Cartridge
+reset cart = cart'
+  where
+    mapper' = AMapper.reset (cMapper cart)
+    cart' = cart{cMapper = mapper'}

@@ -7,13 +7,13 @@ import Shrimp.AbstractBus
 import qualified Shrimp.Cartridge as Cart
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
-import Shrimp.R2C02 as PPU
+import qualified Shrimp.R2C02 as PPU
 
 data NESContext = NESContext
 
 data NES = NES
     { cpu :: CPU.MOS6502
-    , ppu :: R2C02
+    , ppu :: PPU.R2C02
     , cartridge :: Cart.Cartridge
     , cpuRAM :: Memory.RAM
     , ppuRAM :: Memory.RAM
@@ -159,11 +159,12 @@ instance PPUBus NES where
         | (addr >= 0x2000 && addr <= 0x3EFF) = snd $ run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = snd $ run (ppuReadPL addr) nes
         | otherwise = 0 -- TODO: Log error
+    setPixel (x, y) value nes = nes -- TODO: Implement SetPixel support
 
 flattenCPU :: (CPU.MOS6502, NES) -> NES
 flattenCPU (mos6502, nes) = nes{cpu = mos6502}
 
-flattenPPU :: (R2C02, NES) -> NES
+flattenPPU :: (PPU.R2C02, NES) -> NES
 flattenPPU (r2c02, nes) = nes{ppu = r2c02}
 
 updateClock :: Int -> State NES ()
@@ -194,3 +195,13 @@ tick = do
     tickCPU
     tickPPU
     updateClock 1
+
+reset :: State NES ()
+reset = do
+    nes <- get
+    let (cpu', _) = exec CPU.reset (cpu nes, nes) -- CPU Reset does not change the NES
+    let cart' = Cart.reset $ cartridge nes
+    let (ppu', _) = exec PPU.reset (ppu nes, nes) -- PPU Reset does not change the NES
+    let nes' = nes{cpu = cpu', cartridge = cart', ppu = ppu'}
+    -- TODO: UPDATE Context, RAM, Clock
+    put nes'
