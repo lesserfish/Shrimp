@@ -284,7 +284,7 @@ getAddr ZEROPAGE_X = do
     cPC <- getReg PC :: (CPUBus a1) => State (MOS6502, a1) Word16
     xreg <- getReg IDX :: (CPUBus a1) => State (MOS6502, a1) Word8
     lb <- mReadByte cPC -- Get the low byte of the address
-    let addr = joinBytes 0x00 (lb + xreg)
+    let addr = joinBytes 0x00 (lb + xreg) -- Add IDX ro the address
     setReg PC (cPC + 1)
     return addr
 getAddr ZEROPAGE_Y = do

@@ -30,7 +30,11 @@ executable Shrimp
                     Shrimp.Interface,
                     Shrimp.INES,
                     Shrimp.Memory,
-                    Shrimp.Frontend.GUI
+                    Shrimp.Frontend.GUI,
+                    Shrimp.Controller, 
+                    Shrimp.IO,
+                    Shrimp.IO.Input,
+                    Shrimp.IO.Output
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,

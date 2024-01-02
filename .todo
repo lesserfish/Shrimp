@@ -2,5 +2,6 @@
     a. Registers
     b. CPUInterface
     c. Tick
-3. Create method 'newNES' or something like that, that loads a cartridge and then simply resets the CPU, Cartridige and PPU.
+3. Create CPU.new, PPU.new, NES.new
+4. Implement a Memory Tracker in the MOS6502, so we can keep track of the current and following instructions being executed.
 4. Create a Frontend 

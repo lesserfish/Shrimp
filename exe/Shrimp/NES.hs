@@ -5,6 +5,7 @@ import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
 import qualified Shrimp.Cartridge as Cart
+import qualified Shrimp.IO as IO
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.R2C02 as PPU
@@ -19,6 +20,7 @@ data NES = NES
     , ppuRAM :: Memory.RAM
     , context :: NESContext
     , nClock :: Int
+    , nIO :: IO.Queue
     }
 
 -- Helper functions
