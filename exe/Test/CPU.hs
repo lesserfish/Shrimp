@@ -123,7 +123,7 @@ loadMemory (y : ys) = memory // memdata
     memdata = [y]
 
 loadCPU :: CPUState -> MOS6502
-loadCPU (CPUState rpc rs ra rx ry rp _) = MOS6502 reg 0 0 (Context [])
+loadCPU (CPUState rpc rs ra rx ry rp _) = MOS6502 reg 0 0 (Context)
   where
     reg = Registers rpc rs ra rx ry rp
 

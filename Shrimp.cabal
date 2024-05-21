@@ -21,6 +21,7 @@ executable Shrimp
   main-is:          Main.hs
   other-modules:    Shrimp.AbstractBus, 
                     Shrimp.MOS6502, 
+                    Shrimp.MOS6502.Disassembler, 
                     Shrimp.Mapper.Mapper, 
                     Shrimp.Mapper.AbstractMapper, 
                     Shrimp.Mapper.Mapper0, 

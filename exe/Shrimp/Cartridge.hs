@@ -63,7 +63,6 @@ loadCPRG file = do
     let header = cHeader cartridge
     let prgBanks = hPrgSize header
     let size = (fromIntegral prgBanks) * 16 * 1024 :: Int
-    liftIO . putStrLn $ "Reading " ++ (show size) ++ " bytes of PRG data"
     prgData <- liftIO $ readBytesFromFile file size
     let prgArray = Memory.fromList prgData
     let cartridge' = cartridge{cPRGData = prgArray}
@@ -77,7 +76,6 @@ loadCCHR file = do
     let header = cHeader cartridge
     let chrBanks = hChrSize header
     let size = (fromIntegral chrBanks) * 8 * 1024 :: Int
-    liftIO . putStrLn $ "Reading " ++ (show size) ++ " bytes of CHR data"
     charData <- liftIO $ readBytesFromFile file size
     let charArray = Memory.fromList charData
     let cartridge' = cartridge{cCHRData = charArray}

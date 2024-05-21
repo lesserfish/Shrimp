@@ -63,15 +63,7 @@ instance Show Registers where
 
 data Log = LOP String | LA String deriving (Show)
 
-data Context = Context {cLog :: [Log]} deriving (Show)
-
-pushLog :: (CBus m a) => Log -> StateT (MOS6502, a) m ()
-pushLog log = do
-    (mos, x) <- get
-    let c = context mos
-    let c' = c{cLog = (cLog c) ++ [log]}
-    let mos' = mos{context = c'}
-    put (mos', x)
+data Context = Context deriving (Show)
 
 data MOS6502 = MOS6502
     { mosRegisters :: Registers
@@ -87,7 +79,7 @@ mos6502 =
         { mosRegisters = Registers 0 0 0 0 0 0
         , clock = 0
         , cycles = 0
-        , context = Context []
+        , context = Context
         }
 data FLAG
     = CARRY
@@ -447,7 +439,6 @@ fetch :: (CBus m a) => StateT (MOS6502, a) m Word8
 fetch = do
     pc <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
     opcode <- mReadByte pc
-    pushLog (LOP $ (showHex opcode ""))
     setReg PC (pc + 1)
     return opcode
 
