@@ -166,6 +166,11 @@ loadHFlag10 file = do
     -- TODO: Finish this
     put header
 
+loadPadding :: Handle -> StateT Header IO ()
+loadPadding file = do
+    padding <- liftIO $ readBytesFromFile file 5
+    return ()
+
 -- Loads the Header
 -- TODO: Implement INES2.0 compatibility
 loadHeader :: Handle -> StateT Header IO ()
@@ -176,3 +181,4 @@ loadHeader file = do
     loadHFlag8 file
     loadHFlag9 file
     loadHFlag10 file
+    loadPadding file
