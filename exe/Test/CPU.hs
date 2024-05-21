@@ -98,17 +98,17 @@ instance Show Barebones where
 pushLog :: (Word16, Word8, String) -> Barebones -> Barebones
 pushLog info barebones = barebones{bLog = (bLog barebones) ++ [info]}
 
-instance CPUBus Barebones where
-    cpuReadByte addr barebones = (barebones', byte)
+instance PCBus Barebones where
+    pcReadByte addr barebones = (barebones', byte)
       where
         byte = (bRam barebones) ! addr
         barebones' = pushLog (addr, byte, "read") barebones
-    cpuWriteByte addr byte barebones = barebones''
+    pcWriteByte addr byte barebones = barebones''
       where
         ram' = (bRam barebones) // [(addr, byte)]
         barebones' = barebones{bRam = ram'}
         barebones'' = pushLog (addr, byte, "write") barebones'
-    cpuPeek addr barebones = byte
+    pcPeek addr barebones = byte
       where
         byte = (bRam barebones) ! addr
 
