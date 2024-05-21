@@ -20,7 +20,6 @@ data NES = NES
     , ppuRAM :: Memory.RAM
     , context :: NESContext
     , nClock :: Int
-    , nIO :: IO.Queue
     }
 
 -- Helper functions
@@ -104,22 +103,22 @@ cpuWriteCart addr byte = do
     let nes' = nes{cartridge = cart'}
     put nes'
 
-instance CPUBus NES where
-    cpuReadByte addr nes
+instance PCBus NES where
+    pcReadByte addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = run (cpuReadRAM addr) nes
         | (addr >= 0x2000 && addr <= 0x3FFF) = run (cpuReadPPU addr) nes
         | (addr >= 0x4000 && addr <= 0x4015) = run (cpuReadAPU addr) nes
         | (addr >= 0x4016 && addr <= 0x4017) = run (cpuReadControl addr) nes
         | (addr >= 0x4020 && addr <= 0xFFFF) = run (cpuReadCart addr) nes
         | otherwise = (nes, 0) -- TODO: Log error
-    cpuWriteByte addr byte nes
+    pcWriteByte addr byte nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = exec (cpuWriteRAM addr byte) nes
         | (addr >= 0x2000 && addr <= 0x3FFF) = exec (cpuWritePPU addr byte) nes
         | (addr >= 0x4000 && addr <= 0x4015) = exec (cpuWriteAPU addr byte) nes
         | (addr >= 0x4016 && addr <= 0x4017) = exec (cpuWriteControl addr byte) nes
         | (addr >= 0x4020 && addr <= 0xFFFF) = exec (cpuWriteCart addr byte) nes
         | otherwise = nes -- TODO: Log error
-    cpuPeek addr nes
+    pcPeek addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = snd $ run (cpuReadRAM addr) nes
         | (addr >= 0x2000 && addr <= 0x3FFF) = snd $ run (cpuReadPPU addr) nes
         | (addr >= 0x4000 && addr <= 0x4015) = snd $ run (cpuReadAPU addr) nes
@@ -145,23 +144,23 @@ ppuWriteNT addr byte = return () -- TODO: Implement Nametable support
 ppuWritePL :: Word16 -> Word8 -> State NES ()
 ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
 
-instance PPUBus NES where
-    ppuReadByte addr nes
+instance PPBus NES where
+    ppReadByte addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = run (ppuReadPT addr) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = run (ppuReadPL addr) nes
         | otherwise = (nes, 0) -- TODO: Log error
-    ppuWriteByte addr byte nes
+    ppWriteByte addr byte nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = exec (ppuWritePT addr byte) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = exec (ppuWriteNT addr byte) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = exec (ppuWritePL addr byte) nes
         | otherwise = nes -- TODO: Log error
-    ppuPeek addr nes
+    ppPeek addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = snd $ run (ppuReadPT addr) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = snd $ run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = snd $ run (ppuReadPL addr) nes
         | otherwise = 0 -- TODO: Log error
-    setPixel (x, y) value nes = nes -- TODO: Implement SetPixel support
+    ppSetPixel (x, y) value nes = nes -- TODO: Implement SetPixel support
 
 flattenCPU :: (CPU.MOS6502, NES) -> NES
 flattenCPU (mos6502, nes) = nes{cpu = mos6502}
@@ -204,6 +203,25 @@ reset = do
     let (cpu', _) = exec CPU.reset (cpu nes, nes) -- CPU Reset does not change the NES
     let cart' = Cart.reset $ cartridge nes
     let (ppu', _) = exec PPU.reset (ppu nes, nes) -- PPU Reset does not change the NES
-    let nes' = nes{cpu = cpu', cartridge = cart', ppu = ppu'}
-    -- TODO: UPDATE Context, RAM, Clock
+    let nes' = nes{cpu = cpu', cartridge = cart', ppu = ppu', cpuRAM = Memory.new 0xFFF 0, ppuRAM = Memory.new 0xFFFF 0, nClock = 0}
+    -- TODO: UPDATE Context
     put nes'
+
+empty :: NES
+empty =
+    NES
+        { cpu = CPU.mos6502
+        , ppu = PPU.r2c02
+        , cartridge = Cart.emptyCartridge
+        , cpuRAM = Memory.new 0xFFFF 0
+        , ppuRAM = Memory.new 0xFFFF 0
+        , context = NESContext
+        , nClock = 0
+        }
+
+loadNES :: FilePath -> IO NES
+loadNES fp = do
+    cart <- Cart.loadCartridge fp
+    let nes' = empty{cartridge = cart}
+    let nes = execState reset nes'
+    return nes

@@ -1,5 +1,6 @@
 module Shrimp.R2C02 (
     R2C02 (..),
+    r2c02,
     tick,
     reset,
     cpuRead,
@@ -12,18 +13,23 @@ import Shrimp.AbstractBus
 
 data R2C02 = R2C02
 
-tick :: (PPUBus a) => State (R2C02, a) ()
-tick = undefined -- TODO: This. Problably the hardest function so far.
+r2c02 :: R2C02
+r2c02 = R2C02
+
+tick :: (PBus m a) => StateT (R2C02, a) m ()
+tick = do
+    -- TODO: This. Problably the hardest function so far.
+    return ()
 
 --
-readStatus :: (PPUBus a) => State (R2C02, a) Word8
+readStatus :: (PBus m a) => StateT (R2C02, a) m Word8
 readStatus = return 0 -- TODO: Implement Status Read support
 
-readPPUData :: (PPUBus a) => State (R2C02, a) Word8
+readPPUData :: (PBus m a) => StateT (R2C02, a) m Word8
 readPPUData = return 0 -- TODO: Implement PPU Data Read support
 
 -- CPU Interface
-cpuRead :: (PPUBus a) => Word16 -> State (R2C02, a) Word8
+cpuRead :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
 cpuRead addr
     | addr == 0x0000 = return 0 -- Control: Write Only
     | addr == 0x0001 = return 0 -- Mask: Write Only
@@ -35,22 +41,22 @@ cpuRead addr
     | addr == 0x0007 = readPPUData
     | otherwise = return 0 -- TODO: Log error
 
-writeControl :: (PPUBus a) => Word8 -> State (R2C02, a) ()
+writeControl :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeControl byte = return () -- TODO: Implement Control Write suport
 
-writeMask :: (PPUBus a) => Word8 -> State (R2C02, a) ()
+writeMask :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeMask byte = return () -- TODO: Implement Mask Write support
 
-writeScroll :: (PPUBus a) => Word8 -> State (R2C02, a) ()
+writeScroll :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeScroll byte = return () -- TODO: Implement Scroll Write support
 
-writePPUAddr :: (PPUBus a) => Word8 -> State (R2C02, a) ()
+writePPUAddr :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writePPUAddr byte = return () -- TODO: Implement PPU Address Write support
 
-writePPUData :: (PPUBus a) => Word8 -> State (R2C02, a) ()
+writePPUData :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writePPUData byte = return () -- TODO: Implement PPU Data Write support
 
-cpuWrite :: (PPUBus a) => Word16 -> Word8 -> State (R2C02, a) ()
+cpuWrite :: (PBus m a) => Word16 -> Word8 -> StateT (R2C02, a) m ()
 cpuWrite addr byte
     | addr == 0x0000 = writeControl byte
     | addr == 0x0001 = writeMask byte
@@ -62,5 +68,5 @@ cpuWrite addr byte
     | addr == 0x0007 = writePPUData byte
     | otherwise = return () -- TODO: Log error
 
-reset :: (PPUBus a) => State (R2C02, a) ()
-reset = undefined
+reset :: (PBus m a) => StateT (R2C02, a) m ()
+reset = return ()

@@ -1,10 +1,12 @@
 module Shrimp.MOS6502 (
     MOS6502 (..),
+    mos6502,
     tick,
     execute,
     reset,
     Registers (..),
     Context (..),
+    Log (..),
 ) where
 
 import Control.Monad.ST (ST)
@@ -15,6 +17,7 @@ import Data.Word
 import GHC.IO.Device (SeekMode (AbsoluteSeek))
 import GHC.IO.Exception (stackOverflow)
 import GHC.StableName (StableName)
+import Numeric (showHex)
 import Shrimp.AbstractBus
 import Text.Printf
 
@@ -58,7 +61,17 @@ instance Show Registers where
             ++ "\np: \t"
             ++ showWord8 (ps reg)
 
-data Context = Context deriving (Show)
+data Log = LOP String | LA String deriving (Show)
+
+data Context = Context {cLog :: [Log]} deriving (Show)
+
+pushLog :: (CBus m a) => Log -> StateT (MOS6502, a) m ()
+pushLog log = do
+    (mos, x) <- get
+    let c = context mos
+    let c' = c{cLog = (cLog c) ++ [log]}
+    let mos' = mos{context = c'}
+    put (mos', x)
 
 data MOS6502 = MOS6502
     { mosRegisters :: Registers
@@ -68,6 +81,14 @@ data MOS6502 = MOS6502
     }
     deriving (Show)
 
+mos6502 :: MOS6502
+mos6502 =
+    MOS6502
+        { mosRegisters = Registers 0 0 0 0 0 0
+        , clock = 0
+        , cycles = 0
+        , context = Context []
+        }
 data FLAG
     = CARRY
     | ZERO
@@ -412,6 +433,7 @@ updateCycles offset = do
 
 tick :: (CBus m a) => StateT (MOS6502, a) m ()
 tick = do
+    modify (\(mos, a) -> (mos{clock = 1 + (clock mos)}, a))
     (mos6502, bus) <- get
     let c = cycles mos6502
     if c > 0
@@ -425,6 +447,7 @@ fetch :: (CBus m a) => StateT (MOS6502, a) m Word8
 fetch = do
     pc <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
     opcode <- mReadByte pc
+    pushLog (LOP $ (showHex opcode ""))
     setReg PC (pc + 1)
     return opcode
 
