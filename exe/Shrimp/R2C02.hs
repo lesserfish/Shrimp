@@ -8,18 +8,15 @@ module Shrimp.R2C02 (
 ) where
 
 import Control.Monad.State
+import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
+import qualified Shrimp.Memory as Memory
 
-data R2C02 = R2C02
+data R2C02 = R2C02 {}
 
 r2c02 :: R2C02
 r2c02 = R2C02
-
-tick :: (PBus m a) => StateT (R2C02, a) m ()
-tick = do
-    -- TODO: This. Problably the hardest function so far.
-    return ()
 
 --
 readStatus :: (PBus m a) => StateT (R2C02, a) m Word8
@@ -69,4 +66,12 @@ cpuWrite addr byte
     | otherwise = return () -- TODO: Log error
 
 reset :: (PBus m a) => StateT (R2C02, a) m ()
-reset = return ()
+reset = do
+    (r2c02, bus) <- get
+    let r2c02' = r2c02
+    put (r2c02', bus)
+
+tick :: (PBus m a) => StateT (R2C02, a) m ()
+tick = do
+    -- TODO: This. Problably the hardest function so far.
+    return ()

@@ -17,7 +17,8 @@ data NES = NES
     , ppu :: PPU.R2C02
     , cartridge :: Cart.Cartridge
     , cpuRAM :: Memory.RAM
-    , ppuRAM :: Memory.RAM
+    , nametableRAM :: Memory.RAM
+    , paletteRAM :: Memory.RAM
     , context :: NESContext
     , nClock :: Int
     }
@@ -31,6 +32,12 @@ run = (swap .) . runState
 
 exec :: State a b -> a -> a
 exec = execState
+
+flattenCPU :: (CPU.MOS6502, NES) -> NES
+flattenCPU (mos6502, nes) = nes{cpu = mos6502}
+
+flattenPPU :: (PPU.R2C02, NES) -> NES
+flattenPPU (r2c02, nes) = nes{ppu = r2c02}
 
 -- CPU Read interface
 -- RAM
@@ -126,11 +133,15 @@ instance PCBus NES where
         | (addr >= 0x4020 && addr <= 0xFFFF) = snd $ run (cpuReadCart addr) nes
         | otherwise = 0 -- TODO: Log error
 
+-- PPU Interface
+
 ppuReadPT :: Word16 -> State NES Word8
 ppuReadPT addr = return 0 -- TODO: Implement Pattern Table support
 
 ppuReadNT :: Word16 -> State NES Word8
 ppuReadNT addr = return 0 -- TODO: Implement Nametable support
+  where
+    real_addr = addr .&. 0x0FFF
 
 ppuReadPL :: Word16 -> State NES Word8
 ppuReadPL addr = return 0 -- TODO: Implement Palette RAM support
@@ -149,24 +160,21 @@ instance PPBus NES where
         | (addr >= 0x0000 && addr <= 0x1FFF) = run (ppuReadPT addr) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = run (ppuReadPL addr) nes
-        | otherwise = (nes, 0) -- TODO: Log error
     ppWriteByte addr byte nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = exec (ppuWritePT addr byte) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = exec (ppuWriteNT addr byte) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = exec (ppuWritePL addr byte) nes
-        | otherwise = nes -- TODO: Log error
     ppPeek addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = snd $ run (ppuReadPT addr) nes
         | (addr >= 0x2000 && addr <= 0x3EFF) = snd $ run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = snd $ run (ppuReadPL addr) nes
-        | otherwise = 0 -- TODO: Log error
     ppSetPixel (x, y) value nes = nes -- TODO: Implement SetPixel support
 
-flattenCPU :: (CPU.MOS6502, NES) -> NES
-flattenCPU (mos6502, nes) = nes{cpu = mos6502}
-
-flattenPPU :: (PPU.R2C02, NES) -> NES
-flattenPPU (r2c02, nes) = nes{ppu = r2c02}
+ppuWrite :: Word16 -> Word8 -> State NES ()
+ppuWrite addr byte
+    | (addr >= 0x0000 && addr <= 0x1FFF) = ppuWritePT addr byte
+    | (addr >= 0x2000 && addr <= 0x3EFF) = ppuWriteNT addr byte
+    | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuWritePL addr byte
 
 updateClock :: Int -> State NES ()
 updateClock offset = do
@@ -203,8 +211,16 @@ reset = do
     let (cpu', _) = exec CPU.reset (cpu nes, nes) -- CPU Reset does not change the NES
     let cart' = Cart.reset $ cartridge nes
     let (ppu', _) = exec PPU.reset (ppu nes, nes) -- PPU Reset does not change the NES
-    let nes' = nes{cpu = cpu', cartridge = cart', ppu = ppu', cpuRAM = Memory.new 0xFFF 0, ppuRAM = Memory.new 0xFFFF 0, nClock = 0}
-    -- TODO: UPDATE Context
+    let nes' =
+            nes
+                { cpu = cpu'
+                , ppu = ppu'
+                , cpuRAM = Memory.new 0x800 0
+                , nametableRAM = Memory.new 0x800 0
+                , paletteRAM = Memory.new 0x1F 0
+                , context = NESContext
+                , nClock = 0
+                } -- TODO: Do you need to reset the cartridge as well???
     put nes'
 
 empty :: NES
@@ -213,8 +229,9 @@ empty =
         { cpu = CPU.mos6502
         , ppu = PPU.r2c02
         , cartridge = Cart.emptyCartridge
-        , cpuRAM = Memory.new 0xFFFF 0
-        , ppuRAM = Memory.new 0xFFFF 0
+        , cpuRAM = Memory.new 0x800 0
+        , nametableRAM = Memory.new 0x800 0
+        , paletteRAM = Memory.new 0x1F 0
         , context = NESContext
         , nClock = 0
         }
