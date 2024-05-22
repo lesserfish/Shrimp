@@ -7,6 +7,7 @@ module Shrimp.MOS6502 (
     Registers (..),
     Context (..),
     Log (..),
+    disassemble,
 ) where
 
 import Control.Monad.ST (ST)
@@ -2057,3 +2058,210 @@ opTYA IMPLICIT = do
     setReg ACC yreg
     setFlag ZERO (yreg == 0)
     setFlag NEGATIVE (b7 yreg)
+
+-- Info
+
+opInfo :: Word8 -> (String, ADDR_MODE)
+opInfo 0x69 = ("ADC", IMMEDIATE)
+opInfo 0x65 = ("ADC", ZEROPAGE)
+opInfo 0x75 = ("ADC", ZEROPAGE_X)
+opInfo 0x6D = ("ADC", ABSOLUTE)
+opInfo 0x7D = ("ADC", ABSOLUTE_X)
+opInfo 0x79 = ("ADC", ABSOLUTE_Y)
+opInfo 0x61 = ("ADC", INDIRECT_X)
+opInfo 0x71 = ("ADC", INDIRECT_Y)
+opInfo 0x29 = ("AND", IMMEDIATE)
+opInfo 0x25 = ("AND", ZEROPAGE)
+opInfo 0x35 = ("AND", ZEROPAGE_X)
+opInfo 0x2D = ("AND", ABSOLUTE)
+opInfo 0x3D = ("AND", ABSOLUTE_X)
+opInfo 0x39 = ("AND", ABSOLUTE_Y)
+opInfo 0x21 = ("AND", INDIRECT_X)
+opInfo 0x31 = ("AND", INDIRECT_Y)
+opInfo 0x0A = ("ASL", ACCUMULATOR)
+opInfo 0x06 = ("ASL", ZEROPAGE)
+opInfo 0x16 = ("ASL", ZEROPAGE_X)
+opInfo 0x0E = ("ASL", ABSOLUTE)
+opInfo 0x1E = ("ASL", ABSOLUTE_X)
+opInfo 0x90 = ("BCC", RELATIVE)
+opInfo 0xB0 = ("BCS", RELATIVE)
+opInfo 0xF0 = ("BEQ", RELATIVE)
+opInfo 0x24 = ("BIT", ZEROPAGE)
+opInfo 0x2C = ("BIT", ABSOLUTE)
+opInfo 0x30 = ("BMI", RELATIVE)
+opInfo 0xD0 = ("BNE", RELATIVE)
+opInfo 0x10 = ("BPL", RELATIVE)
+opInfo 0x00 = ("BRK", IMPLICIT)
+opInfo 0x50 = ("BVC", RELATIVE)
+opInfo 0x70 = ("BVS", RELATIVE)
+opInfo 0x18 = ("CLC", IMPLICIT)
+opInfo 0xD8 = ("CLD", IMPLICIT)
+opInfo 0x58 = ("CLI", IMPLICIT)
+opInfo 0xB8 = ("CLV", IMPLICIT)
+opInfo 0xC9 = ("CMP", IMMEDIATE)
+opInfo 0xC5 = ("CMP", ZEROPAGE)
+opInfo 0xD5 = ("CMP", ZEROPAGE_X)
+opInfo 0xCD = ("CMP", ABSOLUTE)
+opInfo 0xDD = ("CMP", ABSOLUTE_X)
+opInfo 0xD9 = ("CMP", ABSOLUTE_Y)
+opInfo 0xC1 = ("CMP", INDIRECT_X)
+opInfo 0xD1 = ("CMP", INDIRECT_Y)
+opInfo 0xE0 = ("CPX", IMMEDIATE)
+opInfo 0xE4 = ("CPX", ZEROPAGE)
+opInfo 0xEC = ("CPX", ABSOLUTE)
+opInfo 0xC0 = ("CPY", IMMEDIATE)
+opInfo 0xC4 = ("CPY", ZEROPAGE)
+opInfo 0xCC = ("CPY", ABSOLUTE)
+opInfo 0xC6 = ("DEC", ZEROPAGE)
+opInfo 0xD6 = ("DEC", ZEROPAGE_X)
+opInfo 0xCE = ("DEC", ABSOLUTE)
+opInfo 0xDE = ("DEC", ABSOLUTE_X)
+opInfo 0xCA = ("DEX", IMPLICIT)
+opInfo 0x88 = ("DEY", IMPLICIT)
+opInfo 0x49 = ("EOR", IMMEDIATE)
+opInfo 0x45 = ("EOR", ZEROPAGE)
+opInfo 0x55 = ("EOR", ZEROPAGE_X)
+opInfo 0x4D = ("EOR", ABSOLUTE)
+opInfo 0x5D = ("EOR", ABSOLUTE_X)
+opInfo 0x59 = ("EOR", ABSOLUTE_Y)
+opInfo 0x41 = ("EOR", INDIRECT_X)
+opInfo 0x51 = ("EOR", INDIRECT_Y)
+opInfo 0xE6 = ("INC", ZEROPAGE)
+opInfo 0xF6 = ("INC", ZEROPAGE_X)
+opInfo 0xEE = ("INC", ABSOLUTE)
+opInfo 0xFE = ("INC", ABSOLUTE_X)
+opInfo 0xE8 = ("INX", IMPLICIT)
+opInfo 0xC8 = ("INY", IMPLICIT)
+opInfo 0x4C = ("JMP", ABSOLUTE)
+opInfo 0x6C = ("JMP", INDIRECT)
+opInfo 0x20 = ("JSR", ABSOLUTE)
+opInfo 0xA9 = ("LDA", IMMEDIATE)
+opInfo 0xA5 = ("LDA", ZEROPAGE)
+opInfo 0xB5 = ("LDA", ZEROPAGE_X)
+opInfo 0xAD = ("LDA", ABSOLUTE)
+opInfo 0xBD = ("LDA", ABSOLUTE_X)
+opInfo 0xB9 = ("LDA", ABSOLUTE_Y)
+opInfo 0xA1 = ("LDA", INDIRECT_X)
+opInfo 0xB1 = ("LDA", INDIRECT_Y)
+opInfo 0xA2 = ("LDX", IMMEDIATE)
+opInfo 0xA6 = ("LDX", ZEROPAGE)
+opInfo 0xB6 = ("LDX", ZEROPAGE_Y)
+opInfo 0xAE = ("LDX", ABSOLUTE)
+opInfo 0xBE = ("LDX", ABSOLUTE_Y)
+opInfo 0xA0 = ("LDY", IMMEDIATE)
+opInfo 0xA4 = ("LDY", ZEROPAGE)
+opInfo 0xB4 = ("LDY", ZEROPAGE_X)
+opInfo 0xAC = ("LDY", ABSOLUTE)
+opInfo 0xBC = ("LDY", ABSOLUTE_X)
+opInfo 0x4A = ("LSR", ACCUMULATOR)
+opInfo 0x46 = ("LSR", ZEROPAGE)
+opInfo 0x56 = ("LSR", ZEROPAGE_X)
+opInfo 0x4E = ("LSR", ABSOLUTE)
+opInfo 0x5E = ("LSR", ABSOLUTE_X)
+opInfo 0xEA = ("NOP", IMPLICIT)
+opInfo 0x09 = ("ORA", IMMEDIATE)
+opInfo 0x05 = ("ORA", ZEROPAGE)
+opInfo 0x15 = ("ORA", ZEROPAGE_X)
+opInfo 0x0D = ("ORA", ABSOLUTE)
+opInfo 0x1D = ("ORA", ABSOLUTE_X)
+opInfo 0x19 = ("ORA", ABSOLUTE_Y)
+opInfo 0x01 = ("ORA", INDIRECT_X)
+opInfo 0x11 = ("ORA", INDIRECT_Y)
+opInfo 0x48 = ("PHA", IMPLICIT)
+opInfo 0x08 = ("PHP", IMPLICIT)
+opInfo 0x68 = ("PLA", IMPLICIT)
+opInfo 0x28 = ("PLP", IMPLICIT)
+opInfo 0x2A = ("ROL", ACCUMULATOR)
+opInfo 0x26 = ("ROL", ZEROPAGE)
+opInfo 0x36 = ("ROL", ZEROPAGE_X)
+opInfo 0x2E = ("ROL", ABSOLUTE)
+opInfo 0x3E = ("ROL", ABSOLUTE_X)
+opInfo 0x6A = ("ROR", ACCUMULATOR)
+opInfo 0x66 = ("ROR", ZEROPAGE)
+opInfo 0x76 = ("ROR", ZEROPAGE_X)
+opInfo 0x6E = ("ROR", ABSOLUTE)
+opInfo 0x7E = ("ROR", ABSOLUTE_X)
+opInfo 0x40 = ("RTI", IMPLICIT)
+opInfo 0x60 = ("RTS", IMPLICIT)
+opInfo 0xE9 = ("SBC", IMMEDIATE)
+opInfo 0xE5 = ("SBC", ZEROPAGE)
+opInfo 0xF5 = ("SBC", ZEROPAGE_X)
+opInfo 0xED = ("SBC", ABSOLUTE)
+opInfo 0xFD = ("SBC", ABSOLUTE_X)
+opInfo 0xF9 = ("SBC", ABSOLUTE_Y)
+opInfo 0xE1 = ("SBC", INDIRECT_X)
+opInfo 0xF1 = ("SBC", INDIRECT_Y)
+opInfo 0x38 = ("SEC", IMPLICIT)
+opInfo 0xF8 = ("SED", IMPLICIT)
+opInfo 0x78 = ("SEI", IMPLICIT)
+opInfo 0x85 = ("STA", ZEROPAGE)
+opInfo 0x95 = ("STA", ZEROPAGE_X)
+opInfo 0x8D = ("STA", ABSOLUTE)
+opInfo 0x9D = ("STA", ABSOLUTE_X)
+opInfo 0x99 = ("STA", ABSOLUTE_Y)
+opInfo 0x81 = ("STA", INDIRECT_X)
+opInfo 0x91 = ("STA", INDIRECT_Y)
+opInfo 0x86 = ("STX", ZEROPAGE)
+opInfo 0x96 = ("STX", ZEROPAGE_Y)
+opInfo 0x8E = ("STX", ABSOLUTE)
+opInfo 0x84 = ("STY", ZEROPAGE)
+opInfo 0x94 = ("STY", ZEROPAGE_X)
+opInfo 0x8C = ("STY", ABSOLUTE)
+opInfo 0xAA = ("TAX", IMPLICIT)
+opInfo 0xA8 = ("TAY", IMPLICIT)
+opInfo 0xBA = ("TSX", IMPLICIT)
+opInfo 0x8A = ("TXA", IMPLICIT)
+opInfo 0x9A = ("TXS", IMPLICIT)
+opInfo 0x98 = ("TYA", IMPLICIT)
+
+toHex :: Word8 -> String
+toHex w = printf "%02x" w
+
+disassembleArg :: (CBus m a) => a -> ADDR_MODE -> Word16 -> m (String, Word16)
+disassembleArg _ IMPLICIT _ = return $ ("", 0)
+disassembleArg _ ACCUMULATOR _ = return $ ("A", 0)
+disassembleArg bus IMMEDIATE addr = do
+    argval <- cPeek addr bus
+    return ("#$" ++ toHex argval, 1)
+disassembleArg bus ZEROPAGE addr = do
+    argval <- cPeek addr bus
+    return ("$" ++ toHex argval, 1)
+disassembleArg bus ZEROPAGE_X addr = do
+    argval <- cPeek addr bus
+    return ("$" ++ toHex argval ++ ",X", 1)
+disassembleArg bus ZEROPAGE_Y addr = do
+    argval <- cPeek addr bus
+    return ("$" ++ toHex argval ++ ",Y", 1)
+disassembleArg bus RELATIVE addr = do
+    argval <- cPeek addr bus
+    let offset = (fromIntegral argval :: Int8)
+    return ("*" ++ toHex argval ++ " [" ++ (show offset) ++ "]", 1)
+disassembleArg bus ABSOLUTE addr = do
+    a1 <- cPeek addr bus
+    a2 <- cPeek (addr + 1) bus
+    return ("$" ++ toHex a2 ++ toHex a1 ++ "", 2)
+disassembleArg bus ABSOLUTE_X addr = do
+    a1 <- cPeek addr bus
+    a2 <- cPeek (addr + 1) bus
+    return ("$" ++ toHex a2 ++ toHex a1 ++ ",X", 2)
+disassembleArg bus ABSOLUTE_Y addr = do
+    a1 <- cPeek addr bus
+    a2 <- cPeek (addr + 1) bus
+    return ("$" ++ toHex a2 ++ toHex a1 ++ ",Y", 2)
+disassembleArg bus INDIRECT addr = do
+    a1 <- cPeek addr bus
+    a2 <- cPeek (addr + 1) bus
+    return ("($" ++ toHex a2 ++ toHex a1 ++ ")", 2)
+disassembleArg bus INDIRECT_X addr = do
+    a <- cPeek addr bus
+    return ("($" ++ toHex a ++ ", X)", 1)
+disassembleArg bus INDIRECT_Y addr = do
+    a <- cPeek addr bus
+    return ("($" ++ toHex a ++ "), Y", 1)
+
+disassemble :: (CBus m a) => Word16 -> a -> m (String, Word16)
+disassemble addr bus = do
+    opcode <- cPeek addr bus
+    let (opname, addr_mode) = opInfo opcode
+    (args, offset) <- disassembleArg bus addr_mode (addr + 1)
+    return (opname ++ " " ++ args, offset + 1)
