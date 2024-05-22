@@ -148,64 +148,22 @@ getReg reg = do
     return regval
 
 getFlag :: (CBus m a) => FLAG -> StateT (MOS6502, a) m Bool
-getFlag CARRY = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b0 ps
-    return flag
-getFlag ZERO = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b1 ps
-    return flag
-getFlag INTERRUPT_DISABLE = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b2 ps
-    return flag
-getFlag DECIMAL_MODE = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b3 ps
-    return flag
-getFlag BREAK_CMD = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b4 ps
-    return flag
-getFlag OVERFLOW = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b6 ps
-    return flag
-getFlag NEGATIVE = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let flag = b7 ps
-    return flag
+getFlag CARRY = fmap b0 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag ZERO = fmap b1 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag INTERRUPT_DISABLE = fmap b2 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag DECIMAL_MODE = fmap b3 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag BREAK_CMD = fmap b4 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag OVERFLOW = fmap b6 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag NEGATIVE = fmap b7 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
 
 setFlag :: (CBus m a) => FLAG -> Bool -> StateT (MOS6502, a) m ()
-setFlag CARRY flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 0) else (clearBit ps 0)
-    setReg PS ps'
-setFlag ZERO flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 1) else (clearBit ps 1)
-    setReg PS ps'
-setFlag INTERRUPT_DISABLE flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 2) else (clearBit ps 2)
-    setReg PS ps'
-setFlag DECIMAL_MODE flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 3) else (clearBit ps 3)
-    setReg PS ps'
-setFlag BREAK_CMD flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 4) else (clearBit ps 4)
-    setReg PS ps'
-setFlag OVERFLOW flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 6) else (clearBit ps 6)
-    setReg PS ps'
-setFlag NEGATIVE flag = do
-    ps <- getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    let ps' = if flag then (setBit ps 7) else (clearBit ps 7)
-    setReg PS ps'
+setFlag CARRY flag = mapReg PS (\reg -> if flag then (setBit reg 0) :: Word8 else (clearBit reg 0) :: Word8)
+setFlag ZERO flag = mapReg PS (\reg -> if flag then (setBit reg 1) :: Word8 else (clearBit reg 1) :: Word8)
+setFlag INTERRUPT_DISABLE flag = mapReg PS (\reg -> if flag then (setBit reg 2) :: Word8 else (clearBit reg 2) :: Word8)
+setFlag DECIMAL_MODE flag = mapReg PS (\reg -> if flag then (setBit reg 3) :: Word8 else (clearBit reg 3) :: Word8)
+setFlag BREAK_CMD flag = mapReg PS (\reg -> if flag then (setBit reg 4) :: Word8 else (clearBit reg 4) :: Word8)
+setFlag OVERFLOW flag = mapReg PS (\reg -> if flag then (setBit reg 6) :: Word8 else (clearBit reg 6) :: Word8)
+setFlag NEGATIVE flag = mapReg PS (\reg -> if flag then (setBit reg 7) :: Word8 else (clearBit reg 7) :: Word8)
 
 setFlagIf :: (CBus m a) => Bool -> FLAG -> Bool -> StateT (MOS6502, a) m ()
 setFlagIf condition flag value = do

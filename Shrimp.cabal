@@ -43,7 +43,7 @@ executable Shrimp
                     bytestring >= 0.11.4.0,
                     array >= 0.5.5.0,
                     vector >= 0.13.0.0,
-                    containers >= 0.7
+                    containers >= 0.6.8
   hs-source-dirs:   exe
   default-language: Haskell2010
 test-suite Shrimp-Test
@@ -54,8 +54,9 @@ test-suite Shrimp-Test
     other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Test.CPU
     build-depends:    base >=4.16.4.0,
                       hspec >= 2.11.1,
-                      aeson >= 2.1.2.1,
+                      aeson >= 2.2.1.0,
                       mtl >= 2.3.1,
                       bytestring >= 0.11.4.0,
                       filepath >= 1.4.100.1,
                       array >= 0.5.5.0,
+                      containers >= 0.6.8
