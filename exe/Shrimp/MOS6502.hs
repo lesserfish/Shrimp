@@ -251,27 +251,27 @@ getAddr IMMEDIATE = do
     return addr
 getAddr ZEROPAGE = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16 -- In Zero Page mode, PC contains the low byte of the address we are interested in
-    lb <- mReadByte cPC -- Get the low byte
+    lb <- readByte cPC -- Get the low byte
     let addr = joinBytes 0x00 lb
     setReg PC (cPC + 1)
     return addr
 getAddr ZEROPAGE_X = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
     xreg <- getReg IDX :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    lb <- mReadByte cPC -- Get the low byte of the address
+    lb <- readByte cPC -- Get the low byte of the address
     let addr = joinBytes 0x00 (lb + xreg) -- Add IDX ro the address
     setReg PC (cPC + 1)
     return addr
 getAddr ZEROPAGE_Y = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
     yreg <- getReg IDY :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    lb <- mReadByte cPC -- Get the low byte of the address
+    lb <- readByte cPC -- Get the low byte of the address
     let addr = joinBytes 0x00 (lb + yreg) -- Add IDY to the address
     setReg PC (cPC + 1)
     return addr
 getAddr RELATIVE = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16 -- Get the current position of PC
-    offset <- mReadByte cPC -- Get the offset byte
+    offset <- readByte cPC -- Get the offset byte
     let iPC = fromIntegral cPC :: Int
     let iOffset = fromIntegral (fromIntegral offset :: Int8) :: Int
     let addr = fromIntegral (iPC + iOffset) + 1 :: Word16
@@ -279,24 +279,24 @@ getAddr RELATIVE = do
     return addr
 getAddr ABSOLUTE = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16 -- PC holds the start address of where the actual address resides in memory
-    lb <- mReadByte cPC -- Load the low byte of the address location
-    hb <- mReadByte (cPC + 1) -- Load the high byte of the address location
+    lb <- readByte cPC -- Load the low byte of the address location
+    hb <- readByte (cPC + 1) -- Load the high byte of the address location
     let addr = joinBytes hb lb
     setReg PC (cPC + 2)
     return addr
 getAddr ABSOLUTE_X = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16 -- PC holds the start address ofwhere the actual address resides in memory
     xreg <- getReg IDX :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- IDX is then added to the result
-    lb <- mReadByte cPC -- Load the low byte of the address location
-    hb <- mReadByte (cPC + 1) -- Load the high byte of the address location
+    lb <- readByte cPC -- Load the low byte of the address location
+    hb <- readByte (cPC + 1) -- Load the high byte of the address location
     let addr = (joinBytes hb lb) + (joinBytes 0x00 xreg) -- Add the resulting 2-byte with the IDX register
     setReg PC (cPC + 2)
     return addr
 getAddr ABSOLUTE_Y = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16 -- PC holds the start address ofwhere the actual address resides in memory
     yreg <- getReg IDY :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- IDX is then added to the result
-    lb <- mReadByte cPC -- Load the low byte of the address location
-    hb <- mReadByte (cPC + 1) -- Load the high byte of the address location
+    lb <- readByte cPC -- Load the low byte of the address location
+    hb <- readByte (cPC + 1) -- Load the high byte of the address location
     let addr = (joinBytes hb lb) + (joinBytes 0x00 yreg) -- Add the resulting 2-byte with the IDY register
     setReg PC (cPC + 2)
     return addr
@@ -307,45 +307,45 @@ getAddr INDIRECT = do
     -- There is a BUG in the MOS 6502 where, if the indirect vector falls on a page boundary (i.e. 0xXXFF) then the LSB is fetched correctly from the address 0xXXFF
     -- But the MSB is taken incorrectly from 0xXX00.
     -- That is going to be emulated by adding fetching the high byte from (hb) (lb + 1) where overflow may happen in the addition.
-    addr_lb <- mReadByte (joinBytes pchb pclb) -- Load the low byte of the address location
-    addr_hb <- mReadByte ((joinBytes pchb pclb) + 1) -- Load the high byte of the address location
+    addr_lb <- readByte (joinBytes pchb pclb) -- Load the low byte of the address location
+    addr_hb <- readByte ((joinBytes pchb pclb) + 1) -- Load the high byte of the address location
     let addr1 = joinBytes addr_hb addr_lb
-    lb <- mReadByte addr1 -- Get the actual address from that location
+    lb <- readByte addr1 -- Get the actual address from that location
     let (hb1, lb1) = splitBytes addr1
-    hb <- mReadByte (joinBytes (hb1) (lb1 + 1))
+    hb <- readByte (joinBytes (hb1) (lb1 + 1))
     let addr = joinBytes hb lb
     setReg PC (cPC + 2)
     return addr
 getAddr INDIRECT_X = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
-    table_start <- mReadByte cPC -- PC Holds the start address of a memory table
+    table_start <- readByte cPC -- PC Holds the start address of a memory table
     table_offset <- getReg IDX :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- IDX Holds the offset from the start of the memory table
     let table_addr = table_start + table_offset -- Get table_addr = table_start + offset (Word8)
-    lb <- mReadByte (joinBytes 0x00 table_addr) -- Read low byte
-    hb <- mReadByte (joinBytes 0x00 (table_addr + 1)) -- Read high byte
+    lb <- readByte (joinBytes 0x00 table_addr) -- Read low byte
+    hb <- readByte (joinBytes 0x00 (table_addr + 1)) -- Read high byte
     let addr = joinBytes hb lb
     setReg PC (cPC + 1)
     return addr
 getAddr INDIRECT_Y = do
     cPC <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
-    table_lb <- mReadByte cPC -- PC contains the zero-page memory address which contains the low byte of the actual output
-    addr_lb <- mReadByte $ joinBytes 0x00 table_lb
-    addr_hb <- mReadByte $ joinBytes 0x00 (table_lb + 1)
+    table_lb <- readByte cPC -- PC contains the zero-page memory address which contains the low byte of the actual output
+    addr_lb <- readByte $ joinBytes 0x00 table_lb
+    addr_hb <- readByte $ joinBytes 0x00 (table_lb + 1)
     let addr = joinBytes addr_hb addr_lb
     yreg <- getReg IDY :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- IDY holds the offset from that address
     let faddr = addr + (joinBytes 0x00 yreg)
     setReg PC (cPC + 1)
     return faddr
 
-mReadByte :: (CBus m a) => Word16 -> StateT (MOS6502, a) m Word8
-mReadByte addr = do
+readByte :: (CBus m a) => Word16 -> StateT (MOS6502, a) m Word8
+readByte addr = do
     (mos6502, bus) <- get
     (bus', byte) <- lift $ cReadByte addr bus
     put (mos6502, bus')
     return byte
 
-mWriteByte :: (CBus m a) => Word16 -> Word8 -> StateT (MOS6502, a) m ()
-mWriteByte addr byte = do
+writeByte :: (CBus m a) => Word16 -> Word8 -> StateT (MOS6502, a) m ()
+writeByte addr byte = do
     (mos6502, bus) <- get
     bus' <- lift $ cWriteByte addr byte bus
     put (mos6502, bus')
@@ -355,7 +355,7 @@ mWriteStack byte = do
     (mos6502, bus) <- get -- Get the current of the CPU
     sp <- getReg SP :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Stack Pointer
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
-    mWriteByte addr byte -- Write byte to stack
+    writeByte addr byte -- Write byte to stack
     mapReg SP (\x -> (x :: Word8) - 1) -- Decrement stack pointer
 
 mReadStack :: (CBus m a) => StateT (MOS6502, a) m Word8
@@ -364,7 +364,7 @@ mReadStack = do
     mapReg SP (+ (1 :: Word8)) -- Increment stack pointer
     sp <- getReg SP :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Stack Pointer
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
-    mReadByte addr -- Read byte
+    readByte addr -- Read byte
 
 resetCycles :: (CBus m a) => StateT (MOS6502, a) m ()
 resetCycles = do
@@ -400,7 +400,7 @@ tick = do
 fetch :: (CBus m a) => StateT (MOS6502, a) m Word8
 fetch = do
     pc <- getReg PC :: (CBus m a1) => StateT (MOS6502, a1) m Word16
-    opcode <- mReadByte pc
+    opcode <- readByte pc
     setReg PC (pc + 1)
     return opcode
 
@@ -874,8 +874,8 @@ iIRQ = do
             mWriteStack pchb -- Write the high byte of the PC to the stack
             mWriteStack pclb -- Write the low byte of the PC to the stack
             mWriteStack (setBit ps 0) -- Write the PS to the stack with fourth bit (B flag) unset. (see: https://www.pagetable.com/?p=410)
-            irq_lb <- mReadByte 0xFFFE -- Get the IRQ interrupt vector
-            irq_hb <- mReadByte 0xFFFF --
+            irq_lb <- readByte 0xFFFE -- Get the IRQ interrupt vector
+            irq_hb <- readByte 0xFFFF --
             let jmp_addr = joinBytes irq_hb irq_lb
             setReg PC jmp_addr -- Jump to the address
             setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
@@ -889,16 +889,16 @@ iNMI = do
     mWriteStack pchb -- Write the high byte of the PC to the stack
     mWriteStack pclb -- Write the low byte of the PC to the stack
     mWriteStack (setBit ps 0) -- Write the PS to the stack with fourth bit (B flag) unset. (see: https://www.pagetable.com/?p=410)
-    irq_lb <- mReadByte 0xFFFA -- Get the NMI interrupt vector
-    irq_hb <- mReadByte 0xFFFB --
+    irq_lb <- readByte 0xFFFA -- Get the NMI interrupt vector
+    irq_hb <- readByte 0xFFFB --
     let jmp_addr = joinBytes irq_hb irq_lb
     setReg PC jmp_addr -- Jump to the address
     setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 
 reset :: (CBus m a) => StateT (MOS6502, a) m () -- Non-Maskable Interrupt
 reset = do
-    irq_lb <- mReadByte 0xFFFC -- Get the NMI interrupt vector
-    irq_hb <- mReadByte 0xFFFD --
+    irq_lb <- readByte 0xFFFC -- Get the NMI interrupt vector
+    irq_hb <- readByte 0xFFFD --
     let jmp_addr = joinBytes irq_hb irq_lb
     setReg PC jmp_addr -- Set the PC Register
     setReg SP (0xFD :: Word8) -- Set the Stack Pointer
@@ -943,7 +943,7 @@ opADC addr_mode = do
     let carry = if carry_flag then 1 else 0 :: Word8
     decimal_flag <- getFlag $ DECIMAL_MODE
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let iacc = fromIntegral acc :: Int
     let ibyte = fromIntegral byte :: Int
     let icarry = fromIntegral carry :: Int
@@ -977,7 +977,7 @@ opAND INDIRECT = error "Operation AND does not support INDIRECT addressing mode"
 opAND addr_mode = do
     old_acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     mapReg ACC (.&. byte) -- AND the corresponding byte to Accumulator
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the updated Accumulator
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1002,10 +1002,10 @@ opASL ACCUMULATOR = do
     setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
 opASL addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let carry_flag = b7 byte -- Carry flag is set to contents of old bit 7
     let new_byte = shiftL byte 1 :: Word8 -- Perform the L Shift
-    mWriteByte addr new_byte -- Write new byte to same address
+    writeByte addr new_byte -- Write new byte to same address
     setFlag CARRY carry_flag -- Sets the Carry flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7 new_byte) -- Sets the Negative flag is the result is negative
@@ -1078,7 +1078,7 @@ opBIT INDIRECT_X = error "Operation BIT does not support INDIRECT_X addressing m
 opBIT INDIRECT_Y = error "Operation BIT does not support INDIRECT_Y addressing mode"
 opBIT addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers
     let and_result = (byte .&. acc) -- Perform AND operation
     setFlag ZERO (and_result == 0) -- Sets the ZERO flag if the result of the AND operation is 0
@@ -1160,8 +1160,8 @@ opBRK IMPLICIT = do
     mWriteStack pchb -- Write the high byte of the PC to the stack
     mWriteStack pclb -- Write the low byte of the PC to the stack
     mWriteStack (setBit ps 4) -- Write the PS to the stack with fourth bit (B flag) set.
-    irq_lb <- mReadByte 0xFFFE -- Get the IRQ interrupt vector
-    irq_hb <- mReadByte 0xFFFF --
+    irq_lb <- readByte 0xFFFE -- Get the IRQ interrupt vector
+    irq_hb <- readByte 0xFFFF --
     let jmp_addr = joinBytes irq_hb irq_lb
     setReg PC jmp_addr -- Jump to the address
     setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
@@ -1275,7 +1275,7 @@ opCMP INDIRECT = error "Operation CMP does not support INDIRECT addressing mode"
 opCMP addr_mode = do
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let result = acc - byte -- Compares the accumulator with a memory value
     setFlag ZERO (acc == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (acc >= byte) -- Set the Carry flag if Acc >= mem_value
@@ -1295,7 +1295,7 @@ opCPX INDIRECT_Y = error "Operation CPX does not support INDIRECT_Y addressing m
 opCPX addr_mode = do
     xreg <- getReg IDX :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let result = xreg - byte -- Compares the accumulator with a memory value
     setFlag ZERO (xreg == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (xreg >= byte) -- Set the Carry flag if Acc >= mem_value
@@ -1315,7 +1315,7 @@ opCPY INDIRECT_Y = error "Operation CPY does not support INDIRECT_Y addressing m
 opCPY addr_mode = do
     yreg <- getReg IDY :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let result = yreg - byte -- Compares the accumulator with a memory value
     setFlag ZERO (yreg == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (yreg >= byte) -- Set the Carry flag if Acc >= mem_value
@@ -1333,9 +1333,9 @@ opDEC INDIRECT_X = error "Operation DEC does not support INDIRECT_X addressing m
 opDEC INDIRECT_Y = error "Operation DEC does not support INDIRECT_Y addressing mode"
 opDEC addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let result = byte - 1
-    mWriteByte addr result
+    writeByte addr result
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
 
@@ -1386,7 +1386,7 @@ opEOR INDIRECT = error "Operation EOR does not support INDIRECT addressing mode"
 opEOR addr_mode = do
     old_acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     mapReg ACC (`xor` byte) -- XOR the corresponding byte to Accumulator
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the updated Accumulator
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1404,9 +1404,9 @@ opINC INDIRECT_X = error "Operation INC does not support INDIRECT_X addressing m
 opINC INDIRECT_Y = error "Operation INC does not support INDIRECT_Y addressing mode"
 opINC addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let result = byte + 1
-    mWriteByte addr result
+    writeByte addr result
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
 
@@ -1496,7 +1496,7 @@ opLDA RELATIVE = error "Operation LDA does not support RELATIVE addressing mode"
 opLDA INDIRECT = error "Operation LDA does not support INDIRECT addressing mode"
 opLDA addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     setReg ACC byte
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7 byte)
@@ -1512,7 +1512,7 @@ opLDX INDIRECT_X = error "Operation LDX does not support INDIRECT_X addressing m
 opLDX INDIRECT_Y = error "Operation LDX does not support INDIRECT_Y addressing mode"
 opLDX addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     setReg IDX byte
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7 byte)
@@ -1528,7 +1528,7 @@ opLDY INDIRECT_X = error "Operation LDY does not support INDIRECT_X addressing m
 opLDY INDIRECT_Y = error "Operation LDY does not support INDIRECT_Y addressing mode"
 opLDY addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     setReg IDY byte
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7 byte)
@@ -1552,10 +1552,10 @@ opLSR ACCUMULATOR = do
     setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
 opLSR addr_mode = do
     addr <- getAddr addr_mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     let carry_flag = b0 byte -- Carry flag is set to contents of old bit 0
     let new_byte = shiftR byte 1 :: Word8
-    mWriteByte addr new_byte
+    writeByte addr new_byte
     setFlag CARRY carry_flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7 new_byte) -- Sets the Negative flag is the result is negative
@@ -1584,7 +1584,7 @@ opORA INDIRECT = error "Operation ORA does not support INDIRECT addressing mode"
 opORA addr_mode = do
     old_acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     mapReg ACC (.|. byte) -- OR the corresponding byte to Accumulator
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the updated Accumulator
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1683,12 +1683,12 @@ opROL ACCUMULATOR = do
     setFlag CARRY new_carry
 opROL addr_mode = do
     addr <- getAddr addr_mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     carry_flag <- getFlag CARRY
     let new_carry = b7 byte
     let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
     let byte' = (shiftL byte 1) .|. bit0
-    mWriteByte addr byte'
+    writeByte addr byte'
     setFlag ZERO (byte' == 0)
     setFlag NEGATIVE (b7 byte')
     setFlag CARRY new_carry
@@ -1714,12 +1714,12 @@ opROR ACCUMULATOR = do
     setFlag CARRY new_carry
 opROR addr_mode = do
     addr <- getAddr addr_mode
-    byte <- mReadByte addr
+    byte <- readByte addr
     carry_flag <- getFlag CARRY
     let new_carry = b0 byte
     let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
     let byte' = (shiftR byte 1) .|. bit0
-    mWriteByte addr byte'
+    writeByte addr byte'
     setFlag ZERO (byte' == 0)
     setFlag NEGATIVE (b7 byte')
     setFlag CARRY new_carry
@@ -1778,7 +1778,7 @@ opSBC addr_mode = do
     carry_flag <- getFlag $ CARRY -- Get the Accumulator registers prior to changes
     decimal_flag <- getFlag $ DECIMAL_MODE
     addr <- getAddr addr_mode -- Get the address given the addressing mode
-    byte <- mReadByte addr -- Read byte from the Bus
+    byte <- readByte addr -- Read byte from the Bus
     let carry = if carry_flag then 1 else 0 :: Word8
     let iacc = fromIntegral acc :: Int
     let ibyte = fromIntegral byte :: Int
@@ -1875,7 +1875,7 @@ opSTA INDIRECT = error "Operation STA does not support INDIRECT addressing mode"
 opSTA addr_mode = do
     addr <- getAddr addr_mode
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    mWriteByte addr acc
+    writeByte addr acc
 
 opSTX :: (CBus m a) => ADDR_MODE -> StateT (MOS6502, a) m ()
 opSTX IMPLICIT = error "Operation STX does not support IMPLICIT addressing mode"
@@ -1891,7 +1891,7 @@ opSTX INDIRECT_Y = error "Operation STX does not support INDIRECT_Y addressing m
 opSTX addr_mode = do
     addr <- getAddr addr_mode
     regx <- getReg IDX :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    mWriteByte addr regx
+    writeByte addr regx
 
 opSTY :: (CBus m a) => ADDR_MODE -> StateT (MOS6502, a) m ()
 opSTY IMPLICIT = error "Operation STY does not support IMPLICIT addressing mode"
@@ -1907,7 +1907,7 @@ opSTY INDIRECT_Y = error "Operation STY does not support INDIRECT_Y addressing m
 opSTY addr_mode = do
     addr <- getAddr addr_mode
     regy <- getReg IDY :: (CBus m a1) => StateT (MOS6502, a1) m Word8
-    mWriteByte addr regy
+    writeByte addr regy
 
 opTAX :: (CBus m a) => ADDR_MODE -> StateT (MOS6502, a) m ()
 opTAX ACCUMULATOR = error "Operation TAX does not support ACCUMULATOR addressing mode"

@@ -244,6 +244,35 @@ setVRAMBit L_NAMETABLE_X v = mapReg VRAM (\tram -> if v then (setBit tram 10) ::
 setVRAMBit L_NAMETABLE_Y v = mapReg VRAM (\tram -> if v then (setBit tram 11) :: Word16 else (clearBit tram 11) :: Word16)
 setVRAMBit _ _ = error "Incorrect Flag"
 
+getWriteToggle :: (PBus m a) => StateT (R2C02, a) m Bool
+getWriteToggle = fmap (writeToggle . ppuContext . fst) get
+
+setWriteToggle :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
+setWriteToggle toggle = do
+    (ppu, bus) <- get
+    let ctx = ppuContext ppu
+    let ctx' = ctx{writeToggle = toggle}
+    let ppu' = ppu{ppuContext = ctx'}
+    put (ppu', bus)
+
+getFineX :: (PBus m a) => StateT (R2C02, a) m Word8
+getFineX = (getReg FINEX :: (PBus m a) => StateT (R2C02, a) m Word8)
+
+setFineX :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+setFineX byte = setReg FINEX byte :: (PBus m a) => StateT (R2C02, a) m ()
+
+getTRAM :: (PBus m a) => StateT (R2C02, a) m Word16
+getTRAM = (getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+
+getVRAM :: (PBus m a) => StateT (R2C02, a) m Word16
+getVRAM = (getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+
+setTRAM :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setTRAM t = setReg TRAM t :: (PBus m a) => StateT (R2C02, a) m ()
+
+setVRAM :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setVRAM t = setReg VRAM t :: (PBus m a) => StateT (R2C02, a) m ()
+
 shiftTake :: (Bits a, Integral b, Num a) => Int -> b -> a -> a
 shiftTake s t x = (shiftR x s) .&. (2 ^ t - 1)
 
@@ -289,6 +318,19 @@ data R2C02 = R2C02
     , ppuContext :: Context
     }
 
+readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
+readByte addr = do
+    (ppu, bus) <- get
+    (bus', byte) <- lift $ pReadByte addr bus
+    put (ppu, bus')
+    return byte
+
+writeByte :: (PBus m a) => Word16 -> Word8 -> StateT (R2C02, a) m ()
+writeByte addr byte = do
+    (ppu, bus) <- get
+    bus' <- lift $ pWriteByte addr byte bus
+    put (ppu, bus')
+
 -- CPU Interface
 cpuRead :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
 cpuRead addr
@@ -304,14 +346,14 @@ cpuRead addr
 
 cpuWrite :: (PBus m a) => Word16 -> Word8 -> StateT (R2C02, a) m ()
 cpuWrite addr byte
-    | addr == 0x0000 = return ()
-    | addr == 0x0001 = return ()
+    | addr == 0x0000 = writeControl byte
+    | addr == 0x0001 = writeMask byte
     | addr == 0x0002 = return () -- Status: Read Only
     | addr == 0x0003 = return () -- TODO: Implement OAS ADDR support
     | addr == 0x0004 = return () -- TODO: Implement OAS DATA support
-    | addr == 0x0005 = return ()
-    | addr == 0x0006 = return ()
-    | addr == 0x0007 = return ()
+    | addr == 0x0005 = writeScroll byte
+    | addr == 0x0006 = writeAddress byte
+    | addr == 0x0007 = writeData byte
     | otherwise = return () -- TODO: Log error
 
 writeControl :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
@@ -322,6 +364,47 @@ writeControl byte = do
     setTRAMBit L_NAMETABLE_X nx
     setTRAMBit L_NAMETABLE_Y ny
     return ()
+
+writeMask :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+writeMask byte = setReg PPUMASK byte
+
+writeScroll :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+writeScroll byte = do
+    firstWrite <- fmap not getWriteToggle
+    if firstWrite
+        then do
+            setWriteToggle True
+            setTRAMData L_COARSE_X (shiftTake 3 5 byte)
+            setFineX (shiftTake 0 3 byte)
+        else do
+            setWriteToggle False
+            setTRAMData L_COARSE_Y (shiftTake 3 5 byte)
+            setTRAMData L_FINE_Y (shiftTake 0 3 byte)
+
+writeAddress :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+writeAddress byte = do
+    firstWrite <- fmap not getWriteToggle
+    if firstWrite
+        then do
+            setWriteToggle True
+            let fullbyte = fromIntegral byte :: Word16
+            t <- getTRAM
+            let t' = (shiftL (shiftTake 0 6 fullbyte) 8) .|. (t .&. 0x00FF)
+            setTRAM t
+        else do
+            setWriteToggle False
+            let fullbyte = fromIntegral byte :: Word16
+            t <- getTRAM
+            let t' = (fullbyte) .|. (t .&. 0xFF00)
+            setTRAM t'
+            setVRAM t'
+
+writeData :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+writeData byte = do
+    v <- getVRAM
+    writeByte v byte
+    increment_mode <- getCTRLFlag C_INCREMENT_MODE
+    if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
 
 -- Public Methods
 --
@@ -338,5 +421,9 @@ tick = do
 r2c02 :: R2C02
 r2c02 =
     R2C02
-        {
+        { ppuRegisters = reg
+        , ppuContext = cxt
         }
+  where
+    reg = Registers 0 0 0 0 0 0
+    cxt = Context False
