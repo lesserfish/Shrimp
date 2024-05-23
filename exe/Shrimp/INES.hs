@@ -1,6 +1,6 @@
 module Shrimp.INES (
-    Mirroring,
-    ConsoleType,
+    Mirroring (..),
+    ConsoleType (..),
     Header (..),
     emptyHeader,
     loadHeader,

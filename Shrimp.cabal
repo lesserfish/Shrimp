@@ -43,7 +43,11 @@ executable Shrimp
                     bytestring >= 0.11.4.0,
                     array >= 0.5.5.0,
                     vector >= 0.13.0.0,
-                    containers >= 0.6.8
+                    containers >= 0.6.8,
+                    sdl2 >= 2.5.5.0, 
+                    sdl2-ttf >= 2.1.3,
+                    text >= 2.0
+
   hs-source-dirs:   exe
   default-language: Haskell2010
 test-suite Shrimp-Test
@@ -59,4 +63,5 @@ test-suite Shrimp-Test
                       bytestring >= 0.11.4.0,
                       filepath >= 1.4.100.1,
                       array >= 0.5.5.0,
-                      containers >= 0.6.8
+                      containers >= 0.6.8,
+

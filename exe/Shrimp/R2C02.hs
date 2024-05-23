@@ -5,12 +5,14 @@ module Shrimp.R2C02 (
     reset,
     cpuRead,
     cpuWrite,
+    nametableBase,
 ) where
 
 import Control.Monad.State
 import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
+import qualified Shrimp.INES as INES
 import qualified Shrimp.Memory as Memory
 
 -- Registers
@@ -62,6 +64,8 @@ data Registers = Registers
     , fineX :: Word8
     , vram :: Word16
     , tram :: Word16
+    , writeToggle :: Bool
+    , ppuDataBuffer :: Word8
     }
 
 data RegisterValue a = RegisterValue (Registers -> a)
@@ -197,15 +201,15 @@ setTRAMData _ _ = error "Incorrect Flag"
 getVRAMData :: (PBus m a) => LOOPYFLAG -> StateT (R2C02, a) m Word8
 getVRAMData L_COARSE_X = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x1F) $ loopy :: Word8
+    let bits = fromIntegral $ shiftTake 0 5 loopy :: Word8
     return bits
 getVRAMData L_COARSE_Y = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x1F) $ shiftR loopy 5 :: Word8
+    let bits = fromIntegral $ shiftTake 5 5 loopy :: Word8
     return bits
 getVRAMData L_FINE_Y = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x7) $ shiftR loopy 12 :: Word8
+    let bits = fromIntegral $ shiftTake 12 3 loopy :: Word8
     return bits
 getVRAMData _ = error "Incorrect Flag"
 
@@ -219,7 +223,7 @@ setVRAMData L_COARSE_Y val = do
     let loopy' = (loopy .&. 0xfc1f) + shiftL ((fromIntegral val) .&. 0x1F) 5
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData L_FINE_Y val = do
-    loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
+    loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
     let loopy' = (loopy .&. 0x47FF) + shiftL ((fromIntegral val) .&. 0x7) 12
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData _ _ = error "Incorrect Flag"
@@ -245,25 +249,25 @@ setVRAMBit L_NAMETABLE_Y v = mapReg VRAM (\tram -> if v then (setBit tram 11) ::
 setVRAMBit _ _ = error "Incorrect Flag"
 
 getWriteToggle :: (PBus m a) => StateT (R2C02, a) m Bool
-getWriteToggle = (writeToggle . ppuContext . fst) <$> get
+getWriteToggle = (writeToggle . ppuRegisters . fst) <$> get
 
 setWriteToggle :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
 setWriteToggle toggle = do
     (ppu, bus) <- get
-    let ctx = ppuContext ppu
-    let ctx' = ctx{writeToggle = toggle}
-    let ppu' = ppu{ppuContext = ctx'}
+    let reg = ppuRegisters ppu
+    let reg' = reg{writeToggle = toggle}
+    let ppu' = ppu{ppuRegisters = reg'}
     put (ppu', bus)
 
 getDataBuffer :: (PBus m a) => StateT (R2C02, a) m Word8
-getDataBuffer = (ppuDataBuffer . ppuContext . fst) <$> get
+getDataBuffer = (ppuDataBuffer . ppuRegisters . fst) <$> get
 
 setDataBuffer :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 setDataBuffer byte = do
     (ppu, bus) <- get
-    let ctx = ppuContext ppu
-    let ctx' = ctx{ppuDataBuffer = byte}
-    let ppu' = ppu{ppuContext = ctx'}
+    let reg = ppuRegisters ppu
+    let reg' = reg{ppuDataBuffer = byte}
+    let ppu' = ppu{ppuRegisters = reg'}
     put (ppu', bus)
 
 getFineX :: (PBus m a) => StateT (R2C02, a) m Word8
@@ -320,9 +324,7 @@ b14 x = testBit x 14
 b15 x = testBit x 15
 
 data Context = Context
-    { writeToggle :: Bool
-    , ppuDataBuffer :: Word8
-    }
+    {}
 
 -- R2C02
 data R2C02 = R2C02
@@ -354,7 +356,7 @@ cpuRead addr
     | addr == 0x0005 = return 0 -- Scroll: Write Only
     | addr == 0x0006 = return 0 -- Address: WriteOnly
     | addr == 0x0007 = readData -- Data
-    | otherwise = return 0 --
+    | otherwise = error "CPU Attempted to read out of turn"
 
 readStatus :: (PBus m a) => StateT (R2C02, a) m Word8
 readStatus = do
@@ -439,6 +441,57 @@ writeData byte = do
     increment_mode <- getCTRLFlag C_INCREMENT_MODE
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
 
+incCoarseX :: (PBus m a) => StateT (R2C02, a) m ()
+incCoarseX = do
+    coarseX <- getVRAMData L_COARSE_X
+    if coarseX < 31
+        then setVRAMData L_COARSE_X (coarseX + 1)
+        else do
+            setVRAMData L_COARSE_X 0
+            ntx <- getVRAMBit L_NAMETABLE_X
+            setVRAMBit L_NAMETABLE_X (not ntx)
+
+incCoarseY :: (PBus m a) => StateT (R2C02, a) m ()
+incCoarseY = do
+    coarseY <- getVRAMData L_COARSE_Y
+    if coarseY == 27
+        then do
+            setVRAMData L_COARSE_Y 0
+            nty <- getVRAMBit L_NAMETABLE_Y
+            setVRAMBit L_NAMETABLE_Y (not nty)
+        else
+            if coarseY == 31
+                then do
+                    setVRAMData L_COARSE_Y 0
+                else do
+                    setVRAMData L_COARSE_Y (coarseY + 1)
+
+incFineY :: (PBus m a) => StateT (R2C02, a) m ()
+incFineY = do
+    fineY <- getVRAMData L_FINE_Y
+    if fineY < 7
+        then setVRAMData L_FINE_Y (fineY + 1)
+        else do
+            setVRAMData L_FINE_Y 0
+            incCoarseY
+
+nametableBase :: INES.Mirroring -> Word16 -> Word16
+nametableBase INES.Horizontal addr
+    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
+    | (addr >= 0x2400 && addr <= 0x27FF) = 0x400
+    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x000
+    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
+    | otherwise = error "Address out of range"
+nametableBase INES.Vertical addr
+    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
+    | (addr >= 0x2400 && addr <= 0x27FF) = 0x000
+    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
+    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
+    | otherwise = error "Address out of range"
+
+renderBackground :: (PBus m a) => Int -> Int -> StateT (R2C02, a) m ()
+renderBackground scanline dot = return ()
+
 -- Public Methods
 --
 reset :: (PBus m a) => StateT (R2C02, a) m ()
@@ -455,8 +508,8 @@ r2c02 :: R2C02
 r2c02 =
     R2C02
         { ppuRegisters = reg
-        , ppuContext = cxt 0
+        , ppuContext = cxt
         }
   where
-    reg = Registers 0 0 0 0 0 0
-    cxt = Context False
+    reg = Registers 0 0 0 0 0 0 False 0
+    cxt = Context

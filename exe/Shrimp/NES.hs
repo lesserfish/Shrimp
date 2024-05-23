@@ -5,6 +5,7 @@ import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
 import qualified Shrimp.Cartridge as Cart
+import qualified Shrimp.INES as INES
 import qualified Shrimp.IO as IO
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
@@ -136,21 +137,40 @@ instance PCBus NES where
 -- PPU Interface
 
 ppuReadPT :: Word16 -> State NES Word8
-ppuReadPT addr = return 0 -- TODO: Implement Pattern Table support
+ppuReadPT addr = do
+    nes <- get
+    let cart = cartridge nes
+    let (cart', byte) = Cart.ppuRead cart addr
+    put nes{cartridge = cart'}
+    return byte
 
 ppuReadNT :: Word16 -> State NES Word8
-ppuReadNT addr = return 0 -- TODO: Implement Nametable support
-  where
-    real_addr = addr .&. 0x0FFF
+ppuReadNT addr = do
+    nes <- get
+    let mirroring = INES.hMirroring . Cart.cHeader . cartridge $ nes
+    let baseaddr = PPU.nametableBase mirroring addr
+    let addr' = baseaddr + (addr .&. 0x03FF)
+    let byte = Memory.readByte (nametableRAM nes) addr'
+    return byte
 
 ppuReadPL :: Word16 -> State NES Word8
 ppuReadPL addr = return 0 -- TODO: Implement Palette RAM support
 
 ppuWritePT :: Word16 -> Word8 -> State NES ()
-ppuWritePT addr byte = return () -- TODO: Implement Pattern Table support
+ppuWritePT addr byte = do
+    nes <- get
+    let cart = cartridge nes
+    let cart' = Cart.ppuWrite cart addr byte
+    put nes{cartridge = cart'}
 
 ppuWriteNT :: Word16 -> Word8 -> State NES ()
-ppuWriteNT addr byte = return () -- TODO: Implement Nametable support
+ppuWriteNT addr byte = do
+    nes <- get
+    let mirroring = INES.hMirroring . Cart.cHeader . cartridge $ nes
+    let baseaddr = PPU.nametableBase mirroring addr
+    let addr' = baseaddr + (addr .&. 0x03FF)
+    let ram' = Memory.writeByte (nametableRAM nes) addr' byte
+    put nes{nametableRAM = ram'}
 
 ppuWritePL :: Word16 -> Word8 -> State NES ()
 ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
