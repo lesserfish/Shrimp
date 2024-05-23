@@ -148,13 +148,13 @@ getReg reg = do
     return regval
 
 getFlag :: (CBus m a) => FLAG -> StateT (MOS6502, a) m Bool
-getFlag CARRY = fmap b0 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag ZERO = fmap b1 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag INTERRUPT_DISABLE = fmap b2 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag DECIMAL_MODE = fmap b3 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag BREAK_CMD = fmap b4 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag OVERFLOW = fmap b6 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
-getFlag NEGATIVE = fmap b7 (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag CARRY = b0 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag ZERO = b1 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag INTERRUPT_DISABLE = b2 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag DECIMAL_MODE = b3 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag BREAK_CMD = b4 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag OVERFLOW = b6 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
+getFlag NEGATIVE = b7 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
 
 setFlag :: (CBus m a) => FLAG -> Bool -> StateT (MOS6502, a) m ()
 setFlag CARRY flag = mapReg PS (\reg -> if flag then (setBit reg 0) :: Word8 else (clearBit reg 0) :: Word8)
@@ -2240,4 +2240,4 @@ disassembleL start end bus
         return $ [(start, str)] ++ rest
 
 disassembleM :: (CBus m a) => Word16 -> Word16 -> a -> m (Map.Map Word16 String)
-disassembleM start end bus = fmap (Map.fromList) (disassembleL start end bus)
+disassembleM start end bus = (Map.fromList) <$> (disassembleL start end bus)

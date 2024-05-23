@@ -115,14 +115,14 @@ getReg reg = do
     return regval
 
 getCTRLFlag :: (PBus m a) => CTRLFLAG -> StateT (R2C02, a) m Bool
-getCTRLFlag C_NAMETABLE_X = fmap b0 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_NAMETABLE_Y = fmap b1 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_INCREMENT_MODE = fmap b2 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_PATTERN_SPRITE = fmap b3 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_PATTERN_BACKGROUND = fmap b4 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_SPRITE_SIZE = fmap b5 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_SLAVE_MDOE = fmap b6 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
-getCTRLFlag C_ENABLE_NMI = fmap b7 (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_NAMETABLE_X = b0 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_NAMETABLE_Y = b1 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_INCREMENT_MODE = b2 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_PATTERN_SPRITE = b3 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_PATTERN_BACKGROUND = b4 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_SPRITE_SIZE = b5 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_SLAVE_MDOE = b6 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
+getCTRLFlag C_ENABLE_NMI = b7 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
 
 setCTRLFlag :: (PBus m a) => CTRLFLAG -> Bool -> StateT (R2C02, a) m ()
 setCTRLFlag C_NAMETABLE_X v = mapReg PPUCTRL (\ctrl -> if v then (setBit ctrl 0) :: Word8 else (clearBit ctrl 0) :: Word8)
@@ -135,14 +135,14 @@ setCTRLFlag C_SLAVE_MDOE v = mapReg PPUCTRL (\ctrl -> if v then (setBit ctrl 6) 
 setCTRLFlag C_ENABLE_NMI v = mapReg PPUCTRL (\ctrl -> if v then (setBit ctrl 7) :: Word8 else (clearBit ctrl 7) :: Word8)
 
 getMASKFlag :: (PBus m a) => MASKFLAG -> StateT (R2C02, a) m Bool
-getMASKFlag M_GRAYSCALE = fmap b0 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_RENDER_BACKGROUND_LEFT = fmap b1 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_RENDER_SPRITES_LEFT = fmap b2 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_RENDER_BACKGROUND = fmap b3 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_RENDER_SPRITES = fmap b4 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_ENHANCE_RED = fmap b5 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_ENHANCE_GREEN = fmap b6 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
-getMASKFlag M_ENHANCE_BLUE = fmap b7 (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_GRAYSCALE = b0 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_RENDER_BACKGROUND_LEFT = b1 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_RENDER_SPRITES_LEFT = b2 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_RENDER_BACKGROUND = b3 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_RENDER_SPRITES = b4 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_ENHANCE_RED = b5 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_ENHANCE_GREEN = b6 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
+getMASKFlag M_ENHANCE_BLUE = b7 <$> (getReg PPUMASK :: (PBus m a) => StateT (R2C02, a) m Word8)
 
 setMASKFlag :: (PBus m a) => MASKFLAG -> Bool -> StateT (R2C02, a) m ()
 setMASKFlag M_GRAYSCALE v = mapReg PPUMASK (\ctrl -> if v then (setBit ctrl 0) :: Word8 else (clearBit ctrl 0) :: Word8)
@@ -155,9 +155,9 @@ setMASKFlag M_ENHANCE_GREEN v = mapReg PPUMASK (\ctrl -> if v then (setBit ctrl 
 setMASKFlag M_ENHANCE_BLUE v = mapReg PPUMASK (\ctrl -> if v then (setBit ctrl 7) :: Word8 else (clearBit ctrl 7) :: Word8)
 
 getSTATUSFlag :: (PBus m a) => STATUSFLAG -> StateT (R2C02, a) m Bool
-getSTATUSFlag S_SPRITE_OVERFLOW = fmap b5 (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
-getSTATUSFlag S_SPRITE_ZERO_HIT = fmap b6 (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
-getSTATUSFlag S_VERTICAL_BLANK = fmap b7 (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
+getSTATUSFlag S_SPRITE_OVERFLOW = b5 <$> (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
+getSTATUSFlag S_SPRITE_ZERO_HIT = b6 <$> (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
+getSTATUSFlag S_VERTICAL_BLANK = b7 <$> (getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8)
 
 setSTATUSFlag :: (PBus m a) => STATUSFLAG -> Bool -> StateT (R2C02, a) m ()
 setSTATUSFlag S_SPRITE_OVERFLOW v = mapReg PPUSTATUS (\ctrl -> if v then (setBit ctrl 5) :: Word8 else (clearBit ctrl 5) :: Word8)
@@ -225,8 +225,8 @@ setVRAMData L_FINE_Y val = do
 setVRAMData _ _ = error "Incorrect Flag"
 
 getTRAMBit :: (PBus m a) => LOOPYFLAG -> StateT (R2C02, a) m Bool
-getTRAMBit L_NAMETABLE_X = fmap b10 (getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
-getTRAMBit L_NAMETABLE_Y = fmap b11 (getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+getTRAMBit L_NAMETABLE_X = b10 <$> (getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+getTRAMBit L_NAMETABLE_Y = b11 <$> (getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
 getTRAMBit _ = error "Incorrect Flag"
 
 setTRAMBit :: (PBus m a) => LOOPYFLAG -> Bool -> StateT (R2C02, a) m ()
@@ -235,8 +235,8 @@ setTRAMBit L_NAMETABLE_Y v = mapReg TRAM (\tram -> if v then (setBit tram 11) ::
 setTRAMBit _ _ = error "Incorrect Flag"
 
 getVRAMBit :: (PBus m a) => LOOPYFLAG -> StateT (R2C02, a) m Bool
-getVRAMBit L_NAMETABLE_X = fmap b10 (getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
-getVRAMBit L_NAMETABLE_Y = fmap b11 (getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+getVRAMBit L_NAMETABLE_X = b10 <$> (getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
+getVRAMBit L_NAMETABLE_Y = b11 <$> (getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16)
 getVRAMBit _ = error "Incorrect Flag"
 
 setVRAMBit :: (PBus m a) => LOOPYFLAG -> Bool -> StateT (R2C02, a) m ()
@@ -245,13 +245,24 @@ setVRAMBit L_NAMETABLE_Y v = mapReg VRAM (\tram -> if v then (setBit tram 11) ::
 setVRAMBit _ _ = error "Incorrect Flag"
 
 getWriteToggle :: (PBus m a) => StateT (R2C02, a) m Bool
-getWriteToggle = fmap (writeToggle . ppuContext . fst) get
+getWriteToggle = (writeToggle . ppuContext . fst) <$> get
 
 setWriteToggle :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
 setWriteToggle toggle = do
     (ppu, bus) <- get
     let ctx = ppuContext ppu
     let ctx' = ctx{writeToggle = toggle}
+    let ppu' = ppu{ppuContext = ctx'}
+    put (ppu', bus)
+
+getDataBuffer :: (PBus m a) => StateT (R2C02, a) m Word8
+getDataBuffer = (ppuDataBuffer . ppuContext . fst) <$> get
+
+setDataBuffer :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+setDataBuffer byte = do
+    (ppu, bus) <- get
+    let ctx = ppuContext ppu
+    let ctx' = ctx{ppuDataBuffer = byte}
     let ppu' = ppu{ppuContext = ctx'}
     put (ppu', bus)
 
@@ -310,6 +321,7 @@ b15 x = testBit x 15
 
 data Context = Context
     { writeToggle :: Bool
+    , ppuDataBuffer :: Word8
     }
 
 -- R2C02
@@ -334,15 +346,36 @@ writeByte addr byte = do
 -- CPU Interface
 cpuRead :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
 cpuRead addr
-    | addr == 0x0000 = return 0 -- Control
-    | addr == 0x0001 = return 0 -- Mask
-    | addr == 0x0002 = return 0 -- Status
-    | addr == 0x0003 = return 0 -- OAM Address
-    | addr == 0x0004 = return 0 -- OAM Data
-    | addr == 0x0005 = return 0 -- Scroll
-    | addr == 0x0006 = return 0 -- Address
-    | addr == 0x0007 = return 0 -- Data
+    | addr == 0x0000 = return 0 -- Control: Write Only
+    | addr == 0x0001 = return 0 -- Mask: Write Only
+    | addr == 0x0002 = readStatus -- Status
+    | addr == 0x0003 = return 0 -- OAM Address: Write Only
+    | addr == 0x0004 = return 0 -- OAM Data: TODO
+    | addr == 0x0005 = return 0 -- Scroll: Write Only
+    | addr == 0x0006 = return 0 -- Address: WriteOnly
+    | addr == 0x0007 = readData -- Data
     | otherwise = return 0 --
+
+readStatus :: (PBus m a) => StateT (R2C02, a) m Word8
+readStatus = do
+    buf <- getDataBuffer
+    status <- getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8
+    let byte = (status .&. 0xE0) .|. (buf .&. 0x1F)
+    setWriteToggle False
+    setSTATUSFlag S_VERTICAL_BLANK False
+    return $ byte
+
+readData :: (PBus m a) => StateT (R2C02, a) m Word8
+readData = do
+    v <- getVRAM
+    oldbuf <- getDataBuffer
+    newbuf <- readByte v
+    setDataBuffer newbuf
+    v <- getVRAM
+    let byte = if v >= 0x3F00 then newbuf else oldbuf
+    increment_mode <- getCTRLFlag C_INCREMENT_MODE
+    if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
+    return byte
 
 cpuWrite :: (PBus m a) => Word16 -> Word8 -> StateT (R2C02, a) m ()
 cpuWrite addr byte
@@ -370,7 +403,7 @@ writeMask byte = setReg PPUMASK byte
 
 writeScroll :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeScroll byte = do
-    firstWrite <- fmap not getWriteToggle
+    firstWrite <- not <$> getWriteToggle
     if firstWrite
         then do
             setWriteToggle True
@@ -383,7 +416,7 @@ writeScroll byte = do
 
 writeAddress :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeAddress byte = do
-    firstWrite <- fmap not getWriteToggle
+    firstWrite <- not <$> getWriteToggle
     if firstWrite
         then do
             setWriteToggle True
@@ -422,7 +455,7 @@ r2c02 :: R2C02
 r2c02 =
     R2C02
         { ppuRegisters = reg
-        , ppuContext = cxt
+        , ppuContext = cxt 0
         }
   where
     reg = Registers 0 0 0 0 0 0
