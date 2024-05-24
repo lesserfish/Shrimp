@@ -324,7 +324,10 @@ b14 x = testBit x 14
 b15 x = testBit x 15
 
 data Context = Context
-    {}
+    { ppuNMI :: Bool
+    , ppuScanline :: Int
+    , ppuCycle :: Int
+    }
 
 -- R2C02
 data R2C02 = R2C02
@@ -489,8 +492,6 @@ nametableBase INES.Vertical addr
     | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
     | otherwise = error "Address out of range"
 
-renderBackground :: (PBus m a) => Int -> Int -> StateT (R2C02, a) m ()
-renderBackground scanline dot = return ()
 
 -- Public Methods
 --
@@ -500,8 +501,11 @@ reset = do
     let r2c02' = r2c02
     put (r2c02', bus)
 
+
 tick :: (PBus m a) => StateT (R2C02, a) m ()
 tick = do
+    (ppu, bus) <- get
+    let ctx = ppuContext ppu
     return ()
 
 r2c02 :: R2C02
@@ -511,5 +515,15 @@ r2c02 =
         , ppuContext = cxt
         }
   where
-    reg = Registers 0 0 0 0 0 0 False 0
-    cxt = Context
+    reg = Registers { ppuctrl = 0
+    , ppumask = 0
+    , ppustatus  = 0
+    , fineX = 0
+    , vram = 0
+    , tram = 0
+    , writeToggle = False
+    , ppuDataBuffer = 0
+    }
+    cxt = Context {ppuNMI = False
+    , ppuScanline = -1
+    , ppuCycle = 0}

@@ -42,14 +42,12 @@ class (Monad m) => PBus m a where
     pReadByte :: Word16 -> a -> m (a, Word8)
     pPeek :: Word16 -> a -> m Word8
     pSetPixel :: (Word8, Word8) -> Word8 -> a -> m a
-    pEmitNMI :: a -> m a
 
 class (Monad m) => MPBus m where
     mpWriteByte :: Word16 -> Word8 -> m a
     mpReadByte :: Word16 -> m Word8
     mpPeek :: Word16 -> m Word8
     mpSetPixel :: (Word8, Word8) -> Word8 -> m a
-    mpEmitNMI :: m a
 
 instance (MPBus m) => PBus m () where
     pWriteByte addr content _ = mpWriteByte addr content >> return ()
@@ -58,18 +56,15 @@ instance (MPBus m) => PBus m () where
         return (undefined, byte)
     pPeek addr _ = mpPeek addr
     pSetPixel pos col _ = mpSetPixel pos col
-    pEmitNMI _ = mpEmitNMI
 
 class PPBus a where
     ppWriteByte :: Word16 -> Word8 -> a -> a
     ppReadByte :: Word16 -> a -> (a, Word8)
     ppPeek :: Word16 -> a -> Word8
     ppSetPixel :: (Word8, Word8) -> Word8 -> a -> a
-    ppEmitNMI :: a -> a
 
 instance (PPBus a) => PBus Identity a where
     pWriteByte addr content bus = Identity $ ppWriteByte addr content bus
     pReadByte addr bus = Identity $ ppReadByte addr bus
     pPeek addr bus = Identity $ ppPeek addr bus
     pSetPixel pos col bus = Identity $ ppSetPixel pos col bus
-    pEmitNMI = Identity . ppEmitNMI
