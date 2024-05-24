@@ -16,7 +16,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
 ghc-options: -Wall
 
-executable Shrimp
+executable Shrimp-exe
   import:           warnings
   main-is:          Main.hs
   other-modules:    Shrimp.AbstractBus, 

@@ -2177,7 +2177,7 @@ opInfo 0x98 = Just ("TYA", IMPLICIT)
 opInfo opcode = Nothing
 
 toHex :: Word8 -> String
-toHex w = printf "%02x" w
+toHex w = printf "%02X" w
 
 disassembleArg :: (CBus m a) => a -> ADDR_MODE -> Word16 -> m (String, Word16)
 disassembleArg _ IMPLICIT _ = return $ ("", 0)

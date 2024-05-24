@@ -18,10 +18,12 @@ data SDLContext = SDLContext
     { sdlWindow :: SDL.Window
     , sdlRenderer :: SDL.Renderer
     , sdlRunning :: Bool
-    , sdlFont :: Font.Font
+    , sdlFontA :: Font.Font
+    , sdlFontB :: Font.Font
     , nes :: NES.NES
     , sdlUpdateTextures :: Bool
     , cpuTexture :: SDL.Texture
+    , nesRunning :: Bool
     }
 
 toHex :: Word8 -> String
@@ -39,11 +41,12 @@ til n = output
 
 handleKeydown :: SDL.Keycode -> StateT SDLContext IO ()
 handleKeydown SDL.KeycodeQ = modify (\ctx -> ctx{sdlRunning = False})
-handleKeydown SDL.KeycodeC = do
+handleKeydown SDL.KeycodeSpace = modify (\ctx -> ctx{nesRunning = not (nesRunning ctx)})
+handleKeydown SDL.KeycodeN = do
     ctx <- get
     let n' = execState NES.tick (nes ctx)
     put ctx{nes = n', sdlUpdateTextures = True}
-handleKeydown SDL.KeycodeN = do
+handleKeydown SDL.KeycodeC = do
     ctx <- get
     let n' = execState NES.tick (til . nes $ ctx)
     put ctx{nes = n', sdlUpdateTextures = True}
@@ -66,19 +69,27 @@ updateCPUStatus' :: Text -> Bool -> (Int, Int) -> StateT SDLContext IO ()
 updateCPUStatus' name cond (px, py) = do
     ctx <- get
     let col = if cond then SDL.V4 0 255 0 255 else SDL.V4 255 0 0 255
-    text <- Font.solid (sdlFont ctx) col name >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral px) (fromIntegral py)) (SDL.V2 18 18))
+    (sx, sy) <- Font.size (sdlFontB ctx) name
+    surf <- Font.blended (sdlFontB ctx) col name
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral px) (fromIntegral py)) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
 
 updateCPUStatus :: StateT SDLContext IO ()
 updateCPUStatus = do
     ctx <- get
     let n = nes ctx
-    title <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) "Status" >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) title Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 0) (SDL.V2 60 30))
+    (sx, sy) <- Font.size (sdlFontA ctx) "Status:"
+    surf <- Font.blended (sdlFontA ctx) (SDL.V4 255 255 255 255) "Status"
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 1) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
     let ps = MOS.ps . MOS.mosRegisters . NES.cpu $ n :: Word8
-    let h = 8
-    let d = 20
-    let s = 54
+    let h = 7
+    let d = 18
+    let s = 65
     updateCPUStatus' "N" (testBit ps 7) (s + d * 1, h)
     updateCPUStatus' "V" (testBit ps 6) (s + d * 2, h)
     updateCPUStatus' "B" (testBit ps 4) (s + d * 3, h)
@@ -94,8 +105,29 @@ updateCPUCycles = do
     let n = nes ctx
     let pc = show . MOS.cycles . NES.cpu $ n
     let txt = pack $ "Cycles: " ++ pc
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 150 60) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 150 60) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
+    return ()
+
+updateNESClock :: StateT SDLContext IO ()
+updateNESClock = do
+    ctx <- get
+    let n = nes ctx
+    let pc = show . NES.nClock $ n
+    let txt = pack $ "Clock: " ++ pc
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    let l = 3 * length pc
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 150 90) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUPC :: StateT SDLContext IO ()
@@ -104,8 +136,13 @@ updateCPUPC = do
     let n = nes ctx
     let pc = toHex' . MOS.pc . MOS.mosRegisters . NES.cpu $ n
     let txt = pack $ "PC: 0x" ++ pc
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 60) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 60) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUACC :: StateT SDLContext IO ()
@@ -114,8 +151,13 @@ updateCPUACC = do
     let n = nes ctx
     let reg = toHex . MOS.acc . MOS.mosRegisters . NES.cpu $ n
     let txt = pack $ "A:  0x" ++ reg
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 100) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 90) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUX :: StateT SDLContext IO ()
@@ -124,8 +166,13 @@ updateCPUX = do
     let n = nes ctx
     let reg = toHex . MOS.idx . MOS.mosRegisters . NES.cpu $ n
     let txt = pack $ "X:  0x" ++ reg
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 140) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 120) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUY :: StateT SDLContext IO ()
@@ -134,8 +181,13 @@ updateCPUY = do
     let n = nes ctx
     let reg = toHex . MOS.idy . MOS.mosRegisters . NES.cpu $ n
     let txt = pack $ "Y:  0x" ++ reg
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 180) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 150) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUP :: StateT SDLContext IO ()
@@ -144,17 +196,27 @@ updateCPUP = do
     let n = nes ctx
     let reg = toHex' . fromIntegral . MOS.sp . MOS.mosRegisters . NES.cpu $ n
     let txt = pack $ "P:  0x" ++ reg
-    text <- Font.solid (sdlFont ctx) (SDL.V4 255 255 255 255) txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 220) (SDL.V2 100 30))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 180) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateInstruction :: Bool -> (Word16, String) -> Int -> StateT SDLContext IO ()
 updateInstruction sp (addr, inst) py = do
     ctx <- get
-    let col = if sp then SDL.V4 0 0 255 255 else SDL.V4 255 255 255 255
+    let col = if sp then SDL.V4 0 129 255 255 else SDL.V4 255 255 255 255
     let txt = pack $ "$" ++ toHex' addr ++ ":   " ++ (if inst == "" then replicate 48 ' ' else inst)
-    text <- Font.solid (sdlFont ctx) col txt >>= SDL.createTextureFromSurface (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 (fromIntegral py)) (SDL.V2 300 20))
+    (sx, sy) <- Font.size (sdlFontB ctx) txt
+    surf <- Font.blended (sdlFontB ctx) col txt
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 (fromIntegral py)) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
+    SDL.freeSurface surf
+    SDL.destroyTexture text
+
     return ()
 
 updateCPUInstruction' :: Bool -> Int -> Int -> [(Word16, String)] -> StateT SDLContext IO ()
@@ -168,8 +230,8 @@ updateCPUInstruction = do
     ctx <- get
     let n = nes ctx
     let pc = MOS.pc . MOS.mosRegisters . NES.cpu $ n
-    let after = take 7 . runIdentity . (MOS.disassembleL pc (pc + 20 * 0x04)) $ n
-    let before = tail . take 7 . reverse . runIdentity . (MOS.disassembleL (pc - 20 * 0x04) pc) $ n
+    let after = take 8 . runIdentity . (MOS.disassembleL pc (pc + 20 * 0x04)) $ n
+    let before = tail . take 8 . reverse . runIdentity . (MOS.disassembleL (pc - 20 * 0x04) pc) $ n
     let offset = 30
     let start = 460
     updateCPUInstruction' True start offset after
@@ -188,6 +250,7 @@ updateCPUTexture = do
     updateCPUY
     updateCPUP
     updateCPUCycles
+    updateNESClock
     updateCPUInstruction
     SDL.rendererRenderTarget (sdlRenderer ctx) SDL.$= Nothing
 
@@ -204,14 +267,29 @@ renderSDL :: StateT SDLContext IO ()
 renderSDL = do
     ctx <- get
     SDL.clear (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) (cpuTexture ctx) Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 400 0) (SDL.V2 800 1600))
+    SDL.copy (sdlRenderer ctx) (cpuTexture ctx) Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 500 0) (SDL.V2 700 1600))
     SDL.present (sdlRenderer ctx)
     return ()
 
+(<**>) :: (a -> a) -> Int -> (a -> a)
+f <**> 0 = id
+f <**> 1 = f
+f <**> n = f . (f <**> (n - 1))
+
+nesLoop :: StateT SDLContext IO ()
+nesLoop = do
+    ctx <- get
+    if nesRunning ctx
+        then do
+            let n = nes ctx
+            let n' = (execState NES.tick <**> 10000) n
+            put ctx{nes = n', sdlUpdateTextures = True}
+        else return ()
 mainLoop :: StateT SDLContext IO ()
 mainLoop = do
     events <- SDL.pollEvents
     mapM_ handleEvents events
+    nesLoop
     updateTextures
     renderSDL
     running <- sdlRunning <$> get
@@ -223,19 +301,22 @@ main = do
     Font.initialize
     window <- SDL.createWindow "Shrimp" SDL.defaultWindow{windowInitialSize = SDL.V2 800 800}
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
-    font <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 90
+    fontA <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 22
+    fontB <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 16
     nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
-    cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 800 1600)
+    cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 700 1600)
 
     let context =
             SDLContext
                 { sdlWindow = window
                 , sdlRenderer = renderer
                 , sdlRunning = True
-                , sdlFont = font
+                , sdlFontA = fontA
+                , sdlFontB = fontB
                 , nes = nes
                 , sdlUpdateTextures = True
                 , cpuTexture = cputext
+                , nesRunning = False
                 }
 
     execStateT mainLoop context
