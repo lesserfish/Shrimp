@@ -35,12 +35,12 @@ data REGISTER
     deriving (Show)
 
 data Registers = Registers
-    { pc :: Word16
-    , sp :: Word8
-    , acc :: Word8
-    , idx :: Word8
-    , idy :: Word8
-    , ps :: Word8
+    { pc :: !Word16
+    , sp :: !Word8
+    , acc :: !Word8
+    , idx :: !Word8
+    , idy :: !Word8
+    , ps :: !Word8
     }
 
 showWord16 :: Word16 -> String
@@ -70,9 +70,9 @@ data Log = LOP String | LA String deriving (Show)
 data Context = Context deriving (Show)
 
 data MOS6502 = MOS6502
-    { mosRegisters :: Registers
-    , clock :: Int
-    , cycles :: Int
+    { mosRegisters :: !Registers
+    , clock :: !Int
+    , cycles :: !Int
     , context :: Context
     }
     deriving (Show)

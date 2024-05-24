@@ -21,7 +21,7 @@ data NES = NES
     , nametableRAM :: Memory.RAM
     , paletteRAM :: Memory.RAM
     , context :: NESContext
-    , nClock :: Int
+    , nClock :: !Int
     }
 
 -- Helper functions
