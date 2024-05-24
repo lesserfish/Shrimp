@@ -189,6 +189,7 @@ instance PPBus NES where
         | (addr >= 0x2000 && addr <= 0x3EFF) = snd $ run (ppuReadNT addr) nes
         | (addr >= 0x3F00 && addr <= 0x3FFF) = snd $ run (ppuReadPL addr) nes
     ppSetPixel (x, y) value nes = nes -- TODO: Implement SetPixel support
+    ppEmitNMI nes = nes -- TODO: Implement NMI support
 
 ppuWrite :: Word16 -> Word8 -> State NES ()
 ppuWrite addr byte

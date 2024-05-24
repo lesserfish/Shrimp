@@ -171,15 +171,15 @@ setSTATUSFlag S_VERTICAL_BLANK v = mapReg PPUSTATUS (\ctrl -> if v then (setBit 
 getTRAMData :: (PBus m a) => LOOPYFLAG -> StateT (R2C02, a) m Word8
 getTRAMData L_COARSE_X = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x1F) $ loopy :: Word8
+    let bits = fromIntegral . (shiftTake 0 5) $ loopy :: Word8
     return bits
 getTRAMData L_COARSE_Y = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x1F) $ shiftR loopy 5 :: Word8
+    let bits = fromIntegral . (shiftTake 5 5) $ loopy :: Word8
     return bits
 getTRAMData L_FINE_Y = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let bits = fromIntegral . (.&. 0x7) $ shiftR loopy 12 :: Word8
+    let bits = fromIntegral . (shiftTake 12 3)$ loopy :: Word8
     return bits
 getTRAMData _ = error "Incorrect Flag"
 
@@ -225,7 +225,7 @@ setVRAMData L_COARSE_Y val = do
 setVRAMData L_FINE_Y val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
     let loopy' = (loopy .&. 0x47FF) + shiftL ((fromIntegral val) .&. 0x7) 12
-    setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
+    setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData _ _ = error "Incorrect Flag"
 
 getTRAMBit :: (PBus m a) => LOOPYFLAG -> StateT (R2C02, a) m Bool
@@ -374,7 +374,6 @@ readData = do
     oldbuf <- getDataBuffer
     newbuf <- readByte v
     setDataBuffer newbuf
-    v <- getVRAM
     let byte = if v >= 0x3F00 then newbuf else oldbuf
     increment_mode <- getCTRLFlag C_INCREMENT_MODE
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
