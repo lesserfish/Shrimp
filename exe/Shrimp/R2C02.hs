@@ -426,7 +426,7 @@ writeAddress byte = do
             let fullbyte = fromIntegral byte :: Word16
             t <- getTRAM
             let t' = (shiftL (shiftTake 0 6 fullbyte) 8) .|. (t .&. 0x00FF)
-            setTRAM t
+            setTRAM t'
         else do
             setWriteToggle False
             let fullbyte = fromIntegral byte :: Word16

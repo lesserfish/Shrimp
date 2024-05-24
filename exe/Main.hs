@@ -12,6 +12,8 @@ import qualified SDL as SDL
 import qualified SDL.Font as Font
 import qualified Shrimp.MOS6502 as MOS
 import qualified Shrimp.NES as NES
+import qualified Shrimp.AbstractBus as BUS
+import qualified Shrimp.Memory as Memory
 import Text.Printf
 
 data SDLContext = SDLContext
@@ -23,6 +25,7 @@ data SDLContext = SDLContext
     , nes :: NES.NES
     , sdlUpdateTextures :: Bool
     , cpuTexture :: SDL.Texture
+    , ppuTexture :: SDL.Texture
     , nesRunning :: Bool
     }
 
@@ -209,7 +212,7 @@ updateInstruction :: Bool -> (Word16, String) -> Int -> StateT SDLContext IO ()
 updateInstruction sp (addr, inst) py = do
     ctx <- get
     let col = if sp then SDL.V4 0 129 255 255 else SDL.V4 255 255 255 255
-    let txt = pack $ "$" ++ toHex' addr ++ ":   " ++ (if inst == "" then replicate 48 ' ' else inst)
+    let txt = pack $ "$" ++ toHex' addr ++ ":   " ++ inst
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) col txt
     text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
@@ -254,12 +257,147 @@ updateCPUTexture = do
     updateCPUInstruction
     SDL.rendererRenderTarget (sdlRenderer ctx) SDL.$= Nothing
 
+data Pixel = PA | PB | PC | PD deriving Show
+data Pixel8 = P8 { p0 :: Pixel
+                 , p1 :: Pixel
+                 , p2 :: Pixel
+                 , p3 :: Pixel
+                 , p4 :: Pixel
+                 , p5 :: Pixel
+                 , p6 :: Pixel
+                 , p7 :: Pixel} deriving Show
+p82list :: Pixel8 -> [Pixel]
+p82list (P8 p0 p1 p2 p3 p4 p5 p6 p7) = [p0, p1, p2, p3, p4, p5, p6, p7]
+
+toPixel :: Bool -> Bool -> Pixel
+toPixel False False = PA
+toPixel False True = PB
+toPixel True False = PC
+toPixel True True = PD
+
+combineByte :: (Word8, Word8) -> Pixel8
+combineByte (lsb, hsb) = P8 q0 q1 q2 q3 q4 q5 q6 q7 where
+    q0 = toPixel (testBit lsb 0) (testBit hsb 0)
+    q1 = toPixel (testBit lsb 1) (testBit hsb 1)
+    q2 = toPixel (testBit lsb 2) (testBit hsb 2)
+    q3 = toPixel (testBit lsb 3) (testBit hsb 3)
+    q4 = toPixel (testBit lsb 4) (testBit hsb 4)
+    q5 = toPixel (testBit lsb 5) (testBit hsb 5)
+    q6 = toPixel (testBit lsb 6) (testBit hsb 6)
+    q7 = toPixel (testBit lsb 7) (testBit hsb 7)
+
+getTileOffset :: Int -> (Int, Int) -> Word16
+getTileOffset table (x, y) = addr where
+    offset = fromIntegral $ y * 16 * 16 + x * 16 :: Word16
+    addr = (fromIntegral table) * 0x1000 + offset
+
+getLSB :: NES.NES -> Word16 -> Word16 -> Word8
+getLSB n offset line = byte where
+    addr = offset + line
+    byte = BUS.ppPeek addr n
+
+getHSB :: NES.NES -> Word16 -> Word16 -> Word8
+getHSB n offset line = byte where
+    addr = offset + line + 8
+    byte = BUS.ppPeek addr n
+
+getP8 :: NES.NES -> Word16 -> Word16 -> Pixel8
+getP8 n offset line = pix where
+    lsb = getLSB n offset line
+    hsb = getHSB n offset line
+    pix = combineByte (lsb, hsb)
+
+pixel2color PA = SDL.V4 100 100 100 255
+pixel2color PB = SDL.V4 155 155 155 255
+pixel2color PC = SDL.V4 255 255 200 255
+pixel2color PD = SDL.V4 055 055 055 255
+
+renderLine2Surf :: SDL.Surface -> Int -> Pixel8 -> IO ()
+renderLine2Surf surf height pix = do
+    let pixs = p82list pix
+    let pixdata = [(x, px) | x <- [0..7], let px = pixs !! x]
+    mapM_ (\(x, px) -> do
+            let col = pixel2color px
+            SDL.surfaceFillRect surf (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral (7 - x)) (fromIntegral height)) (SDL.V2 1 1)) col
+        ) pixdata
+
+getPPUTile :: Int -> (Int, Int) -> StateT SDLContext IO SDL.Texture
+getPPUTile pt (tx, ty) = do
+    ctx <- get
+    surf <- SDL.createRGBSurface (SDL.V2 8 8) SDL.RGBA8888
+    mapM_ (\line -> do
+        let p8 = getP8 (nes ctx) (getTileOffset pt (tx, ty)) line
+        liftIO $ renderLine2Surf surf (fromIntegral line) p8) [0..7]
+    text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
+    SDL.freeSurface surf
+    return text
+    
+updatePPUPT :: StateT SDLContext IO ()
+updatePPUPT = do
+    ctx <- get
+    let scale = 2
+    let sy = 800 - 128*scale - 30
+    let sx = 50
+    mapM_ (\(x, y) -> do
+        text <- getPPUTile 0 (x, y)
+        SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (sx + fromIntegral x * 8 * scale) (sy + fromIntegral y * 8 * scale)) (SDL.V2 (scale * 8) (scale * 8)))
+        SDL.destroyTexture text
+
+        text <- getPPUTile 1 (x, y)
+        SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (sx + 10 + 128 * scale + fromIntegral x * 8 * scale) (sy + fromIntegral y * 8 * scale)) (SDL.V2 (scale * 8) (scale * 8)))
+        SDL.destroyTexture text
+
+        ) [(x, y) | x <- [0..15], y <- [0..15]]
+    return ()
+
+getNTByte :: NES.NES -> Word16 -> (Word16, Word16) -> Word8
+getNTByte n nt (nx, ny) = byte where
+    base = nt * 0x0400
+    offset = ny * 32 + nx
+    addr = base + offset
+    ram = NES.nametableRAM n
+    byte = Memory.readByte ram addr
+    
+updatePPUNT' :: Word16 -> StateT SDLContext IO ()
+updatePPUNT' nt = do
+    ctx <- get
+    let res = 14
+    let sx = 85
+    let sy = 20 
+    mapM_  (\(nx, ny) -> do
+            let byte = getNTByte (nes ctx) nt (nx, ny)
+            let px = byte .&. 0x0F
+            let py = (shiftR byte 4)
+            text <- getPPUTile 0 (fromIntegral px, fromIntegral py)
+            SDL.copy 
+                (sdlRenderer ctx) 
+                text 
+                Nothing 
+                (Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral $ sx + nx * res) (fromIntegral $ sy + ny * res)) (SDL.V2 (fromIntegral res) (fromIntegral res)))
+            SDL.destroyTexture text
+            ) [(x, y) | x <- [0..31], y <- [0..29]]
+    return ()
+
+updatePPUNT :: StateT SDLContext IO ()
+updatePPUNT = do
+    updatePPUNT' 0
+
+updatePPUTexture :: StateT SDLContext IO ()
+updatePPUTexture = do
+    ctx <- get
+    SDL.rendererRenderTarget (sdlRenderer ctx) SDL.$= Just (ppuTexture ctx)
+    SDL.clear (sdlRenderer ctx)
+    updatePPUPT
+    updatePPUNT
+    SDL.rendererRenderTarget (sdlRenderer ctx) SDL.$= Nothing
+
 updateTextures :: StateT SDLContext IO ()
 updateTextures = do
     ctx <- get
     if sdlUpdateTextures ctx
         then do
             updateCPUTexture
+            updatePPUTexture
             put ctx{sdlUpdateTextures = False}
         else return ()
 
@@ -267,7 +405,8 @@ renderSDL :: StateT SDLContext IO ()
 renderSDL = do
     ctx <- get
     SDL.clear (sdlRenderer ctx)
-    SDL.copy (sdlRenderer ctx) (cpuTexture ctx) Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 500 0) (SDL.V2 700 1600))
+    SDL.copy (sdlRenderer ctx) (cpuTexture ctx) Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 650 0) (SDL.V2 350 800))
+    SDL.copy (sdlRenderer ctx) (ppuTexture ctx) Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 000 0) (SDL.V2 650 800))
     SDL.present (sdlRenderer ctx)
     return ()
 
@@ -299,12 +438,13 @@ main :: IO ()
 main = do
     SDL.initializeAll
     Font.initialize
-    window <- SDL.createWindow "Shrimp" SDL.defaultWindow{windowInitialSize = SDL.V2 800 800}
+    window <- SDL.createWindow "Shrimp" SDL.defaultWindow{windowInitialSize = SDL.V2 1000 800}
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
     fontA <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 22
     fontB <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 16
     nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
-    cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 700 1600)
+    cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 350 800)
+    pputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 650 800)
 
     let context =
             SDLContext
@@ -316,6 +456,7 @@ main = do
                 , nes = nes
                 , sdlUpdateTextures = True
                 , cpuTexture = cputext
+                , ppuTexture = pputext
                 , nesRunning = False
                 }
 
