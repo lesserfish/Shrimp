@@ -14,13 +14,13 @@ import qualified Shrimp.R2C02 as PPU
 data NESContext = NESContext
 
 data NES = NES
-    { cpu :: CPU.MOS6502
-    , ppu :: PPU.R2C02
-    , cartridge :: Cart.Cartridge
-    , cpuRAM :: Memory.RAM
-    , nametableRAM :: Memory.RAM
-    , paletteRAM :: Memory.RAM
-    , context :: NESContext
+    { cpu :: !CPU.MOS6502
+    , ppu :: !PPU.R2C02
+    , cartridge :: !Cart.Cartridge
+    , cpuRAM :: !Memory.RAM
+    , nametableRAM :: !Memory.RAM
+    , paletteRAM :: !Memory.RAM
+    , context :: !NESContext
     , nClock :: !Int
     }
 

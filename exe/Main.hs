@@ -22,7 +22,7 @@ data SDLContext = SDLContext
     , sdlRunning :: Bool
     , sdlFontA :: Font.Font
     , sdlFontB :: Font.Font
-    , nes :: NES.NES
+    , nes :: !NES.NES
     , sdlUpdateTextures :: Bool
     , cpuTexture :: SDL.Texture
     , ppuTexture :: SDL.Texture
@@ -442,7 +442,7 @@ main = do
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
     fontA <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 22
     fontB <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 16
-    nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
+    nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/donkey_kong.nes"
     cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 350 800)
     pputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 650 800)
 
