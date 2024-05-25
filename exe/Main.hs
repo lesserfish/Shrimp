@@ -2,6 +2,7 @@
 
 module Main where
 
+import Control.Monad (when)
 import Control.Monad.Identity
 import Control.Monad.State
 import Data.Bits
@@ -11,6 +12,7 @@ import SDL (WindowConfig (windowInitialSize))
 import qualified SDL as SDL
 import qualified SDL.Font as Font
 import qualified Shrimp.MOS6502 as MOS
+import qualified Shrimp.R2C02 as PPU
 import qualified Shrimp.NES as NES
 import qualified Shrimp.AbstractBus as BUS
 import qualified Shrimp.Memory as Memory
@@ -23,7 +25,8 @@ data SDLContext = SDLContext
     , sdlFontA :: Font.Font
     , sdlFontB :: Font.Font
     , nes :: !NES.NES
-    , sdlUpdateTextures :: Bool
+    , sdlUpdateCPUTexture :: Bool
+    , sdlUpdatePPUTexture :: Bool
     , cpuTexture :: SDL.Texture
     , ppuTexture :: SDL.Texture
     , nesRunning :: Bool
@@ -35,24 +38,17 @@ toHex w = printf "%02X" w
 toHex' :: Word16 -> String
 toHex' w = printf "%04X" w
 
-til :: NES.NES -> NES.NES
-til n = output
-  where
-    cycles_left = MOS.cycles . NES.cpu $ n
-    cc = mod (NES.nClock $ n) 3
-    output = if cycles_left == 0 && cc == 0 then n else til $ execState NES.tick n
-
 handleKeydown :: SDL.Keycode -> StateT SDLContext IO ()
 handleKeydown SDL.KeycodeQ = modify (\ctx -> ctx{sdlRunning = False})
 handleKeydown SDL.KeycodeSpace = modify (\ctx -> ctx{nesRunning = not (nesRunning ctx)})
 handleKeydown SDL.KeycodeN = do
     ctx <- get
-    let n' = execState NES.tick (nes ctx)
-    put ctx{nes = n', sdlUpdateTextures = True}
+    n' <- liftIO $ execStateT NES.tick (nes ctx)
+    put ctx{nes = n', sdlUpdateCPUTexture = True}
 handleKeydown SDL.KeycodeC = do
     ctx <- get
-    let n' = execState NES.tick (til . nes $ ctx)
-    put ctx{nes = n', sdlUpdateTextures = True}
+    n' <- liftIO $ execStateT NES.tick (nes ctx)
+    put ctx{nes = n', sdlUpdateCPUTexture = True}
 handleKeydown _ = return ()
 
 handleKeyboard :: SDL.KeyboardEventData -> StateT SDLContext IO ()
@@ -89,7 +85,7 @@ updateCPUStatus = do
     SDL.copy (sdlRenderer ctx) text Nothing (Just $ SDL.Rectangle (SDL.P $ SDL.V2 0 1) (SDL.V2 (fromIntegral sx) (fromIntegral sy)))
     SDL.freeSurface surf
     SDL.destroyTexture text
-    let ps = MOS.ps . MOS.mosRegisters . NES.cpu $ n :: Word8
+    let ps = MOS.ps . MOS.registers . NES.cpu $ n :: Word8
     let h = 7
     let d = 18
     let s = 65
@@ -137,7 +133,7 @@ updateCPUPC :: StateT SDLContext IO ()
 updateCPUPC = do
     ctx <- get
     let n = nes ctx
-    let pc = toHex' . MOS.pc . MOS.mosRegisters . NES.cpu $ n
+    let pc = toHex' . MOS.pc . MOS.registers . NES.cpu $ n
     let txt = pack $ "PC: 0x" ++ pc
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
@@ -152,7 +148,7 @@ updateCPUACC :: StateT SDLContext IO ()
 updateCPUACC = do
     ctx <- get
     let n = nes ctx
-    let reg = toHex . MOS.acc . MOS.mosRegisters . NES.cpu $ n
+    let reg = toHex . MOS.acc . MOS.registers . NES.cpu $ n
     let txt = pack $ "A:  0x" ++ reg
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
@@ -167,7 +163,7 @@ updateCPUX :: StateT SDLContext IO ()
 updateCPUX = do
     ctx <- get
     let n = nes ctx
-    let reg = toHex . MOS.idx . MOS.mosRegisters . NES.cpu $ n
+    let reg = toHex . MOS.idx . MOS.registers . NES.cpu $ n
     let txt = pack $ "X:  0x" ++ reg
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
@@ -182,7 +178,7 @@ updateCPUY :: StateT SDLContext IO ()
 updateCPUY = do
     ctx <- get
     let n = nes ctx
-    let reg = toHex . MOS.idy . MOS.mosRegisters . NES.cpu $ n
+    let reg = toHex . MOS.idy . MOS.registers . NES.cpu $ n
     let txt = pack $ "Y:  0x" ++ reg
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
@@ -197,7 +193,7 @@ updateCPUP :: StateT SDLContext IO ()
 updateCPUP = do
     ctx <- get
     let n = nes ctx
-    let reg = toHex' . fromIntegral . MOS.sp . MOS.mosRegisters . NES.cpu $ n
+    let reg = toHex' . fromIntegral . MOS.sp . MOS.registers . NES.cpu $ n
     let txt = pack $ "P:  0x" ++ reg
     (sx, sy) <- Font.size (sdlFontB ctx) txt
     surf <- Font.blended (sdlFontB ctx) (SDL.V4 255 255 255 255) txt
@@ -228,13 +224,20 @@ updateCPUInstruction' sp starty delta (y : ys) = do
     updateInstruction sp y starty
     updateCPUInstruction' False (starty + delta) delta ys
 
+disassembleL :: Word16 -> Word16 -> StateT NES.NES IO [(Word16, String)]
+disassembleL start end = do
+    output <- MOS.disassembleL start end ()
+    return output
+
 updateCPUInstruction :: StateT SDLContext IO ()
 updateCPUInstruction = do
     ctx <- get
     let n = nes ctx
-    let pc = MOS.pc . MOS.mosRegisters . NES.cpu $ n
-    let after = take 8 . runIdentity . (MOS.disassembleL pc (pc + 20 * 0x04)) $ n
-    let before = tail . take 8 . reverse . runIdentity . (MOS.disassembleL (pc - 20 * 0x04) pc) $ n
+    let pc = MOS.pc . MOS.registers . NES.cpu $ n
+    (afterl, _) <- liftIO $ runStateT (disassembleL pc (pc + 20 * 0x04)) n
+    let after = take 8 afterl
+    (beforel, _) <- liftIO $ runStateT (disassembleL (pc - 20 * 0x04) pc) n
+    let before = tail . take 8 . reverse $ beforel
     let offset = 30
     let start = 460
     updateCPUInstruction' True start offset after
@@ -291,21 +294,29 @@ getTileOffset table (x, y) = addr where
     offset = fromIntegral $ y * 16 * 16 + x * 16 :: Word16
     addr = (fromIntegral table) * 0x1000 + offset
 
-getLSB :: NES.NES -> Word16 -> Word16 -> Word8
-getLSB n offset line = byte where
-    addr = offset + line
-    byte = BUS.ppPeek addr n
+peeker :: Word16 -> StateT NES.NES IO Word8
+peeker addr = do
+    result <- BUS.cPeek addr ()
+    return result
 
-getHSB :: NES.NES -> Word16 -> Word16 -> Word8
-getHSB n offset line = byte where
-    addr = offset + line + 8
-    byte = BUS.ppPeek addr n
+getLSB :: NES.NES -> Word16 -> Word16 -> IO Word8
+getLSB n offset line = do 
+    let addr = offset + line
+    (byte, _) <- runStateT (peeker addr) n
+    return byte
 
-getP8 :: NES.NES -> Word16 -> Word16 -> Pixel8
-getP8 n offset line = pix where
-    lsb = getLSB n offset line
-    hsb = getHSB n offset line
-    pix = combineByte (lsb, hsb)
+getHSB :: NES.NES -> Word16 -> Word16 -> IO Word8
+getHSB n offset line = do 
+    let addr = offset + line + 8
+    (byte, _) <- runStateT (peeker addr) n
+    return byte
+
+getP8 :: NES.NES -> Word16 -> Word16 -> IO Pixel8
+getP8 n offset line = do 
+    lsb <- getLSB n offset line
+    hsb <- getHSB n offset line
+    let pix = combineByte (lsb, hsb)
+    return pix
 
 pixel2color PA = SDL.V4 100 100 100 255
 pixel2color PB = SDL.V4 155 155 155 255
@@ -326,7 +337,7 @@ getPPUTile pt (tx, ty) = do
     ctx <- get
     surf <- SDL.createRGBSurface (SDL.V2 8 8) SDL.RGBA8888
     mapM_ (\line -> do
-        let p8 = getP8 (nes ctx) (getTileOffset pt (tx, ty)) line
+        p8 <- liftIO $ getP8 (nes ctx) (getTileOffset pt (tx, ty)) line
         liftIO $ renderLine2Surf surf (fromIntegral line) p8) [0..7]
     text <- SDL.createTextureFromSurface (sdlRenderer ctx) surf
     SDL.freeSurface surf
@@ -350,13 +361,14 @@ updatePPUPT = do
         ) [(x, y) | x <- [0..15], y <- [0..15]]
     return ()
 
-getNTByte :: NES.NES -> Word16 -> (Word16, Word16) -> Word8
-getNTByte n nt (nx, ny) = byte where
-    base = nt * 0x0400
-    offset = ny * 32 + nx
-    addr = base + offset
-    ram = NES.nametableRAM n
-    byte = Memory.readByte ram addr
+getNTByte :: NES.NES -> Word16 -> (Word16, Word16) -> IO Word8
+getNTByte n nt (nx, ny) = do 
+    let base = nt * 0x0400
+    let offset = ny * 32 + nx
+    let addr = base + offset
+    let ram = NES.nametableRAM n
+    byte <- liftIO $ Memory.readByteIO ram addr
+    return byte
     
 updatePPUNT' :: Word16 -> StateT SDLContext IO ()
 updatePPUNT' nt = do
@@ -365,10 +377,10 @@ updatePPUNT' nt = do
     let sx = 85
     let sy = 20 
     mapM_  (\(nx, ny) -> do
-            let byte = getNTByte (nes ctx) nt (nx, ny)
+            byte <- liftIO $ getNTByte (nes ctx) nt (nx, ny)
             let px = byte .&. 0x0F
             let py = (shiftR byte 4)
-            text <- getPPUTile 0 (fromIntegral px, fromIntegral py)
+            text <- getPPUTile 1 (fromIntegral px, fromIntegral py)
             SDL.copy 
                 (sdlRenderer ctx) 
                 text 
@@ -394,12 +406,9 @@ updatePPUTexture = do
 updateTextures :: StateT SDLContext IO ()
 updateTextures = do
     ctx <- get
-    if sdlUpdateTextures ctx
-        then do
-            updateCPUTexture
-            updatePPUTexture
-            put ctx{sdlUpdateTextures = False}
-        else return ()
+    when (sdlUpdateCPUTexture ctx) updateCPUTexture
+    when (sdlUpdatePPUTexture ctx) updatePPUTexture
+    put ctx{sdlUpdateCPUTexture = False, sdlUpdatePPUTexture = False}
 
 renderSDL :: StateT SDLContext IO ()
 renderSDL = do
@@ -410,20 +419,37 @@ renderSDL = do
     SDL.present (sdlRenderer ctx)
     return ()
 
-(<**>) :: (a -> a) -> Int -> (a -> a)
-f <**> 0 = id
+(<**>) :: (a -> IO a) -> Int -> (a -> IO a)
+f <**> 0 = return . id
 f <**> 1 = f
-f <**> n = f . (f <**> (n - 1))
+f <**> n = (\a -> do
+                fa <- f a
+                (f <**> (n - 1)) $ fa)
+
+printppu :: PPU.R2C02 -> String
+printppu ppu = output where
+    cycles = PPU.ppuCycle . PPU.context $ ppu
+    scanline = PPU.ppuScanline . PPU.context $ ppu
+    complete = PPU.complete . PPU.context $ ppu
+    output = "Cycles: " ++ show cycles ++ "\nScanline: " ++ show scanline ++ "\nComplete: " ++ show complete
+
+
+clearComplete :: NES.NES -> NES.NES
+clearComplete n = n{NES.ppu = (NES.ppu n){PPU.context = (PPU.context . NES.ppu $ n){PPU.complete = False}}}
+
 
 nesLoop :: StateT SDLContext IO ()
 nesLoop = do
     ctx <- get
-    if nesRunning ctx
-        then do
-            let n = nes ctx
-            let n' = (execState NES.tick <**> 10000) n
-            put ctx{nes = n', sdlUpdateTextures = True}
-        else return ()
+    when (nesRunning ctx) (do
+        n' <- liftIO $ ((execStateT NES.tick) <**> 1000) (nes ctx)
+        --liftIO . putStrLn $ printppu . NES.ppu $ n'
+        let clock = NES.nClock n'
+        let updateCPU = MOS.complete . MOS.context . NES.cpu $ n'
+        let updatePPU = PPU.complete . PPU.context . NES.ppu $ n'
+        put ctx{nes = n', sdlUpdateCPUTexture = updatePPU, sdlUpdatePPUTexture = updatePPU}
+        )
+
 mainLoop :: StateT SDLContext IO ()
 mainLoop = do
     events <- SDL.pollEvents
@@ -442,7 +468,7 @@ main = do
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
     fontA <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 22
     fontB <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 16
-    nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/donkey_kong.nes"
+    nes <- NES.loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
     cputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 350 800)
     pputext <- SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget (SDL.V2 650 800)
 
@@ -454,7 +480,8 @@ main = do
                 , sdlFontA = fontA
                 , sdlFontB = fontB
                 , nes = nes
-                , sdlUpdateTextures = True
+                , sdlUpdateCPUTexture = True
+                , sdlUpdatePPUTexture = True
                 , cpuTexture = cputext
                 , ppuTexture = pputext
                 , nesRunning = False

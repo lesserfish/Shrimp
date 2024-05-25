@@ -123,7 +123,7 @@ loadMemory (y : ys) = memory // memdata
     memdata = [y]
 
 loadCPU :: CPUState -> MOS6502
-loadCPU (CPUState rpc rs ra rx ry rp _) = MOS6502 reg 0 0 (Context)
+loadCPU (CPUState rpc rs ra rx ry rp _) = MOS6502 reg 0 0 (Context False)
   where
     reg = Registers rpc rs ra rx ry rp
 
@@ -151,12 +151,12 @@ verifyRam array (y : ys) = this && that
 verifyCPU :: MOS6502 -> CPUState -> Bool
 verifyCPU mos6502 cpustate = condition
   where
-    pc_condition = (Shrimp.MOS6502.pc . mosRegisters $ mos6502) == (Test.CPU.pc cpustate) -- Tests whether PC register is the same
-    sp_condition = (sp . mosRegisters $ mos6502) == (s cpustate) -- Tests whether SP register is the same
-    acc_condition = (acc . mosRegisters $ mos6502) == (a cpustate) -- Tests whether Accumulator register is the same
-    x_condition = (idx . mosRegisters $ mos6502) == (x cpustate) -- Tests whether X register is the same
-    y_condition = (idy . mosRegisters $ mos6502) == (y cpustate) -- Tests whether Y register is the same
-    ps_condition = (ps . mosRegisters $ mos6502) == (p cpustate) -- Tests whether PS register is the same
+    pc_condition = (Shrimp.MOS6502.pc . registers $ mos6502) == (Test.CPU.pc cpustate) -- Tests whether PC register is the same
+    sp_condition = (sp . registers $ mos6502) == (s cpustate) -- Tests whether SP register is the same
+    acc_condition = (acc . registers $ mos6502) == (a cpustate) -- Tests whether Accumulator register is the same
+    x_condition = (idx . registers $ mos6502) == (x cpustate) -- Tests whether X register is the same
+    y_condition = (idy . registers $ mos6502) == (y cpustate) -- Tests whether Y register is the same
+    ps_condition = (ps . registers $ mos6502) == (p cpustate) -- Tests whether PS register is the same
     condition =
         pc_condition
             && sp_condition

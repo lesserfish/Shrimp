@@ -1,153 +1,131 @@
 module Shrimp.Cartridge (
-    Cartridge (..),
+    CartData(..),
     emptyCartridge,
-    loadCartridge,
-    cpuWrite,
+    Cartridge(..),
+    CartridgeIO,
+    fromCartData,
+    fromCartDataIO,
+    loadCartridgeIO,
+    Mirroring(..),
+    Header(..),
     cpuRead,
-    ppuWrite,
+    cpuReadIO,
+    cpuWrite,
+    cpuWriteIO,
     ppuRead,
+    ppuReadIO,
+    ppuWrite,
+    ppuWriteIO,
     reset,
+    resetIO
 ) where
 
-import Control.Monad.State
-import Data.Bits
-import qualified Data.ByteString as BS
-import Data.Char
 import Data.Word
-import Shrimp.INES
-import qualified Shrimp.Mapper.AbstractMapper as AMapper
-import Shrimp.Mapper.Mapper
-import Shrimp.Mapper.Mapper0
-import qualified Shrimp.Memory as Memory
-import System.IO
+import Shrimp.Cartridge.Loader (CartData(..), Mirroring(..), Header(..))
+import qualified Shrimp.Cartridge.Loader as CL
+import qualified Shrimp.Memory as M
+import qualified Shrimp.Mapper.Mapper as Mapper
+import qualified Shrimp.Mapper.Mapper0 as Mapper0
 
-data Cartridge = Cartridge
-    { cHeader :: Header
-    , cPRGData :: Memory.RAM
-    , cCHRData :: Memory.RAM
-    , cMapper :: Mapper
+data Cartridge m = Cartridge
+    { cartData :: CartData
+    , prgData :: M.RAM m
+    , chrData :: M.RAM m
+    , mapper :: Mapper.Mapper
     }
-    deriving (Show)
 
--- A default empty cartridge
-emptyCartridge :: Cartridge
-emptyCartridge = Cartridge{cHeader = emptyHeader, cPRGData = Memory.noRAM, cCHRData = Memory.noRAM, cMapper = Mapper (Mapper0 0 0)}
+type CartridgeIO = Cartridge M.RealWorld
 
--- Reads a singly byte from file and return a Word8
-readByteFromFile :: Handle -> IO Word8
-readByteFromFile file = do
-    byte' <- BS.hGet file 1
-    let byte = BS.index byte' 0
-    return byte
+emptyCartridge :: (M.PrimMonad m) => m ( Cartridge (M.PrimState m))
+emptyCartridge = do
+    noram <- M.noRAM
+    let nomapper = Mapper.Mapper (Mapper0.Mapper0 0 0)
+    let cart = Cartridge
+                { cartData = CL.emptyCartData
+                , prgData = noram
+                , chrData = noram
+                , mapper = nomapper}
+    return cart
 
--- Reads N bytes from file and returns a [Word8]
-readBytesFromFile :: Handle -> Int -> IO [Word8]
-readBytesFromFile file count = do
-    bytes' <- BS.hGet file count
-    let bytes = BS.unpack bytes' :: [Word8]
-    return bytes
 
--- Loads the Header into the Cartridge
-loadCHeader :: Handle -> StateT Cartridge IO ()
-loadCHeader file = do
-    cartridge <- get
-    header <- liftIO $ execStateT (loadHeader file) emptyHeader
-    let mapper = chooseMapper header
-    let cartridge' = cartridge{cHeader = header, cMapper = mapper}
-    put cartridge'
+fromCartData :: (M.PrimMonad m) => CartData -> m ( Cartridge (M.PrimState m))
+fromCartData cartdata = do
+    let prgsize = length . cPRGData $ cartdata
+    let chrsize = length . cCHRData $ cartdata
+    prgram <- M.fromList . cPRGData $ cartdata
+    chrram <- M.fromList . cCHRData $ cartdata
+    let cmapper = Mapper.chooseMapper cartdata
+    let cart = Cartridge
+                { cartData = CL.emptyCartData
+                , prgData = prgram
+                , chrData = chrram
+                , mapper = cmapper}
+    return cart
 
--- Loads the PRG Data
-loadCPRG :: Handle -> StateT Cartridge IO ()
-loadCPRG file = do
-    cartridge <- get
-    let header = cHeader cartridge
-    let prgBanks = hPrgSize header
-    let size = (fromIntegral prgBanks) * 16 * 1024 :: Int
-    prgData <- liftIO $ readBytesFromFile file size
-    let prgArray = Memory.fromList prgData
-    let cartridge' = cartridge{cPRGData = prgArray}
-    put cartridge'
+fromCartDataIO :: CartData -> IO CartridgeIO
+fromCartDataIO cart = fromCartData cart
 
---
--- Loads the CHR Data
-loadCCHR :: Handle -> StateT Cartridge IO ()
-loadCCHR file = do
-    cartridge <- get
-    let header = cHeader cartridge
-    let chrBanks = hChrSize header
-    let size = (fromIntegral chrBanks) * 8 * 1024 :: Int
-    charData <- liftIO $ readBytesFromFile file size
-    let charArray = Memory.fromList charData
-    let cartridge' = cartridge{cCHRData = charArray}
-    put cartridge'
+loadCartridgeIO :: FilePath -> IO CartridgeIO
+loadCartridgeIO fp = do
+    cartdata <- CL.loadCartData fp
+    fromCartDataIO cartdata
 
-loadCTrainer :: Handle -> StateT Cartridge IO ()
-loadCTrainer file = do
-    cartridge <- get
-    -- TODO: Implement this
-    put cartridge
+-- CPU
 
--- Loads the PlayChoice INST-ROM, if present
--- TODO: Implement this
-loadCPCInstROM :: Handle -> StateT Cartridge IO ()
-loadCPCInstROM file = do
-    cartridge <- get
-    put cartridge
+cpuRead :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> m (Cartridge (M.PrimState m), Word8)
+cpuRead cart addr = do
+    let (mapper', addr') = Mapper.cpuRMap (mapper cart) addr
+    byte <- M.readByte (prgData cart) addr'
+    let cart' = cart{mapper = mapper'}
+    return (cart', byte)
 
--- Loads the PlayChoice PROM, if present
--- TODO: Implement this
-loadCPCPROM :: Handle -> StateT Cartridge IO ()
-loadCPCPROM file = do
-    cartridge <- get
-    put cartridge
+cpuReadIO :: CartridgeIO -> Word16 -> IO (CartridgeIO, Word8)
+cpuReadIO = cpuRead
 
-loadCartridgeT :: Handle -> StateT Cartridge IO ()
-loadCartridgeT file = do
-    loadCHeader file -- Loads the Header
-    loadCTrainer file -- Loads the Trainer section, if present
-    loadCPRG file -- Loads the PRG Data
-    loadCCHR file -- Loads the CHR Data
-    loadCPCInstROM file -- Loads the PlayChoice INST-ROM, if present
-    loadCPCPROM file -- Loads the PlayChoice PROM, if present
+cpuWrite :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> Word8 -> m (Cartridge (M.PrimState m))
+cpuWrite cart addr byte = do
+    let (mapper', addr') = Mapper.cpuWMap (mapper cart) addr
+    M.writeByte (prgData cart) addr' byte
+    let cart' = cart{mapper = mapper'}
+    return cart'
 
-loadCartridge :: FilePath -> IO Cartridge
-loadCartridge filepath = do
-    file <- openBinaryFile filepath ReadMode
-    cartridge <- execStateT (loadCartridgeT file) emptyCartridge
-    return cartridge
+cpuWriteIO :: CartridgeIO -> Word16 -> Word8 -> IO CartridgeIO
+cpuWriteIO = cpuWrite
 
-cpuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
-cpuRead cart addr = (cartridge', byte)
-  where
-    (mapper', addr') = AMapper.cpuRMap (cMapper cart) addr
-    byte = Memory.readByte (cPRGData cart) addr'
-    cartridge' = cart{cMapper = mapper'}
+-- PPU
 
--- TODO: Is Write allowed? Is PRG ROM or RAM?
-cpuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
-cpuWrite cart addr byte = cartridge'
-  where
-    (mapper', addr') = AMapper.cpuWMap (cMapper cart) addr
-    prg' = Memory.writeByte (cPRGData cart) addr' byte
-    cartridge' = cart{cMapper = mapper', cPRGData = prg'}
+ppuRead :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> m (Cartridge (M.PrimState m), Word8)
+ppuRead cart addr = do
+    let (mapper', addr') = Mapper.ppuRMap (mapper cart) addr
+    byte <- M.readByte (chrData cart) addr'
+    let cart' = cart{mapper = mapper'}
+    return (cart', byte)
 
-ppuRead :: Cartridge -> Word16 -> (Cartridge, Word8)
-ppuRead cart addr = (cartridge', byte)
-  where
-    (mapper', addr') = AMapper.ppuRMap (cMapper cart) addr
-    byte = Memory.readByte (cCHRData cart) addr'
-    cartridge' = cart{cMapper = mapper'}
+ppuReadIO :: CartridgeIO -> Word16 -> IO (CartridgeIO, Word8)
+ppuReadIO = ppuRead
 
--- TODO: Is Write allowed? Is CHR ROM or RAM?
-ppuWrite :: Cartridge -> Word16 -> Word8 -> Cartridge
-ppuWrite cart addr byte = cartridge'
-  where
-    (mapper', addr') = AMapper.ppuWMap (cMapper cart) addr
-    chr' = Memory.writeByte (cCHRData cart) addr' byte
-    cartridge' = cart{cMapper = mapper', cCHRData = chr'}
+ppuWrite :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> Word8 -> m (Cartridge (M.PrimState m))
+ppuWrite cart addr byte = do
+    let (mapper', addr') = Mapper.ppuWMap (mapper cart) addr
+    M.writeByte (chrData cart) addr' byte
+    let cart' = cart{mapper = mapper'}
+    return cart'
 
-reset :: Cartridge -> Cartridge
-reset cart = cart'
-  where
-    mapper' = AMapper.reset (cMapper cart)
-    cart' = cart{cMapper = mapper'}
+ppuWriteIO :: CartridgeIO -> Word16 -> Word8 -> IO CartridgeIO
+ppuWriteIO = ppuWrite
+
+
+reset :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> m (Cartridge (M.PrimState m))
+reset cart = do
+    let cartdata = cartData cart
+    let prgsize = length . cPRGData $ cartdata
+    let chrsize = length . cCHRData $ cartdata
+    M.reset $ prgData cart
+    M.reset $ chrData cart
+    let cmapper = Mapper.chooseMapper cartdata
+    let cart' = cart { cartData = CL.emptyCartData
+                     , mapper = cmapper}
+    return cart'
+
+resetIO :: CartridgeIO -> IO CartridgeIO
+resetIO = reset

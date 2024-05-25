@@ -1,18 +1,25 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Shrimp.R2C02 (
     R2C02 (..),
+    Context(..),
     r2c02,
+    mDispatcher,
     tick,
+    setNMI,
     reset,
     cpuRead,
+    cpuRead',
     cpuWrite,
     nametableBase,
 ) where
 
+import Control.Monad (when)
 import Control.Monad.State
 import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
-import qualified Shrimp.INES as INES
+import Shrimp.Cartridge (Mirroring(..))
 import qualified Shrimp.Memory as Memory
 
 -- Registers
@@ -68,55 +75,54 @@ data Registers = Registers
     , ppuDataBuffer :: Word8
     }
 
-data RegisterValue a = RegisterValue (Registers -> a)
-
 class RegisterType a where
-    readRegister :: REGISTER -> RegisterValue a
-    writeRegister :: REGISTER -> a -> Registers -> Registers
-
-instance RegisterType Word8 where
-    readRegister PPUCTRL = RegisterValue ppuctrl
-    readRegister PPUMASK = RegisterValue ppumask
-    readRegister PPUSTATUS = RegisterValue ppustatus
-    readRegister FINEX = RegisterValue fineX
-    readRegister _ = error "Attempted to read Word16 as Word8"
-
-    writeRegister PPUCTRL val regs = regs{ppuctrl = val}
-    writeRegister PPUMASK val regs = regs{ppumask = val}
-    writeRegister PPUSTATUS val regs = regs{ppustatus = val}
-    writeRegister FINEX val regs = regs{fineX = val}
-    writeRegister _ _ _ = error "Attempted to write Word16 to Word8"
+    getter :: REGISTER -> Registers -> a
+    setter :: REGISTER -> a -> Registers -> Registers
 
 instance RegisterType Word16 where
-    readRegister VRAM = RegisterValue vram
-    readRegister TRAM = RegisterValue tram
-    readRegister _ = error "Attempted to read Word8 as Word16"
+    getter VRAM = vram
+    getter TRAM = tram
+    getter _ = error "Attempted to read Word8 as Word16"
 
-    writeRegister VRAM val regs = regs{vram = val}
-    writeRegister TRAM val regs = regs{tram = val}
-    writeRegister _ _ _ = error "Attempted to write Word8 to Word16"
+    setter VRAM val regs = regs{vram = val}
+    setter TRAM val regs = regs{tram = val}
+    setter _ _ _ = error "Attempted to write Word8 to Word16"
+
+instance RegisterType Word8 where
+    getter PPUCTRL = ppuctrl
+    getter PPUMASK = ppumask
+    getter PPUSTATUS = ppustatus
+    getter FINEX = fineX
+    getter _ = error "Attempted to read Word16 as Word8"
+
+    setter PPUCTRL val regs = regs{ppuctrl = val}
+    setter PPUMASK val regs = regs{ppumask = val}
+    setter PPUSTATUS val regs = regs{ppustatus = val}
+    setter FINEX val regs = regs{fineX = val}
+    setter _ _ _ = error "Attempted to write Word16 to Word8"
+
+modifyFst :: (Monad m) => (a -> a) -> StateT (a, b) m ()
+modifyFst f = modify(\(a, b) -> (f a, b))
+
+mDispatcher :: (PBus m ()) => StateT (R2C02, ()) m b -> R2C02 -> m (R2C02, b)
+mDispatcher state ppu = do
+    (output, (ppu', _)) <- runStateT state (ppu, ())
+    return $ (ppu', output)
 
 mapReg :: (PBus m a, RegisterType b) => REGISTER -> (b -> b) -> StateT (R2C02, a) m ()
-mapReg reg func = do
-    (ppu, bus) <- get
-    let registers = ppuRegisters ppu
-        RegisterValue getter = readRegister reg
-        currentVal = getter registers
-        updatedVal = func currentVal
-        registers' = writeRegister reg updatedVal registers
-        ppu' = ppu{ppuRegisters = registers'}
-    put (ppu', bus)
+mapReg register f = modifyFst updateppu where
+    updateppu ppu = ppu{registers = setter register (updatereg $ ppu) (registers ppu)}
+    updatereg ppu = f . (getter register) . registers $ ppu
 
 setReg :: (PBus m a, RegisterType b) => REGISTER -> b -> StateT (R2C02, a) m ()
 setReg reg value = mapReg reg (\_ -> value)
 
+setRegIf :: (PBus m a, RegisterType b) => Bool -> REGISTER -> b -> StateT (R2C02, a) m ()
+setRegIf condition reg value = if condition then setReg reg value else return ()
+
 getReg :: (PBus m a, RegisterType b) => REGISTER -> StateT (R2C02, a) m b
-getReg reg = do
-    (ppu, _) <- get
-    let registers = ppuRegisters ppu
-    let RegisterValue getter = readRegister reg
-    let regval = getter registers
-    return regval
+getReg reg = (getter reg) . registers . fst <$> get
+
 
 getCTRLFlag :: (PBus m a) => CTRLFLAG -> StateT (R2C02, a) m Bool
 getCTRLFlag C_NAMETABLE_X = b0 <$> (getReg PPUCTRL :: (PBus m a) => StateT (R2C02, a) m Word8)
@@ -249,25 +255,25 @@ setVRAMBit L_NAMETABLE_Y v = mapReg VRAM (\tram -> if v then (setBit tram 11) ::
 setVRAMBit _ _ = error "Incorrect Flag"
 
 getWriteToggle :: (PBus m a) => StateT (R2C02, a) m Bool
-getWriteToggle = (writeToggle . ppuRegisters . fst) <$> get
+getWriteToggle = (writeToggle . registers . fst) <$> get
 
 setWriteToggle :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
 setWriteToggle toggle = do
     (ppu, bus) <- get
-    let reg = ppuRegisters ppu
+    let reg = registers ppu
     let reg' = reg{writeToggle = toggle}
-    let ppu' = ppu{ppuRegisters = reg'}
+    let ppu' = ppu{registers = reg'}
     put (ppu', bus)
 
 getDataBuffer :: (PBus m a) => StateT (R2C02, a) m Word8
-getDataBuffer = (ppuDataBuffer . ppuRegisters . fst) <$> get
+getDataBuffer = (ppuDataBuffer . registers . fst) <$> get
 
 setDataBuffer :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 setDataBuffer byte = do
     (ppu, bus) <- get
-    let reg = ppuRegisters ppu
+    let reg = registers ppu
     let reg' = reg{ppuDataBuffer = byte}
-    let ppu' = ppu{ppuRegisters = reg'}
+    let ppu' = ppu{registers = reg'}
     put (ppu', bus)
 
 getFineX :: (PBus m a) => StateT (R2C02, a) m Word8
@@ -327,13 +333,55 @@ data Context = Context
     { ppuNMI :: Bool
     , ppuScanline :: Int
     , ppuCycle :: Int
+    , complete :: Bool
     }
 
 -- R2C02
 data R2C02 = R2C02
-    { ppuRegisters :: Registers
-    , ppuContext :: Context
+    { registers :: Registers
+    , context :: Context
     }
+
+reset :: (PBus m a) => StateT (R2C02, a) m ()
+reset = do
+    (r2c02, bus) <- get
+    let reg = Registers { ppuctrl = 0
+    , ppumask = 0
+    , ppustatus  = 0
+    , fineX = 0
+    , vram = 0
+    , tram = 0
+    , writeToggle = False
+    , ppuDataBuffer = 0
+    }
+    let ctx = Context {ppuNMI = False
+    , ppuScanline = -1
+    , ppuCycle = 0
+    , complete = False}
+    let r2c02' = r2c02 {context = ctx, registers = reg}
+    put (r2c02', bus)
+
+r2c02 :: R2C02
+r2c02 =
+    R2C02
+        { registers = reg
+        , context = ctx
+        }
+  where
+    reg = Registers { ppuctrl = 0
+    , ppumask = 0
+    , ppustatus  = 0
+    , fineX = 0
+    , vram = 0
+    , tram = 0
+    , writeToggle = False
+    , ppuDataBuffer = 0
+    }
+    ctx = Context {ppuNMI = False
+    , ppuScanline = -1
+    , ppuCycle = 0
+    , complete = False}
+
 
 readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
 readByte addr = do
@@ -347,6 +395,12 @@ writeByte addr byte = do
     (ppu, bus) <- get
     bus' <- lift $ pWriteByte addr byte bus
     put (ppu, bus')
+
+
+cpuRead' :: (PBus m a) => Word16 -> R2C02 -> a -> m (a, Word8)
+cpuRead' addr ppu x = do
+    (w, (p, x')) <- runStateT (cpuRead addr) (ppu, x)
+    return (x', w)
 
 -- CPU Interface
 cpuRead :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -478,14 +532,14 @@ incFineY = do
             setVRAMData L_FINE_Y 0
             incCoarseY
 
-nametableBase :: INES.Mirroring -> Word16 -> Word16
-nametableBase INES.Horizontal addr
+nametableBase :: Mirroring -> Word16 -> Word16
+nametableBase Horizontal addr
     | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
     | (addr >= 0x2400 && addr <= 0x27FF) = 0x400
     | (addr >= 0x2800 && addr <= 0x2BFF) = 0x000
     | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
     | otherwise = error "Address out of range"
-nametableBase INES.Vertical addr
+nametableBase Vertical addr
     | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
     | (addr >= 0x2400 && addr <= 0x27FF) = 0x000
     | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
@@ -493,37 +547,76 @@ nametableBase INES.Vertical addr
     | otherwise = error "Address out of range"
 
 
--- Public Methods
---
-reset :: (PBus m a) => StateT (R2C02, a) m ()
-reset = do
-    (r2c02, bus) <- get
-    let r2c02' = r2c02
-    put (r2c02', bus)
+-- Tick
 
+getCycle :: (PBus m a) => StateT (R2C02, a) m Int
+getCycle = ppuCycle . context . fst <$> get
+
+getScanline :: (PBus m a) => StateT (R2C02, a) m Int
+getScanline = ppuScanline . context . fst <$> get
+
+setCycle :: (PBus m a) => Int -> StateT (R2C02, a) m ()
+setCycle c = modifyFst (\ppu -> ppu{context = (context ppu){ppuCycle = c}})
+
+setScanline :: (PBus m a) => Int -> StateT (R2C02, a) m ()
+setScanline s = modifyFst (\ppu -> ppu{context = (context ppu){ppuScanline = s}})
+
+setComplete :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
+setComplete b = modifyFst (\ppu -> ppu{context = (context ppu){complete = b}})
+
+incScanline :: (PBus m a) => StateT (R2C02, a) m ()
+incScanline = do
+    scanline <- getScanline
+    if scanline >= 260
+    then do
+        setScanline (-1)
+        setComplete True
+    else do
+        setScanline (scanline + 1)
+
+incCycle :: (PBus m a) => StateT (R2C02, a) m ()
+incCycle = do
+    cycle <- getCycle
+    if cycle >= 340 
+    then do
+        setCycle 0
+        incScanline
+    else do
+        setCycle (cycle + 1)
+
+handleVisibleScanline :: (PBus m a) => StateT (R2C02, a) m ()
+handleVisibleScanline = return ()
+
+setNMI :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
+setNMI b = modifyFst (\ppu -> ppu{context = (context ppu){ppuNMI = b}})
+
+handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
+handleEndOfFrame = do
+    scanline <- getScanline
+    cycle <- getCycle
+    enableNMI <- getCTRLFlag C_ENABLE_NMI
+    when (scanline == 241 && cycle == 1) (do
+        setSTATUSFlag S_VERTICAL_BLANK True
+        when enableNMI (setNMI True)
+        )
+
+handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
+handleComposition = return ()
+
+renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
+renderPixel = return ()
+
+tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
+tickBackground = do
+    scanline <- getScanline
+    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
+    when (scanline >= (-1) && scanline < 240) handleVisibleScanline
+    when (scanline >= 241  && scanline < 261) handleEndOfFrame
+    when (renderBackground) handleComposition
+    renderPixel
+    incCycle
 
 tick :: (PBus m a) => StateT (R2C02, a) m ()
 tick = do
-    (ppu, bus) <- get
-    let ctx = ppuContext ppu
-    return ()
+    tickBackground
 
-r2c02 :: R2C02
-r2c02 =
-    R2C02
-        { ppuRegisters = reg
-        , ppuContext = cxt
-        }
-  where
-    reg = Registers { ppuctrl = 0
-    , ppumask = 0
-    , ppustatus  = 0
-    , fineX = 0
-    , vram = 0
-    , tram = 0
-    , writeToggle = False
-    , ppuDataBuffer = 0
-    }
-    cxt = Context {ppuNMI = False
-    , ppuScanline = -1
-    , ppuCycle = 0}

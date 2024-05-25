@@ -44,10 +44,10 @@ class (Monad m) => PBus m a where
     pSetPixel :: (Word8, Word8) -> Word8 -> a -> m a
 
 class (Monad m) => MPBus m where
-    mpWriteByte :: Word16 -> Word8 -> m a
+    mpWriteByte :: Word16 -> Word8 -> m ()
     mpReadByte :: Word16 -> m Word8
     mpPeek :: Word16 -> m Word8
-    mpSetPixel :: (Word8, Word8) -> Word8 -> m a
+    mpSetPixel :: (Word8, Word8) -> Word8 -> m ()
 
 instance (MPBus m) => PBus m () where
     pWriteByte addr content _ = mpWriteByte addr content >> return ()

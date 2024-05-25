@@ -1,8 +1,17 @@
 {-# LANGUAGE GADTs #-}
 
-module Shrimp.Mapper.Mapper where
+module Shrimp.Mapper.Mapper (
+    Mapper(..),
+    chooseMapper,
+    chooseMapperH,
+    cpuRMap,
+    cpuWMap,
+    ppuRMap,
+    ppuWMap,
+    reset
+) where
 
-import Shrimp.INES
+import Shrimp.Cartridge.Loader
 import Shrimp.Mapper.AbstractMapper
 import Shrimp.Mapper.Mapper0
 
@@ -28,7 +37,11 @@ instance AbstractMapper Mapper where
 instance Show Mapper where
     show (Mapper m) = show m
 
-chooseMapper :: Header -> Mapper
-chooseMapper header
+
+chooseMapper :: CartData -> Mapper
+chooseMapper = chooseMapperH . cHeader
+
+chooseMapperH :: Header -> Mapper
+chooseMapperH header
     | (hMapper header) == 0 = Mapper (Mapper0{prgBanks0 = (hPrgSize header), chrBanks0 = (hChrSize header)})
     | otherwise = error ("Unsupported Mapper: " ++ show (hMapper header))

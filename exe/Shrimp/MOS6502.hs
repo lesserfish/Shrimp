@@ -1,12 +1,16 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Shrimp.MOS6502 (
     MOS6502 (..),
+    mDispatcher,
     mos6502,
     tick,
     execute,
     reset,
+    iNMI,
+    iIRQ,
     Registers (..),
     Context (..),
-    Log (..),
     disassemble,
     disassembleL,
     disassembleM,
@@ -65,26 +69,29 @@ instance Show Registers where
             ++ "\np: \t"
             ++ showWord8 (ps reg)
 
-data Log = LOP String | LA String deriving (Show)
 
-data Context = Context deriving (Show)
+data Context = Context
+    { complete :: Bool 
+    }
+    deriving (Show)
 
 data MOS6502 = MOS6502
-    { mosRegisters :: !Registers
+    { registers :: !Registers
     , clock :: !Int
     , cycles :: !Int
-    , context :: Context
+    , context :: !Context
     }
     deriving (Show)
 
 mos6502 :: MOS6502
 mos6502 =
     MOS6502
-        { mosRegisters = Registers 0 0 0 0 0 0
+        { registers = Registers 0 0 0 0 0 0
         , clock = 0
         , cycles = 0
-        , context = Context
+        , context = Context False
         }
+
 data FLAG
     = CARRY
     | ZERO
@@ -95,43 +102,43 @@ data FLAG
     | NEGATIVE
     deriving (Show)
 
-data RegisterValue a = RegisterValue (Registers -> a)
-
 class RegisterType a where
-    readRegister :: REGISTER -> RegisterValue a
-    writeRegister :: REGISTER -> a -> Registers -> Registers
+    getter :: REGISTER -> Registers -> a
+    setter :: REGISTER -> a -> Registers -> Registers
 
 instance RegisterType Word16 where
-    readRegister PC = RegisterValue pc
-    readRegister _ = error "Attempted to read Word8 as Word16"
-    writeRegister PC val regs = regs{pc = val}
-    writeRegister _ _ _ = error "Attempted to Write Word8 to Word16"
+    getter PC = pc
+    getter _ = error "Attempted to read Word8 as Word16"
+    setter PC val regs = regs{pc = val}
+    setter _ _ _ = error "Attempted to Write Word8 to Word16"
 
 instance RegisterType Word8 where
-    readRegister SP = RegisterValue sp
-    readRegister ACC = RegisterValue acc
-    readRegister IDX = RegisterValue idx
-    readRegister IDY = RegisterValue idy
-    readRegister PS = RegisterValue ps
-    readRegister _ = error "Attempted to read Word16 as Word8"
+    getter SP = sp
+    getter ACC = acc
+    getter IDX = idx
+    getter IDY = idy
+    getter PS = ps
+    getter _ = error "Attempted to read Word16 as Word8"
 
-    writeRegister SP val regs = regs{sp = val}
-    writeRegister ACC val regs = regs{acc = val}
-    writeRegister IDX val regs = regs{idx = val}
-    writeRegister IDY val regs = regs{idy = val}
-    writeRegister PS val regs = regs{ps = val}
-    writeRegister _ _ _ = error "Attempted to write Word16 to Word8"
+    setter SP val regs = regs{sp = val}
+    setter ACC val regs = regs{acc = val}
+    setter IDX val regs = regs{idx = val}
+    setter IDY val regs = regs{idy = val}
+    setter PS val regs = regs{ps = val}
+    setter _ _ _ = error "Attempted to write Word16 to Word8"
+
+modifyFst :: (Monad m) => (a -> a) -> StateT (a, b) m ()
+modifyFst f = modify(\(a, b) -> (f a, b))
+
+mDispatcher :: (CBus m ()) => StateT (MOS6502, ()) m b -> MOS6502 -> m (MOS6502, b)
+mDispatcher state cpu = do
+    (output, (ppu', _)) <- runStateT state (cpu, ())
+    return $ (ppu', output)
 
 mapReg :: (CBus m a, RegisterType b) => REGISTER -> (b -> b) -> StateT (MOS6502, a) m ()
-mapReg reg func = do
-    (cpu, bus) <- get
-    let registers = mosRegisters cpu
-        RegisterValue getter = readRegister reg
-        currentVal = getter registers
-        updatedVal = func currentVal
-        registers' = writeRegister reg updatedVal registers
-        cpu' = cpu{mosRegisters = registers'}
-    put (cpu', bus)
+mapReg register f = modifyFst updatemos where
+    updatemos mos = mos{registers = setter register (updatereg $ mos) (registers mos)}
+    updatereg mos = f . (getter register) . registers $ mos
 
 setReg :: (CBus m a, RegisterType b) => REGISTER -> b -> StateT (MOS6502, a) m ()
 setReg reg value = mapReg reg (\_ -> value)
@@ -140,12 +147,7 @@ setRegIf :: (CBus m a, RegisterType b) => Bool -> REGISTER -> b -> StateT (MOS65
 setRegIf condition reg value = if condition then setReg reg value else return ()
 
 getReg :: (CBus m a, RegisterType b) => REGISTER -> StateT (MOS6502, a) m b
-getReg reg = do
-    (mos6502, _) <- get
-    let registers = mosRegisters mos6502
-    let RegisterValue getter = readRegister reg
-    let regval = getter registers
-    return regval
+getReg reg = (getter reg) . registers . fst <$> get
 
 getFlag :: (CBus m a) => FLAG -> StateT (MOS6502, a) m Bool
 getFlag CARRY = b0 <$> (getReg PS :: (CBus m a1) => StateT (MOS6502, a1) m Word8)
@@ -367,23 +369,16 @@ mReadStack = do
     readByte addr -- Read byte
 
 resetCycles :: (CBus m a) => StateT (MOS6502, a) m ()
-resetCycles = do
-    (mos6502, bus) <- get
-    let mos6502' = mos6502{cycles = 0}
-    put (mos6502', bus)
+resetCycles = modifyFst (\mos -> mos{cycles = 0})
 
 resetClock :: (CBus m a) => StateT (MOS6502, a) m ()
-resetClock = do
-    (mos6502, bus) <- get
-    let mos6502' = mos6502{clock = 0}
-    put (mos6502', bus)
+resetClock = modifyFst (\mos -> mos{clock = 0})
 
 updateCycles :: (CBus m a) => Int -> StateT (MOS6502, a) m ()
-updateCycles offset = do
-    (mos6502, bus) <- get
-    let c = cycles mos6502
-    let mos6502' = mos6502{cycles = (c + offset)}
-    put (mos6502', bus)
+updateCycles offset = modifyFst (\mos -> mos{cycles = offset + cycles mos})
+
+setComplete :: (CBus m a) => Bool -> StateT (MOS6502, a) m ()
+setComplete b = modifyFst (\mos -> mos{context = (context mos){complete = b}})
 
 tick :: (CBus m a) => StateT (MOS6502, a) m ()
 tick = do
@@ -396,6 +391,7 @@ tick = do
         else do
             opcode <- fetch
             execute opcode
+            setComplete True
 
 fetch :: (CBus m a) => StateT (MOS6502, a) m Word8
 fetch = do
@@ -858,7 +854,8 @@ execute 0x9A = do
 execute 0x98 = do
     updateCycles 2
     opTYA IMPLICIT
-execute opcode = error (show opcode ++ ": Unknown opcode")
+execute opcode = return ()
+--error (show opcode ++ ": Unknown opcode") -- TODO: Add error log to Context perhaps?
 
 iIRQ :: (CBus m a) => StateT (MOS6502, a) m ()
 iIRQ = do
@@ -2241,3 +2238,4 @@ disassembleL start end bus
 
 disassembleM :: (CBus m a) => Word16 -> Word16 -> a -> m (Map.Map Word16 String)
 disassembleM start end bus = (Map.fromList) <$> (disassembleL start end bus)
+
