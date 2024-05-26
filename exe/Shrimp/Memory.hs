@@ -55,7 +55,7 @@ noRAM = UMV.new 0
 
 loadList :: (PrimMonad m)  => RAM (PrimState m) -> [Word8] -> m ()
 loadList ram lst
-    | UMV.length ram <= length lst = error "Memory too small to load entire list"
+    | UMV.length ram < length lst = error "Memory too small to load entire list"
     | otherwise = mapM_ (\idx -> UMV.write ram idx (lst !! idx)) [0.. ((fromIntegral . length $ lst) - 1)]
 
 fromList :: (PrimMonad m) => [Word8] -> m (RAM (PrimState m))

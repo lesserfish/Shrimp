@@ -25,30 +25,13 @@ data NES = NES
     , nClock :: !Int
     }
 
--- Helper functions
-swap :: (a, b) -> (b, a)
-swap (x, y) = (y, x)
-
-run :: State a b -> a -> (a, b)
-run = (swap .) . runState
-
-exec :: State a b -> a -> a
-exec = execState
-
-flattenCPU :: (CPU.MOS6502, NES) -> NES
-flattenCPU (mos6502, nes) = nes{cpu = mos6502}
-
-flattenPPU :: (PPU.R2C02, NES) -> NES
-flattenPPU (r2c02, nes) = nes{ppu = r2c02}
-
-
 -- CPU Interface
 
 cpuReadRAM :: Word16 -> StateT NES IO Word8
 cpuReadRAM addr = do
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
-    byte <- liftIO $ Memory.readByteIO (nametableRAM nes) real_addr
+    byte <- liftIO $ Memory.readByteIO (cpuRAM nes) real_addr
     return byte
 
 cpuReadPPU :: Word16 -> StateT NES IO Word8
@@ -69,10 +52,8 @@ cpuReadCart :: Word16 -> StateT NES IO Word8
 cpuReadCart addr = do
     nes <- get
     (cart', byte) <- liftIO $ Cart.cpuReadIO (cartridge nes) addr -- The mapper fixes the address by itself
-    let nes' = nes{cartridge = cart'}
-    put nes'
+    put nes{cartridge = cart'}
     return byte
-
 
 cpuWriteRAM :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteRAM addr byte = do
@@ -204,7 +185,7 @@ tickPPU = do
 tick :: StateT NES IO ()
 tick = do
     tickCPU
-    tickPPU
+    --tickPPU
     updateClock 1
 
 reset :: StateT NES IO ()
