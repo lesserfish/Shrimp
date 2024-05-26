@@ -1,5 +1,6 @@
 module Emulator where
 
+import Control.Exception
 import Control.Monad
 import Communication
 import Shrimp.NES
@@ -84,7 +85,11 @@ emulationLoop = do
     exit <- getExit
     if exit then return () else emulationLoop
     
-startEmulationLoop :: EmulatorContext -> IO()
+
+
+startEmulationLoop :: EmulatorContext -> IO ()
 startEmulationLoop ectx = do
-    _ <- execStateT emulationLoop ectx
-    return ()
+    result <- try $ execStateT emulationLoop ectx
+    case result of
+        Left e -> putStrLn $ "ERROR: " ++ show (e :: SomeException)
+        Right _ -> return ()

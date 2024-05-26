@@ -13,6 +13,7 @@ import qualified SDL.Font as Font
 import Renderer.Common
 import Renderer.CPUInstructions
 import Renderer.CPUState
+import Renderer.Nametable
 import Control.Monad.State
 import SDL.Raw (getCurrentAudioDriver)
 
@@ -35,11 +36,13 @@ initializeRenderer pipe = do
     ctx <- initializeSDL
     statustext <- createCPUTexture ctx
     insttext <- createInstructionTexture ctx
+    nttext <- createNametableTexture ctx
     now <- getCurrentTime
     return $ RenderContext
         { rSDLContext = ctx
         , rtCPUStatus= statustext
         , rtCPUInstructions = insttext
+        , rtNametable = nttext
         , rPipe = pipe
         , rExit = False
         , rRunning = False

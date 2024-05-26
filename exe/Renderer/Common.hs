@@ -23,6 +23,7 @@ data RenderContext = RenderContext
     { rSDLContext :: SDLContext
     , rtCPUStatus :: SDL.Texture
     , rtCPUInstructions :: SDL.Texture
+    , rtNametable :: SDL.Texture
     , rPipe :: CommPipe
     , rExit :: Bool
     , rRunning :: Bool

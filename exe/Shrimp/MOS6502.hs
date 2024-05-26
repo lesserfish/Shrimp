@@ -339,6 +339,12 @@ getAddr INDIRECT_Y = do
     setReg PC (cPC + 1)
     return faddr
 
+debug :: (CBus m a) => String -> StateT (MOS6502, a) m ()
+debug str = do
+    (ppu, bus) <- get
+    lift $ cDebug str bus
+    return ()
+
 readByte :: (CBus m a) => Word16 -> StateT (MOS6502, a) m Word8
 readByte addr = do
     (mos6502, bus) <- get
@@ -349,6 +355,7 @@ readByte addr = do
 writeByte :: (CBus m a) => Word16 -> Word8 -> StateT (MOS6502, a) m ()
 writeByte addr byte = do
     (mos6502, bus) <- get
+    debug $ "CPU requesting Write Byte. Writing byte " ++ (toHex byte) ++ " to address " ++ (toHex' addr)
     bus' <- lift $ cWriteByte addr byte bus
     put (mos6502, bus')
 
@@ -2175,6 +2182,9 @@ opInfo opcode = Nothing
 
 toHex :: Word8 -> String
 toHex w = printf "%02X" w
+
+toHex' :: Word16 -> String
+toHex' w = printf "%04X" w
 
 disassembleArg :: (CBus m a) => a -> ADDR_MODE -> Word16 -> m (String, Word16)
 disassembleArg _ IMPLICIT _ = return $ ("", 0)

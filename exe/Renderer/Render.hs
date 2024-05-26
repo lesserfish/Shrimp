@@ -13,8 +13,7 @@ import Renderer.Common
 import Renderer.CPUInstructions
 import Renderer.CPUState
 import Control.Monad.State
-import SDL.Raw (getCurrentAudioDriver)
-import qualified SDL.Raw as SDL
+import Renderer.Nametable (renderNametable, updateNametableTexture)
 
 getNES :: StateT RenderContext IO NES
 getNES = do
@@ -25,30 +24,20 @@ getNES = do
     return nes
 
 
-renderInstruction :: StateT RenderContext IO ()
-renderInstruction = do
+renderTexture :: (SDLContext -> NES -> SDL.Texture -> IO ()) -> (RenderContext -> SDL.Texture) -> StateT RenderContext IO ()
+renderTexture updateFunc getter = do
     rctx <- get 
     let ctx = rSDLContext rctx
-    let instructionTexture = rtCPUInstructions rctx
     nes <- getNES
-    updateInstructionTexture ctx nes instructionTexture
-    modify (\ctx -> ctx{rUpdateCPU = False})
-
-
-renderStatus :: StateT RenderContext IO ()
-renderStatus = do
-    rctx <- get 
-    let ctx = rSDLContext rctx
-    let statusTexture = rtCPUStatus rctx
-    nes <- getNES
-    updateCPUTexture ctx nes statusTexture
-    modify (\ctx -> ctx{rUpdateCPU = False})
+    let texture = getter rctx
+    liftIO $ updateFunc ctx nes texture
 
 renderCPU :: StateT RenderContext IO ()
 renderCPU = do
     rctx <- get 
-    renderStatus
-    renderInstruction
+    renderTexture updateInstructionTexture rtCPUInstructions
+    renderTexture updateCPUTexture rtCPUStatus
+    renderTexture updateNametableTexture rtNametable
     modify (\ctx -> ctx{rUpdateCPU = False})
 
 windowSegment :: (Int, Int) -> (Int, Int) -> Maybe (SDL.Rectangle CInt)
@@ -63,9 +52,11 @@ render = do
     let renderer = cRenderer ctx
     let statusTexture = rtCPUStatus rctx
     let instructionTexture = rtCPUInstructions rctx
+    let nametableTexture = rtNametable rctx
 
     SDL.clear renderer
     when updateCPU renderCPU
     SDL.copy renderer statusTexture Nothing (windowSegment (600, 0) (250, 300))
     SDL.copy renderer instructionTexture Nothing (windowSegment (600, 250) (300, 350))
+    SDL.copy renderer nametableTexture Nothing (windowSegment (0, 0) (600, 600))
     SDL.present renderer

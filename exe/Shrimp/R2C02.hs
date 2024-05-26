@@ -2,14 +2,15 @@
 
 module Shrimp.R2C02 (
     R2C02 (..),
+    setDEBUG,
     Context(..),
+    Registers(..),
     r2c02,
     mDispatcher,
     tick,
     setNMI,
     reset,
     cpuRead,
-    cpuRead',
     cpuWrite,
     nametableBase,
 ) where
@@ -292,7 +293,8 @@ setTRAM :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
 setTRAM t = setReg TRAM t :: (PBus m a) => StateT (R2C02, a) m ()
 
 setVRAM :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
-setVRAM t = setReg VRAM t :: (PBus m a) => StateT (R2C02, a) m ()
+setVRAM t = do
+    setReg VRAM t :: (PBus m a) => StateT (R2C02, a) m ()
 
 shiftTake :: (Bits a, Integral b, Num a) => Int -> b -> a -> a
 shiftTake s t x = (shiftR x s) .&. (2 ^ t - 1)
@@ -334,6 +336,7 @@ data Context = Context
     , ppuScanline :: Int
     , ppuCycle :: Int
     , complete :: Bool
+    , cdebug :: String
     }
 
 -- R2C02
@@ -357,7 +360,8 @@ reset = do
     let ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False}
+    , complete = False
+    , cdebug = ""}
     let r2c02' = r2c02 {context = ctx, registers = reg}
     put (r2c02', bus)
 
@@ -380,7 +384,8 @@ r2c02 =
     ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False}
+    , complete = False
+    , cdebug = ""}
 
 
 readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -396,11 +401,12 @@ writeByte addr byte = do
     bus' <- lift $ pWriteByte addr byte bus
     put (ppu, bus')
 
+debug :: (PBus m a) => String -> StateT (R2C02, a) m ()
+debug str = do
+    (ppu, bus) <- get
+    lift $ pDebug str bus
+    return ()
 
-cpuRead' :: (PBus m a) => Word16 -> R2C02 -> a -> m (a, Word8)
-cpuRead' addr ppu x = do
-    (w, (p, x')) <- runStateT (cpuRead addr) (ppu, x)
-    return (x', w)
 
 -- CPU Interface
 cpuRead :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -491,12 +497,16 @@ writeAddress byte = do
             setTRAM t'
             setVRAM t'
 
+setDEBUG :: (PBus m a) => String -> StateT (R2C02, a) m ()
+setDEBUG str = modifyFst (\ppu -> ppu{context = (context ppu){cdebug = str}})
+
 writeData :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeData byte = do
     v <- getVRAM
     writeByte v byte
     increment_mode <- getCTRLFlag C_INCREMENT_MODE
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
+    setDEBUG "After after after"
 
 incCoarseX :: (PBus m a) => StateT (R2C02, a) m ()
 incCoarseX = do

@@ -52,12 +52,12 @@ renderCPUInstructions ctx nes = do
     mapM_ (\id -> renderCPUInstruction ctx (colors !! id) id (selection !! id)) instructionsIDS
 
 
-updateInstructionTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> m()
+updateInstructionTexture :: SDLContext -> NES -> SDL.Texture -> IO()
 updateInstructionTexture ctx nes texture = do
     let renderer = cRenderer ctx
     SDL.rendererRenderTarget renderer SDL.$= Just texture
     SDL.clear renderer
-    liftIO $ renderCPUInstructions ctx nes
+    renderCPUInstructions ctx nes
     SDL.rendererRenderTarget renderer SDL.$= Nothing
 
 createInstructionTexture :: SDLContext -> IO SDL.Texture

@@ -30,9 +30,14 @@ data NES = NES
 
 cpuReadRAM :: Word16 -> StateT NES IO Word8
 cpuReadRAM addr = do
+    liftIO . putStrLn $ "CPU read RAM"
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     byte <- liftIO $ Memory.readByteIO (cpuRAM nes) real_addr
+
+    (ppu', _) <- PPU.mDispatcher (PPU.setDEBUG "Debug from CPU read RAM")(ppu nes)
+    put nes{ppu = ppu'}
+
     return byte
 
 cpuReadPPU :: Word16 -> StateT NES IO Word8
@@ -81,6 +86,7 @@ cpuWriteCart addr byte = do
     cart' <- liftIO $ Cart.cpuWriteIO (cartridge nes) addr byte -- The mapper fixes the address by itself
     put nes{cartridge = cart'}
 
+
 instance MCBus (StateT NES IO) where
     mcReadByte addr
         | (addr >= 0x0000 && addr <= 0x1FFF) = cpuReadRAM addr
@@ -101,6 +107,8 @@ instance MCBus (StateT NES IO) where
         byte <- mcReadByte addr
         put nes -- Little trickery. Unsure if this works. I think so.
         return byte
+    mcDebug log = do
+        liftIO $ putStrLn log
 
 -- PPU Interface 
 
@@ -158,6 +166,8 @@ instance MPBus (StateT NES IO) where
        put nes
        return byte
     mpSetPixel (x, y) value = return () -- TODO: Implement SetPixel support
+    mpDebug log = do
+        liftIO $ putStrLn log
 
 
 updateClock :: Int -> StateT NES IO ()
@@ -185,6 +195,9 @@ tickPPU = do
 
 tick :: StateT NES IO ()
 tick = do
+    nes <- get
+    liftIO . putStrLn $ "Debug: " ++ (PPU.cdebug . PPU.context . ppu $ nes)
+    nes <- get
     tickCPU
     --tickPPU
     updateClock 1
