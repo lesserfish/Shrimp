@@ -15,14 +15,6 @@ import Text.Printf
 execute :: (Monad m) => (() -> m b) -> m b
 execute f = f ()
 
-disassembleL' :: Word16 -> Word16 -> StateT NES IO [(Word16, String)]
-disassembleL' start end = execute $ (MOS.disassembleL start end)
-
-disassembleL :: Word16 -> Word16 -> NES -> IO [(Word16, String)]
-disassembleL start end nes = do
-    (output, _) <- runStateT (disassembleL' start end) nes
-    return output
-
 getTextHeight :: SDLContext -> IO (Int, Int)
 getTextHeight ctx = do
     let font = cStatusFont ctx
@@ -37,8 +29,8 @@ renderCPUInstruction ctx color yoffset (addr, instruction) = do
 renderCPUInstructions :: SDLContext -> NES -> IO()
 renderCPUInstructions ctx nes = do
     let pc = MOS.pc . MOS.registers . cpu $ nes
-    instructionsBefore <- disassembleL (pc - 80) pc nes
-    instructionsAfter  <- disassembleL pc (pc + 80) nes
+    instructionsBefore <- MOS.disassembleL (pc - 80) pc nes
+    instructionsAfter  <- MOS.disassembleL pc (pc + 80) nes
 
     let selectAfter = take 8 instructionsAfter
     let selectBefore = reverse . (drop 1) . (take 7) . reverse $ instructionsBefore

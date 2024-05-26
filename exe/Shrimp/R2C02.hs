@@ -2,7 +2,6 @@
 
 module Shrimp.R2C02 (
     R2C02 (..),
-    setDEBUG,
     Context(..),
     Registers(..),
     r2c02,
@@ -336,7 +335,6 @@ data Context = Context
     , ppuScanline :: Int
     , ppuCycle :: Int
     , complete :: Bool
-    , cdebug :: String
     }
 
 -- R2C02
@@ -360,8 +358,7 @@ reset = do
     let ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False
-    , cdebug = ""}
+    , complete = False}
     let r2c02' = r2c02 {context = ctx, registers = reg}
     put (r2c02', bus)
 
@@ -384,8 +381,7 @@ r2c02 =
     ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False
-    , cdebug = ""}
+    , complete = False}
 
 
 readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -497,16 +493,12 @@ writeAddress byte = do
             setTRAM t'
             setVRAM t'
 
-setDEBUG :: (PBus m a) => String -> StateT (R2C02, a) m ()
-setDEBUG str = modifyFst (\ppu -> ppu{context = (context ppu){cdebug = str}})
-
 writeData :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
 writeData byte = do
     v <- getVRAM
     writeByte v byte
     increment_mode <- getCTRLFlag C_INCREMENT_MODE
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
-    setDEBUG "After after after"
 
 incCoarseX :: (PBus m a) => StateT (R2C02, a) m ()
 incCoarseX = do

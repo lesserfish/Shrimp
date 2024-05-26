@@ -8,25 +8,11 @@ import Data.Word
 
 -- CPU
 
-class (Show a, Monad m) => CBus m a where
+class (Monad m) => CBus m a where
     cWriteByte :: Word16 -> Word8 -> a -> m a
     cReadByte :: Word16 -> a -> m (a, Word8)
     cPeek :: Word16 -> a -> m Word8
     cDebug :: String -> a -> m a
-
-class (Monad m) => MCBus m where
-    mcWriteByte :: Word16 -> Word8 -> m ()
-    mcReadByte :: Word16 -> m Word8
-    mcPeek :: Word16 -> m Word8
-    mcDebug :: String -> m ()
-
-instance (MCBus m) => CBus m () where
-    cWriteByte addr content _ = mcWriteByte addr content >> return ()
-    cReadByte addr _ = do
-        byte <- mcReadByte addr
-        return (undefined, byte)
-    cPeek addr _ = mcPeek addr
-    cDebug log _ = mcDebug log
 
 class PCBus a where
     pcWriteByte :: Word16 -> Word8 -> a -> a
@@ -34,7 +20,7 @@ class PCBus a where
     pcPeek :: Word16 -> a -> Word8
     pcDebug :: String -> a -> a
 
-instance (Show a, PCBus a) => CBus Identity a where
+instance (PCBus a) => CBus Identity a where
     cWriteByte addr content bus = Identity $ pcWriteByte addr content bus
     cReadByte addr bus = Identity $ pcReadByte addr bus
     cPeek addr bus = Identity $ pcPeek addr bus
@@ -48,22 +34,6 @@ class (Monad m) => PBus m a where
     pPeek :: Word16 -> a -> m Word8
     pSetPixel :: (Word8, Word8) -> Word8 -> a -> m a
     pDebug :: String -> a -> m a
-
-class (Monad m) => MPBus m where
-    mpWriteByte :: Word16 -> Word8 -> m ()
-    mpReadByte :: Word16 -> m Word8
-    mpPeek :: Word16 -> m Word8
-    mpSetPixel :: (Word8, Word8) -> Word8 -> m ()
-    mpDebug :: String -> m ()
-
-instance (MPBus m) => PBus m () where
-    pWriteByte addr content _ = mpWriteByte addr content >> return ()
-    pReadByte addr _ = do
-        byte <- mpReadByte addr
-        return (undefined, byte)
-    pPeek addr _ = mpPeek addr
-    pSetPixel pos col _ = mpSetPixel pos col
-    pDebug log _ = mpDebug log
 
 class PPBus a where
     ppWriteByte :: Word16 -> Word8 -> a -> a

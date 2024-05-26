@@ -12,7 +12,7 @@ import Renderer.CPUInstructions
 
 main :: IO ()
 main = do
-    nes <- loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/donkey_kong.nes"
+    nes <- loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
     pipe <- createPipe nes
     rctx <- initializeRenderer pipe
     ectx <- initializeEmulator pipe

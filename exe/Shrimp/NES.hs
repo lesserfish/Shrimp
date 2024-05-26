@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Shrimp.NES where
 
 import Control.Monad (when)
@@ -26,26 +27,31 @@ data NES = NES
     , nClock :: !Int
     }
 
+-- Helper functions
+swap :: (a, b) -> (b, a)
+swap (x, y) = (y, x)
+
+run :: (Monad m) => StateT a m b -> a -> m (a, b)
+run s i = swap <$> runStateT s i
+
+exec :: (Monad m) => StateT a m b -> a -> m a
+exec = execStateT
+
 -- CPU Interface
 
 cpuReadRAM :: Word16 -> StateT NES IO Word8
 cpuReadRAM addr = do
-    liftIO . putStrLn $ "CPU read RAM"
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     byte <- liftIO $ Memory.readByteIO (cpuRAM nes) real_addr
-
-    (ppu', _) <- PPU.mDispatcher (PPU.setDEBUG "Debug from CPU read RAM")(ppu nes)
-    put nes{ppu = ppu'}
-
     return byte
 
 cpuReadPPU :: Word16 -> StateT NES IO Word8
 cpuReadPPU addr = do
     nes <- get
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    (ppu', byte) <- PPU.mDispatcher (PPU.cpuRead real_addr) (ppu nes)
-    put nes{ppu = ppu'}
+    (byte, out) <- liftIO $ runStateT (PPU.cpuRead real_addr) (ppu nes, nes)
+    let nes' = flattenPPU out
     return byte
 
 cpuReadAPU :: Word16 -> StateT NES IO Word8
@@ -71,8 +77,9 @@ cpuWritePPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWritePPU addr byte = do
     nes <- get
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    (ppu', _) <- PPU.mDispatcher (PPU.cpuWrite real_addr byte) (ppu nes)
-    put nes{ppu = ppu'}
+    out <- liftIO $ execStateT (PPU.cpuWrite real_addr byte) (ppu nes, nes)
+    let nes' = flattenPPU out
+    put nes'
 
 cpuWriteAPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
@@ -87,28 +94,25 @@ cpuWriteCart addr byte = do
     put nes{cartridge = cart'}
 
 
-instance MCBus (StateT NES IO) where
-    mcReadByte addr
-        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuReadRAM addr
-        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuReadPPU addr
-        | (addr >= 0x4000 && addr <= 0x4015) = cpuReadAPU addr
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuReadControl addr
-        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuReadCart addr
-        | otherwise = return 0
-    mcWriteByte addr byte
-        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuWriteRAM addr byte
-        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuWritePPU addr byte
-        | (addr >= 0x4000 && addr <= 0x4015) = cpuWriteAPU addr byte
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl addr byte
-        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart addr byte
-        | otherwise = return ()
-    mcPeek addr = do
-        nes <- get
-        byte <- mcReadByte addr
-        put nes -- Little trickery. Unsure if this works. I think so.
-        return byte
-    mcDebug log = do
+instance CBus IO NES where
+    cReadByte addr nes
+        | (addr >= 0x0000 && addr <= 0x1FFF) = run (cpuReadRAM addr) nes
+        | (addr >= 0x2000 && addr <= 0x3FFF) = run (cpuReadPPU addr) nes
+        | (addr >= 0x4000 && addr <= 0x4015) = run (cpuReadAPU addr) nes
+        | (addr >= 0x4016 && addr <= 0x4017) = run (cpuReadControl addr) nes
+        | (addr >= 0x4020 && addr <= 0xFFFF) = run (cpuReadCart addr) nes
+        | otherwise = return (nes, 0) -- TODO: Log error ?
+    cWriteByte addr byte nes
+        | (addr >= 0x0000 && addr <= 0x1FFF) = exec (cpuWriteRAM addr byte) nes
+        | (addr >= 0x2000 && addr <= 0x3FFF) = exec (cpuWritePPU addr byte) nes
+        | (addr >= 0x4000 && addr <= 0x4015) = exec (cpuWriteAPU addr byte) nes
+        | (addr >= 0x4016 && addr <= 0x4017) = exec (cpuWriteControl addr byte) nes
+        | (addr >= 0x4020 && addr <= 0xFFFF) = exec (cpuWriteCart addr byte) nes
+        | otherwise = return nes -- TODO: Log error ?
+    cPeek addr nes = snd <$> cReadByte addr nes
+    cDebug log nes = do
         liftIO $ putStrLn log
+        return nes
 
 -- PPU Interface 
 
@@ -151,24 +155,29 @@ ppuWriteNT addr byte = do
 ppuWritePL :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
 
-instance MPBus (StateT NES IO) where
-    mpReadByte addr 
-        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuReadPT addr
-        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuReadNT addr
-        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuReadPL addr
-    mpWriteByte addr byte
-        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuWritePT addr byte
-        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuWriteNT addr byte
-        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuWritePL addr byte
-    mpPeek addr = do
-       nes <- get 
-       byte <- mpReadByte addr
-       put nes
-       return byte
-    mpSetPixel (x, y) value = return () -- TODO: Implement SetPixel support
-    mpDebug log = do
+instance PBus IO NES where
+    pReadByte addr nes
+        | (addr >= 0x0000 && addr <= 0x1FFF) = run (ppuReadPT addr) nes
+        | (addr >= 0x2000 && addr <= 0x3EFF) = run (ppuReadNT addr) nes
+        | (addr >= 0x3F00 && addr <= 0x3FFF) = run (ppuReadPL addr) nes
+        | otherwise = return (nes, 0) -- TODO: Log error
+    pWriteByte addr byte nes
+        | (addr >= 0x0000 && addr <= 0x1FFF) = exec (ppuWritePT addr byte) nes
+        | (addr >= 0x2000 && addr <= 0x3EFF) = exec (ppuWriteNT addr byte) nes
+        | (addr >= 0x3F00 && addr <= 0x3FFF) = exec (ppuWritePL addr byte) nes
+        | otherwise = return nes -- TODO: Log error
+    pPeek addr nes = snd <$> pReadByte addr nes
+    pSetPixel = undefined
+    pDebug log nes = do
         liftIO $ putStrLn log
+        return nes
 
+
+flattenCPU :: (CPU.MOS6502, NES) -> NES
+flattenCPU (mos6502, nes) = nes{cpu = mos6502}
+
+flattenPPU :: (PPU.R2C02, NES) -> NES
+flattenPPU (r2c02, nes) = nes{ppu = r2c02}
 
 updateClock :: Int -> StateT NES IO ()
 updateClock offset = do
@@ -182,21 +191,22 @@ tickCPU = do
     if (nClock nes) `mod` 3 == 0 -- The CPU clock is ~ 3x slowers than the PPU clock
         then do
             let mos6502 = cpu nes
-            (cpu', _) <- CPU.mDispatcher CPU.tick mos6502
-            put nes{cpu = cpu'}
+            out <- liftIO $ execStateT CPU.tick (mos6502, nes)
+            let nes' = flattenCPU out
+            put nes'
         else put nes
 
 tickPPU :: StateT NES IO ()
 tickPPU = do
     nes <- get
     let r2c02 = ppu nes
-    (ppu', _) <- PPU.mDispatcher PPU.tick r2c02
-    put nes{ppu = ppu'}
+    out <- liftIO $ execStateT PPU.tick (r2c02, nes)
+    let nes' = flattenPPU out
+    put nes'
 
 tick :: StateT NES IO ()
 tick = do
     nes <- get
-    liftIO . putStrLn $ "Debug: " ++ (PPU.cdebug . PPU.context . ppu $ nes)
     nes <- get
     tickCPU
     --tickPPU
@@ -205,8 +215,8 @@ tick = do
 reset :: StateT NES IO ()
 reset = do
     nes <- get
-    (cpu', _) <- CPU.mDispatcher CPU.reset (cpu nes)
-    (ppu', _) <- PPU.mDispatcher PPU.reset (ppu nes)
+    (cpu', _) <- liftIO $ execStateT CPU.reset (cpu nes, nes)
+    (ppu', _) <- liftIO $ execStateT PPU.reset (ppu nes, nes)
     --cart' <- liftIO $ Cart.reset $ cartridge nes
     liftIO $ Memory.resetIO (cpuRAM nes)
     liftIO $ Memory.resetIO (nametableRAM nes)
@@ -261,5 +271,4 @@ setPPUComplete b nes = nes' where
     ctx' = ctx{PPU.complete = b}
     r2' = r2{PPU.context = ctx'}
     nes' = nes{ppu = r2'}
-
 

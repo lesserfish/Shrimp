@@ -9,17 +9,12 @@ import Data.Word
 import qualified SDL as SDL
 import Shrimp.AbstractBus
 
-readPPUMemory :: Word16 -> StateT NES IO Word8
-readPPUMemory addr = do
-    byte <- mpPeek addr
-    return byte
-
 getNametableTile :: NES -> Int -> (Int, Int) -> IO Word8
 getNametableTile nes nt (nx, ny) = do
     let baseAddr = 0x2000 + nt * 0x400
     let offset = ny * 32 + nx
     let addr = fromIntegral $ baseAddr + offset :: Word16
-    (byte, _) <- runStateT (readPPUMemory addr) nes
+    byte <- pPeek addr nes
     return byte
 
 renderNametableLine :: SDLContext -> NES -> Int -> Int -> IO ()

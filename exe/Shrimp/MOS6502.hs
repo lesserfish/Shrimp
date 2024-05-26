@@ -355,7 +355,6 @@ readByte addr = do
 writeByte :: (CBus m a) => Word16 -> Word8 -> StateT (MOS6502, a) m ()
 writeByte addr byte = do
     (mos6502, bus) <- get
-    debug $ "CPU requesting Write Byte. Writing byte " ++ (toHex byte) ++ " to address " ++ (toHex' addr)
     bus' <- lift $ cWriteByte addr byte bus
     put (mos6502, bus')
 

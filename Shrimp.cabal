@@ -21,21 +21,29 @@ executable Shrimp-exe
   main-is:          Main.hs
   other-modules:    Shrimp.AbstractBus, 
                     Shrimp.MOS6502, 
-                    Shrimp.MOS6502.Disassembler, 
                     Shrimp.Mapper.Mapper, 
                     Shrimp.Mapper.AbstractMapper, 
                     Shrimp.Mapper.Mapper0, 
                     Shrimp.Cartridge, 
+                    Shrimp.Cartridge.Loader, 
                     Shrimp.NES, 
                     Shrimp.R2C02, 
                     Shrimp.Interface,
-                    Shrimp.INES,
                     Shrimp.Memory,
                     Shrimp.Frontend.GUI,
                     Shrimp.Controller, 
                     Shrimp.IO,
                     Shrimp.IO.Input,
-                    Shrimp.IO.Output
+                    Shrimp.IO.Output,
+                    Communication,
+                    Emulator,
+                    Renderer,
+                    Renderer.CPUState,
+                    Renderer.Nametable,
+                    Renderer.CPUInstructions,
+                    Renderer.Common,
+                    Renderer.Control, 
+                    Renderer.Render
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
@@ -46,7 +54,9 @@ executable Shrimp-exe
                     containers >= 0.6.8,
                     sdl2 >= 2.5.5.0, 
                     sdl2-ttf >= 2.1.3,
-                    text >= 2.0
+                    text >= 2.0,
+                    stm >= 2.5.1.0,
+                    time >= 1.12.2
 
   hs-source-dirs:   exe
   default-language: Haskell2010
