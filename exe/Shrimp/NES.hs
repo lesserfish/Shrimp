@@ -11,6 +11,7 @@ import qualified Shrimp.IO as IO
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.R2C02 as PPU
+import Shrimp.MOS6502 (disassembleL)
 
 data NESContext = NESContext
 
@@ -231,3 +232,21 @@ loadNES fp = do
     let nes' = emptynes{cartridge = cart}
     nes <- execStateT reset nes'
     return nes
+
+setCPUComplete :: Bool -> NES -> NES
+setCPUComplete b nes = nes' where
+    mos = cpu nes
+    ctx = CPU.context mos
+    ctx' = ctx{CPU.complete = b}
+    mos' = mos{CPU.context = ctx'}
+    nes' = nes{cpu = mos'}
+
+setPPUComplete :: Bool -> NES -> NES
+setPPUComplete b nes = nes' where
+    r2 = ppu nes
+    ctx = PPU.context r2
+    ctx' = ctx{PPU.complete = b}
+    r2' = r2{PPU.context = ctx'}
+    nes' = nes{ppu = r2'}
+
+
