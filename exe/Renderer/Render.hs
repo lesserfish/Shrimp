@@ -14,6 +14,7 @@ import Renderer.CPUInstructions
 import Renderer.CPUState
 import Control.Monad.State
 import Renderer.Nametable (renderNametable, updateNametableTexture)
+import Renderer.Pattern (updatePatternTexture)
 
 getNES :: StateT RenderContext IO NES
 getNES = do
@@ -38,11 +39,8 @@ renderCPU = do
     renderTexture updateInstructionTexture rtCPUInstructions
     renderTexture updateCPUTexture rtCPUStatus
     renderTexture updateNametableTexture rtNametable
-    modify (\ctx -> ctx{rUpdateCPU = False})
-
-windowSegment :: (Int, Int) -> (Int, Int) -> Maybe (SDL.Rectangle CInt)
-windowSegment (sx, sy) (w, h) = Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral sx) (fromIntegral sy)) (SDL.V2 (fromIntegral w) (fromIntegral h))
-
+    renderTexture updatePatternTexture rtPattern
+    put rctx{rUpdateCPU = False}
 
 render :: StateT RenderContext IO ()
 render = do
@@ -50,13 +48,11 @@ render = do
     let updateCPU = rUpdateCPU rctx
     let ctx = rSDLContext rctx
     let renderer = cRenderer ctx
-    let statusTexture = rtCPUStatus rctx
-    let instructionTexture = rtCPUInstructions rctx
-    let nametableTexture = rtNametable rctx
+    when updateCPU renderCPU
 
     SDL.clear renderer
-    when updateCPU renderCPU
-    SDL.copy renderer statusTexture Nothing (windowSegment (600, 0) (250, 300))
-    SDL.copy renderer instructionTexture Nothing (windowSegment (600, 250) (300, 350))
-    SDL.copy renderer nametableTexture Nothing (windowSegment (0, 0) (600, 600))
+    SDL.copy renderer (rtCPUStatus rctx) Nothing (windowSegment (600, 0) (250, 300))
+    SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 250) (300, 350))
+    SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600))
+    --SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (0, 0) (600, 600))
     SDL.present renderer

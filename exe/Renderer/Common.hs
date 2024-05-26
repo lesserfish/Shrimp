@@ -24,6 +24,7 @@ data RenderContext = RenderContext
     , rtCPUStatus :: SDL.Texture
     , rtCPUInstructions :: SDL.Texture
     , rtNametable :: SDL.Texture
+    , rtPattern :: SDL.Texture
     , rPipe :: CommPipe
     , rExit :: Bool
     , rRunning :: Bool
@@ -73,4 +74,6 @@ renderString rd string (px, py) color= do
     SDL.freeSurface textSurface
     SDL.destroyTexture textTexture
 
+windowSegment :: (Int, Int) -> (Int, Int) -> Maybe (SDL.Rectangle CInt)
+windowSegment (sx, sy) (w, h) = Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral sx) (fromIntegral sy)) (SDL.V2 (fromIntegral w) (fromIntegral h))
 

@@ -1,5 +1,8 @@
 module Renderer.Nametable where
 
+import Foreign.Marshal.Utils
+import Foreign.Ptr
+import qualified Data.ByteString as BS
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as UV
 import Control.Monad.State
@@ -24,19 +27,10 @@ renderNametableLine ctx nes nt ny = do
     let content = concat . (map toHex2) $ tiles 
     renderString renderData content (0, ny * 20) white
     
-
-demo :: NES -> IO ()
-demo nes = do
-    ubx <- UV.freeze . nametableRAM $ nes
-    let l = UV.toList ubx
-    -- putStrLn $ show l
-    return ()
-
 renderNametable :: SDLContext -> NES -> IO()
 renderNametable ctx nes = do
     let nt = 0
     mapM_ (renderNametableLine ctx nes nt) [0..29]
-    demo nes
 
 updateNametableTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> m()
 updateNametableTexture ctx nes texture = do

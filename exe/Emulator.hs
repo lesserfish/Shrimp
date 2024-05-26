@@ -1,5 +1,6 @@
 module Emulator where
 
+import Data.Time.Clock
 import Control.Exception
 import Control.Monad
 import Communication
@@ -12,10 +13,13 @@ data EmulatorContext = EmulatorContext
     { ePipe :: CommPipe
     , eExit :: Bool
     , eRunning :: Bool
+    , rLastTime :: UTCTime
     }
 
 initializeEmulator :: CommPipe -> IO EmulatorContext
-initializeEmulator pipe = return $ EmulatorContext pipe False False
+initializeEmulator pipe = do
+    now <- getCurrentTime
+    return $ EmulatorContext pipe False False now
 
 tickNES :: StateT EmulatorContext IO ()
 tickNES = do
@@ -26,6 +30,17 @@ tickNES = do
     nes' <- liftIO $ execStateT tick nes
     liftIO . atomically $ writeTVar tnes nes'
 
+frameReady :: StateT EmulatorContext IO Bool
+frameReady = do
+    ctx <- get
+    let before = rLastTime ctx
+    now <- liftIO $ getCurrentTime
+    let diff = diffUTCTime now before
+    if diff > (1/60)
+        then do
+            put ctx{rLastTime = now}
+            return True
+        else return False
 
 fullTick :: NES -> IO NES
 fullTick nes = do
@@ -49,7 +64,9 @@ runNES :: StateT EmulatorContext IO ()
 runNES = do
     ectx <- get
     let running = eRunning ectx
-    when running (tickNES >> sendInformation CPUCOMPLETE)
+    when running (tickNES >> do 
+            ready <- frameReady
+            when ready (sendInformation CPUCOMPLETE))
 
 sendInformation :: Information -> StateT EmulatorContext IO ()
 sendInformation info = do

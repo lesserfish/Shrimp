@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Renderer where
 
+import Renderer.Pattern
 import Renderer.Control
 import Renderer.Render
 import Data.Time.Clock
@@ -37,12 +38,14 @@ initializeRenderer pipe = do
     statustext <- createCPUTexture ctx
     insttext <- createInstructionTexture ctx
     nttext <- createNametableTexture ctx
+    pttext <- createPatternTexture ctx
     now <- getCurrentTime
     return $ RenderContext
         { rSDLContext = ctx
         , rtCPUStatus= statustext
         , rtCPUInstructions = insttext
         , rtNametable = nttext
+        , rtPattern = pttext
         , rPipe = pipe
         , rExit = False
         , rRunning = False
