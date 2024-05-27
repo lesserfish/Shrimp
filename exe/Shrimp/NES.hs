@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Shrimp.NES where
 
@@ -8,11 +7,9 @@ import Data.Bits
 import Data.Word
 import Shrimp.AbstractBus
 import qualified Shrimp.Cartridge as Cart
-import qualified Shrimp.IO as IO
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.R2C02 as PPU
-import Shrimp.MOS6502 (disassembleL)
 
 data NESContext = NESContext
 
