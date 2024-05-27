@@ -17,9 +17,9 @@ data NES = NES
     { cpu :: !CPU.MOS6502
     , ppu :: !PPU.R2C02
     , cartridge :: !Cart.Cartridge
-    , cpuRAM :: !Memory.IORAM
-    , nametableRAM :: !Memory.IORAM
-    , paletteRAM :: !Memory.IORAM
+    , cpuRAM :: !Memory.RAM
+    , nametableRAM :: !Memory.RAM
+    , paletteRAM :: !Memory.RAM
     , context :: !NESContext
     , nClock :: !Int
     }
@@ -40,7 +40,7 @@ cpuReadRAM :: Word16 -> StateT NES IO Word8
 cpuReadRAM addr = do
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
-    byte <- liftIO $ Memory.readByteIO (cpuRAM nes) real_addr
+    byte <- liftIO $ Memory.readByte (cpuRAM nes) real_addr
     return byte
 
 cpuReadPPU :: Word16 -> StateT NES IO Word8
@@ -60,7 +60,7 @@ cpuReadControl addr = return 0 -- TODO: Implement Control Support
 cpuReadCart :: Word16 -> StateT NES IO Word8
 cpuReadCart addr = do
     nes <- get
-    (cart', byte) <- liftIO $ Cart.cpuReadIO (cartridge nes) addr -- The mapper fixes the address by itself
+    (cart', byte) <- liftIO $ Cart.cpuRead (cartridge nes) addr -- The mapper fixes the address by itself
     put nes{cartridge = cart'}
     return byte
 
@@ -68,7 +68,7 @@ cpuWriteRAM :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteRAM addr byte = do
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
-    liftIO $ Memory.writeByteIO (cpuRAM nes) real_addr byte
+    liftIO $ Memory.writeByte (cpuRAM nes) real_addr byte
 
 cpuWritePPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWritePPU addr byte = do
@@ -87,7 +87,7 @@ cpuWriteControl addr byte = return () -- TODO: Implement Control Support
 cpuWriteCart :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteCart addr byte = do
     nes <- get
-    cart' <- liftIO $ Cart.cpuWriteIO (cartridge nes) addr byte -- The mapper fixes the address by itself
+    cart' <- liftIO $ Cart.cpuWrite (cartridge nes) addr byte -- The mapper fixes the address by itself
     put nes{cartridge = cart'}
 
 
@@ -117,7 +117,7 @@ ppuReadPT :: Word16 -> StateT NES IO Word8
 ppuReadPT addr = do
     nes <- get
     let cart = cartridge nes
-    (cart', byte) <- liftIO $ Cart.ppuReadIO cart addr
+    (cart', byte) <- liftIO $ Cart.ppuRead cart addr
     put nes{cartridge = cart'}
     return byte
 
@@ -127,7 +127,7 @@ ppuReadNT addr = do
     let mirroring = Cart.hMirroring . Cart.cHeader . Cart.cartData . cartridge $ nes
     let baseaddr = PPU.nametableBase mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
-    byte <- liftIO $ Memory.readByteIO (nametableRAM nes) addr'
+    byte <- liftIO $ Memory.readByte (nametableRAM nes) addr'
     return byte
 
 ppuReadPL :: Word16 -> StateT NES IO Word8
@@ -138,7 +138,7 @@ ppuWritePT :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePT addr byte = do
     nes <- get
     let cart = cartridge nes
-    cart' <- liftIO $ Cart.ppuWriteIO cart addr byte
+    cart' <- liftIO $ Cart.ppuWrite cart addr byte
     put nes{cartridge = cart'}
 
 ppuWriteNT :: Word16 -> Word8 -> StateT NES IO ()
@@ -147,7 +147,7 @@ ppuWriteNT addr byte = do
     let mirroring = Cart.hMirroring . Cart.cHeader . Cart.cartData . cartridge $ nes
     let baseaddr = PPU.nametableBase mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
-    liftIO $ Memory.writeByteIO (nametableRAM nes) addr' byte
+    liftIO $ Memory.writeByte (nametableRAM nes) addr' byte
 
 ppuWritePL :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
@@ -215,9 +215,9 @@ reset = do
     (cpu', _) <- liftIO $ execStateT CPU.reset (cpu nes, nes)
     (ppu', _) <- liftIO $ execStateT PPU.reset (ppu nes, nes)
     --cart' <- liftIO $ Cart.reset $ cartridge nes -- TODO: Implement cartridge resetting. Probably just run a fromCartDataIO.
-    liftIO $ Memory.resetIO (cpuRAM nes)
-    liftIO $ Memory.resetIO (nametableRAM nes)
-    liftIO $ Memory.resetIO (paletteRAM nes)
+    liftIO $ Memory.reset (cpuRAM nes)
+    liftIO $ Memory.reset (nametableRAM nes)
+    liftIO $ Memory.reset (paletteRAM nes)
     let nes' =
             nes
                 { cpu = cpu'
@@ -231,9 +231,9 @@ reset = do
 empty :: IO NES
 empty = do
     nocart <- Cart.emptyCartridge
-    cpuram <- Memory.newIO 0x800 0
-    nmtbram <- Memory.newIO 0x800 0
-    pltram <- Memory.newIO 0x1F 0
+    cpuram <- Memory.new 0x800 0
+    nmtbram <- Memory.new 0x800 0
+    pltram <- Memory.new 0x1F 0
     return $ NES
         { cpu = CPU.mos6502
         , ppu = PPU.r2c02

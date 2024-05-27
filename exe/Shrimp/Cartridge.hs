@@ -2,20 +2,14 @@ module Shrimp.Cartridge (
     CartData(..),
     emptyCartridge,
     Cartridge(..),
-    Cartridge,
     fromCartData,
-    fromCartDataIO,
     loadCartridge,
     Mirroring(..),
     Header(..),
     cpuRead,
-    cpuReadIO,
     cpuWrite,
-    cpuWriteIO,
     ppuRead,
-    ppuReadIO,
     ppuWrite,
-    ppuWriteIO,
     reset,
 ) where
 
@@ -28,8 +22,8 @@ import qualified Shrimp.Mapper.Mapper0 as Mapper0
 
 data Cartridge = Cartridge
     { cartData :: CartData
-    , prgData :: M.IORAM
-    , chrData :: M.IORAM
+    , prgData :: M.RAM
+    , chrData :: M.RAM
     , mapper :: Mapper.Mapper
     }
 
@@ -44,7 +38,7 @@ emptyCartridge = do
                 , mapper = nomapper}
     return cart
 
-fromCartData ::  CartData -> IO ( Cartridge )
+fromCartData ::  CartData -> IO Cartridge
 fromCartData cartdata = do
     let prgsize = 0x4000 * (fromIntegral . hPrgSize . cHeader $ cartdata) :: Int
     let chrsize = 0x2000 * (fromIntegral . hChrSize . cHeader $ cartdata) :: Int
@@ -60,13 +54,10 @@ fromCartData cartdata = do
                 , mapper = cmapper}
     return cart
 
-fromCartDataIO :: CartData -> IO Cartridge
-fromCartDataIO cart = fromCartData cart
-
 loadCartridge :: FilePath -> IO Cartridge
 loadCartridge fp = do
     cartdata <- CL.loadCartData fp
-    fromCartDataIO cartdata
+    fromCartData cartdata
 
 -- CPU
 
@@ -77,18 +68,12 @@ cpuRead cart addr = do
     let cart' = cart{mapper = mapper'}
     return (cart', byte)
 
-cpuReadIO :: Cartridge -> Word16 -> IO (Cartridge, Word8)
-cpuReadIO = cpuRead
-
-cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO (Cartridge)
+cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO Cartridge
 cpuWrite cart addr byte = do
     let (mapper', addr') = Mapper.cpuWMap (mapper cart) addr
     M.writeByte (prgData cart) addr' byte
     let cart' = cart{mapper = mapper'}
     return cart'
-
-cpuWriteIO :: Cartridge -> Word16 -> Word8 -> IO Cartridge
-cpuWriteIO = cpuWrite
 
 -- PPU
 
@@ -99,20 +84,13 @@ ppuRead cart addr = do
     let cart' = cart{mapper = mapper'}
     return (cart', byte)
 
-ppuReadIO :: Cartridge -> Word16 -> IO (Cartridge, Word8)
-ppuReadIO = ppuRead
-
-ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO (Cartridge)
+ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO Cartridge
 ppuWrite cart addr byte = do
     let (mapper', addr') = Mapper.ppuWMap (mapper cart) addr
     M.writeByte (chrData cart) addr' byte
     let cart' = cart{mapper = mapper'}
     return cart'
 
-ppuWriteIO :: Cartridge -> Word16 -> Word8 -> IO Cartridge
-ppuWriteIO = ppuWrite
-
-
-reset ::  Cartridge  -> IO (Cartridge)
+reset ::  Cartridge  -> IO Cartridge
 reset cart = undefined -- TODO
 
