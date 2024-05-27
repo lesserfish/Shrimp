@@ -40,16 +40,13 @@ cpuReadRAM :: Word16 -> StateT NES IO Word8
 cpuReadRAM addr = do
     nes <- get
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
-    byte <- liftIO $ Memory.readByte (cpuRAM nes) real_addr
-    return byte
+    liftIO $ Memory.readByte (cpuRAM nes) real_addr
 
 cpuReadPPU :: Word16 -> StateT NES IO Word8
 cpuReadPPU addr = do
     nes <- get
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    (byte, out) <- liftIO $ runStateT (PPU.cpuRead real_addr) (ppu nes, nes)
-    let nes' = flattenPPU out
-    return byte
+    (liftIO $ runStateT (PPU.cpuRead real_addr) (ppu nes, nes)) >>= flattenPPU'
 
 cpuReadAPU :: Word16 -> StateT NES IO Word8
 cpuReadAPU addr = return 0 -- TODO: Implement APU Support
@@ -60,9 +57,7 @@ cpuReadControl addr = return 0 -- TODO: Implement Control Support
 cpuReadCart :: Word16 -> StateT NES IO Word8
 cpuReadCart addr = do
     nes <- get
-    (cart', byte) <- liftIO $ Cart.cpuRead (cartridge nes) addr -- The mapper fixes the address by itself
-    put nes{cartridge = cart'}
-    return byte
+    (liftIO $ Cart.cpuRead (cartridge nes) addr) >>= updateCart' -- The mapper fixes the address by itself
 
 cpuWriteRAM :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteRAM addr byte = do
@@ -74,9 +69,7 @@ cpuWritePPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWritePPU addr byte = do
     nes <- get
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    out <- liftIO $ execStateT (PPU.cpuWrite real_addr byte) (ppu nes, nes)
-    let nes' = flattenPPU out
-    put nes'
+    (liftIO $ execStateT (PPU.cpuWrite real_addr byte) (ppu nes, nes)) >>= flattenPPU
 
 cpuWriteAPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
@@ -87,9 +80,7 @@ cpuWriteControl addr byte = return () -- TODO: Implement Control Support
 cpuWriteCart :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteCart addr byte = do
     nes <- get
-    cart' <- liftIO $ Cart.cpuWrite (cartridge nes) addr byte -- The mapper fixes the address by itself
-    put nes{cartridge = cart'}
-
+    (liftIO $ Cart.cpuWrite (cartridge nes) addr byte) >>= updateCart -- The mapper fixes the address by itself
 
 instance CBus IO NES where
     cReadByte addr nes
@@ -117,9 +108,7 @@ ppuReadPT :: Word16 -> StateT NES IO Word8
 ppuReadPT addr = do
     nes <- get
     let cart = cartridge nes
-    (cart', byte) <- liftIO $ Cart.ppuRead cart addr
-    put nes{cartridge = cart'}
-    return byte
+    (liftIO $ Cart.ppuRead cart addr) >>= updateCart'
 
 ppuReadNT :: Word16 -> StateT NES IO Word8
 ppuReadNT addr = do
@@ -127,19 +116,16 @@ ppuReadNT addr = do
     let mirroring = Cart.hMirroring . Cart.cHeader . Cart.cartData . cartridge $ nes
     let baseaddr = PPU.nametableBase mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
-    byte <- liftIO $ Memory.readByte (nametableRAM nes) addr'
-    return byte
+    liftIO $ Memory.readByte (nametableRAM nes) addr'
 
 ppuReadPL :: Word16 -> StateT NES IO Word8
 ppuReadPL addr = return 0 -- TODO: Implement Palette RAM support
-
 
 ppuWritePT :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePT addr byte = do
     nes <- get
     let cart = cartridge nes
-    cart' <- liftIO $ Cart.ppuWrite cart addr byte
-    put nes{cartridge = cart'}
+    (liftIO $ Cart.ppuWrite cart addr byte) >>= updateCart
 
 ppuWriteNT :: Word16 -> Word8 -> StateT NES IO ()
 ppuWriteNT addr byte = do
@@ -170,17 +156,27 @@ instance PBus IO NES where
         return nes
 
 
-flattenCPU :: (CPU.MOS6502, NES) -> NES
-flattenCPU (mos6502, nes) = nes{cpu = mos6502}
+flattenCPU :: (CPU.MOS6502, NES) -> StateT NES IO ()
+flattenCPU (mos, nes) = put nes{cpu = mos}
 
-flattenPPU :: (PPU.R2C02, NES) -> NES
-flattenPPU (r2c02, nes) = nes{ppu = r2c02}
+flattenCPU' :: (a, (CPU.MOS6502, NES)) -> StateT NES IO a
+flattenCPU' (smth, (mos, nes)) = put nes{cpu = mos} >> return smth
+
+flattenPPU :: (PPU.R2C02, NES) -> StateT NES IO ()
+flattenPPU (r2c02, nes) = put nes{ppu = r2c02}
+
+flattenPPU' :: (a, (PPU.R2C02, NES)) -> StateT NES IO a
+flattenPPU' (smth, (r2c02, nes)) = put nes{ppu = r2c02} >> return smth
+
+updateCart :: Cart.Cartridge -> StateT NES IO ()
+updateCart c = modify(\nes -> nes{cartridge = c})
+
+updateCart' :: (Cart.Cartridge, a) -> StateT NES IO a
+updateCart' (c, smth) = modify(\nes -> nes{cartridge = c}) >> return smth
+
 
 updateClock :: Int -> StateT NES IO ()
-updateClock offset = do
-    nes <- get
-    put nes{nClock = (nClock nes) + offset}
-
+updateClock offset = modify(\nes -> nes{nClock = (nClock nes) + offset})
 
 tickCPU :: StateT NES IO ()
 tickCPU = do
@@ -188,18 +184,14 @@ tickCPU = do
     if (nClock nes) `mod` 3 == 0 -- The CPU clock is ~ 3x slowers than the PPU clock
         then do
             let mos6502 = cpu nes
-            out <- liftIO $ execStateT CPU.tick (mos6502, nes)
-            let nes' = flattenCPU out
-            put nes'
+            (liftIO $ execStateT CPU.tick (mos6502, nes)) >>= flattenCPU
         else put nes
 
 tickPPU :: StateT NES IO ()
 tickPPU = do
     nes <- get
     let r2c02 = ppu nes
-    out <- liftIO $ execStateT PPU.tick (r2c02, nes)
-    let nes' = flattenPPU out
-    put nes'
+    (liftIO $ execStateT PPU.tick (r2c02, nes)) >>= flattenPPU
 
 tick :: StateT NES IO ()
 tick = do
