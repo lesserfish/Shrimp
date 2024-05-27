@@ -51,6 +51,9 @@ initializeRenderer pipe = do
         , rRunning = False
         , rUpdateCPU = True
         , rLastTime = now
+        , rDisplayMode = DM_CPUSTATUS
+        , rNChoice = nt1
+        , rPChoice = pt1
         }
 
 rendererLoop :: StateT RenderContext IO ()

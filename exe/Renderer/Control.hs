@@ -75,11 +75,28 @@ getNES = do
     nes <- liftIO $ atomically . readTVar $ tnes
     return nes
 
+
+modeUp :: StateT RenderContext IO ()
+modeUp = modify (\rctx -> rctx{rDisplayMode = nextMode . rDisplayMode $ rctx}) where
+    nextMode DM_CPUSTATUS = DM_NAMETABLE
+    nextMode DM_NAMETABLE = DM_PATTERNTABLE
+    nextMode DM_PATTERNTABLE = DM_CPUSTATUS
+
+modeDown :: StateT RenderContext IO ()
+modeDown = modify (\rctx -> rctx{rDisplayMode = prevMode . rDisplayMode $ rctx}) where
+    prevMode DM_NAMETABLE = DM_CPUSTATUS
+    prevMode DM_PATTERNTABLE = DM_NAMETABLE
+    prevMode DM_CPUSTATUS = DM_PATTERNTABLE
+
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram
 handleKeydown SDL.KeycodeSpace = toggleEmulation
 handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
+handleKeydown SDL.KeycodeRight = modeUp
+handleKeydown SDL.KeycodeLeft = modeDown
+--handleKeydown SDL.KeycodeUp = modify (\rctx -> rctx{rNChoice = not . rNChoice $ rctx})
+--handleKeydown SDL.KeycodeDown = modify (\rctx -> rctx{rPChoice = not . rPChoice $ rctx})
 handleKeydown _ = return ()
 
 handleKeyboard :: SDL.KeyboardEventData -> StateT RenderContext IO ()

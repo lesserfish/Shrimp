@@ -19,6 +19,17 @@ data RenderData = RenderData
     , rdFont :: Font.Font
     }
 
+data DisplayMode = DM_CPUSTATUS | DM_NAMETABLE | DM_PATTERNTABLE deriving (Show, Eq)
+
+type NTChoice = Bool
+type PTChoice = Bool
+
+nt1 = True
+nt2 = False
+
+pt1 = True
+pt2 = False
+
 data RenderContext = RenderContext
     { rSDLContext :: SDLContext
     , rtCPUStatus :: SDL.Texture
@@ -30,6 +41,9 @@ data RenderContext = RenderContext
     , rRunning :: Bool
     , rUpdateCPU :: Bool
     , rLastTime :: UTCTime
+    , rDisplayMode :: DisplayMode
+    , rNChoice :: NTChoice
+    , rPChoice :: PTChoice
     }
 
 -- Colors

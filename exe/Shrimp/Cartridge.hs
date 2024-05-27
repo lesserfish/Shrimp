@@ -47,13 +47,14 @@ emptyCartridge = do
                 , mapper = nomapper}
     return cart
 
-
 fromCartData :: (M.PrimMonad m) => CartData -> m ( Cartridge (M.PrimState m))
 fromCartData cartdata = do
-    let prgsize = length . cPRGData $ cartdata
-    let chrsize = length . cCHRData $ cartdata
-    prgram <- M.fromList . cPRGData $ cartdata
-    chrram <- M.fromList . cCHRData $ cartdata
+    let prgsize = 0x4000 * (fromIntegral . hPrgSize . cHeader $ cartdata) :: Int
+    let chrsize = 0x2000 * (fromIntegral . hChrSize . cHeader $ cartdata) :: Int
+    prgram <- M.new prgsize 0
+    chrram <- M.new chrsize 0
+    M.loadList prgram 0 (cPRGData cartdata)
+    M.loadList chrram 0 (cCHRData cartdata)
     let cmapper = Mapper.chooseMapper cartdata
     let cart = Cartridge
                 { cartData = CL.emptyCartData
@@ -116,16 +117,7 @@ ppuWriteIO = ppuWrite
 
 
 reset :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> m (Cartridge (M.PrimState m))
-reset cart = do
-    let cartdata = cartData cart
-    let prgsize = length . cPRGData $ cartdata
-    let chrsize = length . cCHRData $ cartdata
-    M.reset $ prgData cart
-    M.reset $ chrData cart
-    let cmapper = Mapper.chooseMapper cartdata
-    let cart' = cart { cartData = CL.emptyCartData
-                     , mapper = cmapper}
-    return cart'
+reset cart = undefined -- TODO
 
 resetIO :: CartridgeIO -> IO CartridgeIO
 resetIO = reset

@@ -29,13 +29,13 @@ type RAM s = UMV.MVector s Word8
 type IORAM = UMV.IOVector Word8
 type STRAM = UMV.STVector Word8
 
-new :: (PrimMonad m) => Word16 -> Word8 -> m (RAM (PrimState m))
+new :: (PrimMonad m) => Int -> Word8 -> m (RAM (PrimState m))
 new size e = UMV.replicate (fromIntegral size) e
 
-newIO :: Word16 -> Word8 -> IO IORAM
+newIO :: Int -> Word8 -> IO IORAM
 newIO = new
 
-newST :: Word16 -> Word8 -> ST s (RAM (PrimState (ST s)))
+newST :: Int -> Word8 -> ST s (RAM (PrimState (ST s)))
 newST = new
 
 readByte :: (PrimMonad m) => RAM (PrimState m) -> Word16 -> m Word8
@@ -53,10 +53,10 @@ writeByteIO = writeByte
 noRAM :: (PrimMonad m) => m (RAM (PrimState m))
 noRAM = UMV.new 0
 
-loadList :: (PrimMonad m)  => RAM (PrimState m) -> [Word8] -> m ()
-loadList ram lst
+loadList :: (PrimMonad m)  => RAM (PrimState m) -> Int -> [Word8] -> m ()
+loadList ram offset lst
     | UMV.length ram < length lst = error "Memory too small to load entire list"
-    | otherwise = mapM_ (\idx -> UMV.write ram idx (lst !! idx)) [0.. ((fromIntegral . length $ lst) - 1)]
+    | otherwise = mapM_ (\idx -> UMV.write ram (offset + idx) (lst !! idx)) [0.. ((fromIntegral . length $ lst) - 1)]
 
 fromList :: (PrimMonad m) => [Word8] -> m (RAM (PrimState m))
 fromList list = UMV.generate (length list) (\idx -> list !! idx)
@@ -65,7 +65,7 @@ fromListIO :: [Word8] -> IO IORAM
 fromListIO = fromList
 
 reset :: (PrimMonad m) => RAM (PrimState m) ->  m ()
-reset ram = mapM_ (\idx -> UMV.write ram idx 0) [0.. ((fromIntegral . UMV.length $ ram) - 1)]
+reset ram = do mapM_ (\idx -> UMV.write ram idx 0) [0.. ((fromIntegral . UMV.length $ ram) - 1)]
 
 resetIO :: IORAM -> IO ()
 resetIO = reset

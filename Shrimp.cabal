@@ -28,18 +28,13 @@ executable Shrimp-exe
                     Shrimp.Cartridge.Loader, 
                     Shrimp.NES, 
                     Shrimp.R2C02, 
-                    Shrimp.Interface,
                     Shrimp.Memory,
-                    Shrimp.Frontend.GUI,
-                    Shrimp.Controller, 
-                    Shrimp.IO,
-                    Shrimp.IO.Input,
-                    Shrimp.IO.Output,
                     Communication,
                     Emulator,
                     Renderer,
                     Renderer.CPUState,
                     Renderer.Nametable,
+                    Renderer.Pattern,
                     Renderer.CPUInstructions,
                     Renderer.Common,
                     Renderer.Control, 
@@ -56,7 +51,8 @@ executable Shrimp-exe
                     sdl2-ttf >= 2.1.3,
                     text >= 2.0,
                     stm >= 2.5.1.0,
-                    time >= 1.12.2
+                    time >= 1.12.2,
+                    split >= 0.2.5
 
   hs-source-dirs:   exe
   default-language: Haskell2010

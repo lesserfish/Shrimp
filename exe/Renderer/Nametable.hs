@@ -27,17 +27,17 @@ renderNametableLine ctx nes nt ny = do
     let content = concat . (map toHex2) $ tiles 
     renderString renderData content (0, ny * 20) white
     
-renderNametable :: SDLContext -> NES -> IO()
-renderNametable ctx nes = do
-    let nt = 0
+renderNametable :: SDLContext -> NES -> Int -> IO()
+renderNametable ctx nes nt = do
     mapM_ (renderNametableLine ctx nes nt) [0..29]
 
-updateNametableTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> m()
-updateNametableTexture ctx nes texture = do
+updateNametableTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> NTChoice -> m()
+updateNametableTexture ctx nes texture ntc = do
+    let nt = if ntc then 0 else 1
     let renderer = cRenderer ctx
     SDL.rendererRenderTarget renderer SDL.$= Just texture
     SDL.clear renderer
-    liftIO $ renderNametable ctx nes
+    liftIO $ renderNametable ctx nes nt
     SDL.rendererRenderTarget renderer SDL.$= Nothing
 
 createNametableTexture :: SDLContext -> IO SDL.Texture

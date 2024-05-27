@@ -30,7 +30,7 @@ getPatternTable pt nes = do
             let hbs = patternData !! (pt * 0x1000 + tileOffset + line + 8)
 
             mapM_(\py -> do
-                let xid = tilex * 8 + (7 - py) + pt * 16 * 8
+                let xid = tilex * 8 + (7 - py)
                 let yid = tiley * 8 + line
                 let memPos = xid + yid * 128
 
@@ -50,10 +50,10 @@ toColor 2 = [255, 2, 255, 255]
 toColor 3 = [255, 255, 2, 255]
 toColor _ = [2, 2, 2, 2]
 
-renderPattern :: SDLContext -> SDL.Texture -> NES -> IO ()
-renderPattern ctx texture nes = do
-    pt <- getPatternTable 0 nes
-    let bd = BS.pack . concat . (fmap toColor) $ pt  :: BS.ByteString
+renderPattern :: SDLContext -> SDL.Texture -> NES -> Int -> IO ()
+renderPattern ctx texture nes pt = do
+    table <- getPatternTable pt nes
+    let bd = BS.pack . concat . (fmap toColor) $ table  :: BS.ByteString
     (targetPtr, pitch) <- SDL.lockTexture texture Nothing 
     BS.useAsCString bd (\ptr -> do
             let sourcePtr = castPtr ptr :: Ptr ()
@@ -61,9 +61,10 @@ renderPattern ctx texture nes = do
         )
     SDL.unlockTexture texture
 
-updatePatternTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> m()
-updatePatternTexture ctx nes texture = do
-    liftIO $ renderPattern ctx texture nes
+updatePatternTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> PTChoice -> m()
+updatePatternTexture ctx nes texture ptc = do
+    let pt = if ptc then 0 else 1
+    liftIO $ renderPattern ctx texture nes pt
 
 createPatternTexture :: SDLContext -> IO SDL.Texture
 createPatternTexture ctx = do
