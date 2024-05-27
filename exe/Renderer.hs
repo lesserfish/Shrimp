@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Renderer where
 
+import Renderer.Screen
 import Renderer.Pattern
 import Renderer.Control
 import Renderer.Render
@@ -39,6 +40,7 @@ initializeRenderer pipe = do
     insttext <- createInstructionTexture ctx
     nttext <- createNametableTexture ctx
     pttext <- createPatternTexture ctx
+    sctext <- createScreenTexture ctx
     now <- getCurrentTime
     return $ RenderContext
         { rSDLContext = ctx
@@ -46,6 +48,7 @@ initializeRenderer pipe = do
         , rtCPUInstructions = insttext
         , rtNametable = nttext
         , rtPattern = pttext
+        , rtScreen = sctext
         , rPipe = pipe
         , rExit = False
         , rRunning = False

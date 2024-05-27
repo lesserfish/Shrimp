@@ -10,8 +10,12 @@ import qualified Shrimp.Cartridge as Cart
 import qualified Shrimp.MOS6502 as CPU
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.R2C02 as PPU
+import qualified Shrimp.Display as Display
 
 data NESContext = NESContext
+    { nCPUComplete :: Bool
+    , nPPUComplete :: Bool
+    }
 
 data NES = NES
     { cpu :: !CPU.MOS6502
@@ -22,6 +26,7 @@ data NES = NES
     , paletteRAM :: !Memory.RAM
     , context :: !NESContext
     , nClock :: !Int
+    , nDisplay :: !Display.Display
     }
 
 -- Helper functions
@@ -67,9 +72,8 @@ cpuWriteRAM addr byte = do
 
 cpuWritePPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWritePPU addr byte = do
-    nes <- get
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    (liftIO $ execStateT (PPU.cpuWrite real_addr byte) (ppu nes, nes)) >>= flattenPPU
+    getPPU' >>= (liftIO . execStateT (PPU.cpuWrite real_addr byte)) >>= flattenPPU
 
 cpuWriteAPU :: Word16 -> Word8 -> StateT NES IO ()
 cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
@@ -138,6 +142,11 @@ ppuWriteNT addr byte = do
 ppuWritePL :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
 
+ppuSetPixel :: (Word16, Word16) -> Word8 -> StateT NES IO ()
+ppuSetPixel addr col = do
+    display <- nDisplay <$> get
+    liftIO $ Display.setPixel display addr col
+    
 instance PBus IO NES where
     pReadByte addr nes
         | (addr >= 0x0000 && addr <= 0x1FFF) = run (ppuReadPT addr) nes
@@ -150,7 +159,7 @@ instance PBus IO NES where
         | (addr >= 0x3F00 && addr <= 0x3FFF) = exec (ppuWritePL addr byte) nes
         | otherwise = return nes -- TODO: Log error
     pPeek addr nes = snd <$> pReadByte addr nes
-    pSetPixel = undefined
+    pSetPixel addr col nes = exec (ppuSetPixel addr col) nes
     pDebug log nes = do
         liftIO $ putStrLn log
         return nes
@@ -195,27 +204,64 @@ tickPPU = do
 
 tick :: StateT NES IO ()
 tick = do
-    nes <- get
-    nes <- get
     tickCPU
     tickPPU
+    postTick
     updateClock 1
+
+getCPU :: StateT NES IO CPU.MOS6502
+getCPU = cpu <$> get
+
+getCPU' :: StateT NES IO (CPU.MOS6502, NES)
+getCPU' = (\nes -> (cpu nes, nes)) <$> get
+
+getPPU :: StateT NES IO PPU.R2C02
+getPPU = ppu <$> get
+
+getPPU' :: StateT NES IO (PPU.R2C02, NES)
+getPPU' = (\nes -> (ppu nes, nes)) <$> get
+
+setCPUComplete :: Bool -> StateT NES IO ()
+setCPUComplete b = modify (\nes -> nes{context = (context nes){nCPUComplete = b}})
+
+fetchCPUComplete :: StateT NES IO Bool
+fetchCPUComplete = do
+    c <- nCPUComplete . context <$> get
+    setCPUComplete False
+    return c
+
+fetchPPUComplete :: StateT NES IO Bool
+fetchPPUComplete = do
+    c <- nPPUComplete . context <$> get
+    setPPUComplete False
+    return c
+
+setPPUComplete :: Bool -> StateT NES IO ()
+setPPUComplete b = modify (\nes -> nes{context = (context nes){nPPUComplete = b}})
+
+postTick :: StateT NES IO ()
+postTick = do
+    getPPU' >>= (liftIO . runStateT PPU.fetchComplete) >>= flattenPPU' >>= setPPUComplete
+    cpuc <- getCPU' >>= (liftIO . runStateT CPU.fetchComplete) >>= flattenCPU' >>= setCPUComplete
+    nmi  <- getPPU' >>= (liftIO . runStateT PPU.fetchNMI) >>= flattenPPU'
+    when nmi (getCPU' >>= (liftIO . execStateT CPU.iNMI) >>= flattenCPU)
 
 reset :: StateT NES IO ()
 reset = do
     nes <- get
-    (cpu', _) <- liftIO $ execStateT CPU.reset (cpu nes, nes)
-    (ppu', _) <- liftIO $ execStateT PPU.reset (ppu nes, nes)
+    cpu' <- fst <$> (getCPU' >>= (liftIO . execStateT CPU.reset))
+    ppu' <- fst <$> (getPPU' >>= (liftIO . execStateT PPU.reset))
     --cart' <- liftIO $ Cart.reset $ cartridge nes -- TODO: Implement cartridge resetting. Probably just run a fromCartDataIO.
     liftIO $ Memory.reset (cpuRAM nes)
     liftIO $ Memory.reset (nametableRAM nes)
     liftIO $ Memory.reset (paletteRAM nes)
+    liftIO $ Display.reset (nDisplay nes)
     let nes' =
             nes
                 { cpu = cpu'
                 , ppu = ppu'
                 --, cartridge = cart'
-                , context = NESContext
+                , context = NESContext False False
                 , nClock = 0
                 } 
     put nes'
@@ -226,6 +272,7 @@ empty = do
     cpuram <- Memory.new 0x800 0
     nmtbram <- Memory.new 0x800 0
     pltram <- Memory.new 0x1F 0
+    display <- Display.newDisplay
     return $ NES
         { cpu = CPU.mos6502
         , ppu = PPU.r2c02
@@ -233,8 +280,9 @@ empty = do
         , cpuRAM = cpuram
         , nametableRAM = nmtbram
         , paletteRAM = pltram
-        , context = NESContext
+        , context = NESContext False False
         , nClock = 0
+        , nDisplay = display
         }
 
 loadNES :: FilePath -> IO NES
@@ -244,20 +292,4 @@ loadNES fp = do
     let nes' = emptynes{cartridge = cart}
     nes <- execStateT reset nes'
     return nes
-
-setCPUComplete :: Bool -> NES -> NES
-setCPUComplete b nes = nes' where
-    mos = cpu nes
-    ctx = CPU.context mos
-    ctx' = ctx{CPU.complete = b}
-    mos' = mos{CPU.context = ctx'}
-    nes' = nes{cpu = mos'}
-
-setPPUComplete :: Bool -> NES -> NES
-setPPUComplete b nes = nes' where
-    r2 = ppu nes
-    ctx = PPU.context r2
-    ctx' = ctx{PPU.complete = b}
-    r2' = r2{PPU.context = ctx'}
-    nes' = nes{ppu = r2'}
 

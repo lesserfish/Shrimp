@@ -36,6 +36,7 @@ data RenderContext = RenderContext
     , rtCPUInstructions :: SDL.Texture
     , rtNametable :: SDL.Texture
     , rtPattern :: SDL.Texture
+    , rtScreen :: SDL.Texture
     , rPipe :: CommPipe
     , rExit :: Bool
     , rRunning :: Bool

@@ -12,6 +12,8 @@ module Shrimp.R2C02 (
     cpuRead,
     cpuWrite,
     nametableBase,
+    fetchComplete,
+    fetchNMI
 ) where
 
 import Control.Monad (when)
@@ -21,6 +23,11 @@ import Data.Word
 import Shrimp.AbstractBus
 import Shrimp.Cartridge (Mirroring(..))
 import qualified Shrimp.Memory as Memory
+
+
+-- REMOVE
+lcg a c m seed = iterate (\x -> (a * x + c) `mod` m) seed
+-- END
 
 -- Registers
 
@@ -391,6 +398,12 @@ readByte addr = do
     put (ppu, bus')
     return byte
 
+setPixel :: (PBus m a) => (Word16, Word16) -> Word8 -> StateT (R2C02, a) m ()
+setPixel addr byte = do
+    (ppu, bus) <- get
+    bus' <- lift $ pSetPixel addr byte bus
+    put (ppu, bus')
+
 writeByte :: (PBus m a) => Word16 -> Word8 -> StateT (R2C02, a) m ()
 writeByte addr byte = do
     (ppu, bus) <- get
@@ -565,6 +578,13 @@ setScanline s = modifyFst (\ppu -> ppu{context = (context ppu){ppuScanline = s}}
 setComplete :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
 setComplete b = modifyFst (\ppu -> ppu{context = (context ppu){complete = b}})
 
+fetchComplete :: (PBus m a) => StateT (R2C02, a) m Bool
+fetchComplete = do
+    (r2c02, _) <- get
+    let c = complete . context $ r2c02
+    setComplete False
+    return c
+
 incScanline :: (PBus m a) => StateT (R2C02, a) m ()
 incScanline = do
     scanline <- getScanline
@@ -591,6 +611,13 @@ handleVisibleScanline = return ()
 setNMI :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
 setNMI b = modifyFst (\ppu -> ppu{context = (context ppu){ppuNMI = b}})
 
+fetchNMI :: (PBus m a) => StateT (R2C02, a) m Bool
+fetchNMI = do
+    (r2c02, _) <- get
+    let nmi = ppuNMI . context $ r2c02
+    setNMI False
+    return nmi
+
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
     scanline <- getScanline
@@ -605,7 +632,16 @@ handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
 handleComposition = return ()
 
 renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
-renderPixel = return ()
+renderPixel = do 
+    (ppu, _) <- get
+    scanline <- getScanline
+    cycle <- getCycle
+    when (scanline >= 0 && scanline < 240 && cycle >= 0 && cycle < 256) (do
+        let seed = cycle * scanline :: Int
+        let rn = foldl (+) 0 (take 6 $ lcg seed 16278361 (2^31) 24) :: Int
+        let c = if (mod rn 10) > 5 then 0 else 1 :: Word8 
+        setPixel (fromIntegral cycle, fromIntegral scanline) c
+        )
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do

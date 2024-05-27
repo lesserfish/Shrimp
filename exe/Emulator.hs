@@ -44,12 +44,10 @@ frameReady = do
 
 fullTick :: NES -> IO NES
 fullTick nes = do
-    let complete = MOS.complete . MOS.context . cpu $ nes
+    (complete, nes') <- runStateT fetchCPUComplete nes
     if complete 
-        then return $ setCPUComplete False nes
-        else do
-            nes' <- execStateT tick nes
-            fullTick nes'
+        then return nes'
+        else (execStateT tick nes') >>= fullTick
 
 fullTickNES :: StateT EmulatorContext IO ()
 fullTickNES = do
@@ -64,7 +62,7 @@ runNES :: StateT EmulatorContext IO ()
 runNES = do
     ectx <- get
     let running = eRunning ectx
-    when running (tickNES >> do 
+    when running (fullTickNES >> fullTickNES >> fullTickNES >> fullTickNES >> fullTickNES >> do 
             ready <- frameReady
             when ready (sendInformation CPUCOMPLETE))
 
@@ -102,8 +100,6 @@ emulationLoop = do
     exit <- getExit
     if exit then return () else emulationLoop
     
-
-
 startEmulationLoop :: EmulatorContext -> IO ()
 startEmulationLoop ectx = do
     result <- try $ execStateT emulationLoop ectx

@@ -14,6 +14,7 @@ module Shrimp.MOS6502 (
     disassemble,
     disassembleL,
     disassembleM,
+    fetchComplete
 ) where
 
 import Control.Monad.ST (ST)
@@ -385,6 +386,13 @@ updateCycles offset = modifyFst (\mos -> mos{cycles = offset + cycles mos})
 
 setComplete :: (CBus m a) => Bool -> StateT (MOS6502, a) m ()
 setComplete b = modifyFst (\mos -> mos{context = (context mos){complete = b}})
+
+fetchComplete :: (CBus m a) => StateT (MOS6502, a) m Bool
+fetchComplete = do
+    (mos, _) <- get
+    let c = complete . context $ mos
+    setComplete False
+    return c
 
 tick :: (CBus m a) => StateT (MOS6502, a) m ()
 tick = do

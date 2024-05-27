@@ -22,6 +22,7 @@ executable Shrimp-exe
   other-modules:    Shrimp.AbstractBus, 
                     Shrimp.MOS6502, 
                     Shrimp.Mapper.Mapper, 
+                    Shrimp.Display,
                     Shrimp.Mapper.AbstractMapper, 
                     Shrimp.Mapper.Mapper0, 
                     Shrimp.Cartridge, 
@@ -38,6 +39,7 @@ executable Shrimp-exe
                     Renderer.CPUInstructions,
                     Renderer.Common,
                     Renderer.Control, 
+                    Renderer.Screen, 
                     Renderer.Render
                    -- Add other necessary modules here
   -- other-extensions:

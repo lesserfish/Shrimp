@@ -3,12 +3,14 @@ module Shrimp.Memory (
     new,
     writeByte,
     loadList,
+    toList,
     readByte,
     noRAM,
     reset
 ) where
 
 import qualified Data.Vector.Unboxed.Mutable as UMV
+import qualified Data.Vector.Unboxed as UV
 import Data.Word
 
 type RAM = UMV.IOVector Word8
@@ -35,4 +37,7 @@ loadList ram offset list = do
 reset :: RAM -> IO ()
 reset ram = do mapM_ (\idx -> UMV.write ram idx 0) [0.. ((fromIntegral . UMV.length $ ram) - 1)]
 
-
+toList :: RAM -> IO [Word8]
+toList ram = do
+   fram <- UV.freeze ram 
+   return $ UV.toList fram

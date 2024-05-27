@@ -32,14 +32,14 @@ class (Monad m) => PBus m a where
     pWriteByte :: Word16 -> Word8 -> a -> m a
     pReadByte :: Word16 -> a -> m (a, Word8)
     pPeek :: Word16 -> a -> m Word8
-    pSetPixel :: (Word8, Word8) -> Word8 -> a -> m a
+    pSetPixel :: (Word16, Word16) -> Word8 -> a -> m a
     pDebug :: String -> a -> m a
 
 class PPBus a where
     ppWriteByte :: Word16 -> Word8 -> a -> a
     ppReadByte :: Word16 -> a -> (a, Word8)
     ppPeek :: Word16 -> a -> Word8
-    ppSetPixel :: (Word8, Word8) -> Word8 -> a -> a
+    ppSetPixel :: (Word16, Word16) -> Word8 -> a -> a
     ppDebug :: String -> a -> a
 
 instance (PPBus a) => PBus Identity a where
