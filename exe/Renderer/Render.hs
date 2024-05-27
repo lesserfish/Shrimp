@@ -53,6 +53,6 @@ render = do
     SDL.clear renderer
     SDL.copy renderer (rtCPUStatus rctx) Nothing (windowSegment (600, 0) (250, 300))
     SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 250) (300, 350))
-    SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600))
-    --SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (0, 0) (600, 600))
+    --SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600))
+    SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (0, 0) (600, 600))
     SDL.present renderer
