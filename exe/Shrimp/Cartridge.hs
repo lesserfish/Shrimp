@@ -3,6 +3,7 @@ module Shrimp.Cartridge (
     emptyCartridge,
     Cartridge(..),
     CartridgeIO,
+    CartridgeST,
     fromCartData,
     fromCartDataIO,
     loadCartridgeIO,
@@ -35,6 +36,7 @@ data Cartridge m = Cartridge
     }
 
 type CartridgeIO = Cartridge M.RealWorld
+type CartridgeST s = Cartridge s
 
 emptyCartridge :: (M.PrimMonad m) => m ( Cartridge (M.PrimState m))
 emptyCartridge = do

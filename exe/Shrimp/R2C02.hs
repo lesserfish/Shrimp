@@ -419,7 +419,6 @@ cpuRead addr
 
 readStatus :: (PBus m a) => StateT (R2C02, a) m Word8
 readStatus = do
-    setSTATUSFlag S_VERTICAL_BLANK True
     buf <- getDataBuffer
     status <- getReg PPUSTATUS :: (PBus m a) => StateT (R2C02, a) m Word8
     let byte = (status .&. 0xE0) .|. (buf .&. 0x1F)

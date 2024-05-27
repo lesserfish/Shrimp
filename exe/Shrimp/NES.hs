@@ -206,7 +206,7 @@ tick = do
     nes <- get
     nes <- get
     tickCPU
-    --tickPPU
+    tickPPU
     updateClock 1
 
 reset :: StateT NES IO ()
@@ -214,7 +214,7 @@ reset = do
     nes <- get
     (cpu', _) <- liftIO $ execStateT CPU.reset (cpu nes, nes)
     (ppu', _) <- liftIO $ execStateT PPU.reset (ppu nes, nes)
-    --cart' <- liftIO $ Cart.reset $ cartridge nes
+    --cart' <- liftIO $ Cart.reset $ cartridge nes -- TODO: Implement cartridge resetting. Probably just run a fromCartDataIO.
     liftIO $ Memory.resetIO (cpuRAM nes)
     liftIO $ Memory.resetIO (nametableRAM nes)
     liftIO $ Memory.resetIO (paletteRAM nes)
