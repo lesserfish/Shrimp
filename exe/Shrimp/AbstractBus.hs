@@ -34,6 +34,7 @@ class (Monad m) => PBus m a where
     pPeek :: Word16 -> a -> m Word8
     pSetPixel :: (Word16, Word16) -> Word8 -> a -> m a
     pDebug :: String -> a -> m a
+    pTriggerNMI :: a -> m a
 
 class PPBus a where
     ppWriteByte :: Word16 -> Word8 -> a -> a
@@ -41,6 +42,8 @@ class PPBus a where
     ppPeek :: Word16 -> a -> Word8
     ppSetPixel :: (Word16, Word16) -> Word8 -> a -> a
     ppDebug :: String -> a -> a
+    ppTriggerNMI :: a -> a
+
 
 instance (PPBus a) => PBus Identity a where
     pWriteByte addr content bus = Identity $ ppWriteByte addr content bus
@@ -48,3 +51,4 @@ instance (PPBus a) => PBus Identity a where
     pPeek addr bus = Identity $ ppPeek addr bus
     pSetPixel pos col bus = Identity $ ppSetPixel pos col bus
     pDebug string a = Identity $ ppDebug string a
+    pTriggerNMI a = Identity $ ppTriggerNMI a

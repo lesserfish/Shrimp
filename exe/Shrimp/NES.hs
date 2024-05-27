@@ -29,6 +29,10 @@ data NES = NES
     , nDisplay :: !Display.Display
     }
 
+instance Show NES where
+    show nes = "Clock: " ++ show (nClock nes)
+            ++ "\nCPU: " ++ show (cpu nes)
+
 -- Helper functions
 swap :: (a, b) -> (b, a)
 swap (x, y) = (y, x)
@@ -146,6 +150,9 @@ ppuSetPixel :: (Word16, Word16) -> Word8 -> StateT NES IO ()
 ppuSetPixel addr col = do
     display <- nDisplay <$> get
     liftIO $ Display.setPixel display addr col
+
+ppuTriggerNMI :: StateT NES IO ()
+ppuTriggerNMI = (getCPU' >>= (liftIO . execStateT CPU.iNMI) >>= flattenCPU)
     
 instance PBus IO NES where
     pReadByte addr nes
@@ -160,6 +167,7 @@ instance PBus IO NES where
         | otherwise = return nes -- TODO: Log error
     pPeek addr nes = snd <$> pReadByte addr nes
     pSetPixel addr col nes = exec (ppuSetPixel addr col) nes
+    pTriggerNMI nes = exec ppuTriggerNMI nes
     pDebug log nes = do
         liftIO $ putStrLn log
         return nes
@@ -188,26 +196,18 @@ updateClock :: Int -> StateT NES IO ()
 updateClock offset = modify(\nes -> nes{nClock = (nClock nes) + offset})
 
 tickCPU :: StateT NES IO ()
-tickCPU = do
-    nes <- get
-    if (nClock nes) `mod` 3 == 0 -- The CPU clock is ~ 3x slowers than the PPU clock
-        then do
-            let mos6502 = cpu nes
-            (liftIO $ execStateT CPU.tick (mos6502, nes)) >>= flattenCPU
-        else put nes
+tickCPU = getCPU' >>= (liftIO . (execStateT CPU.tick)) >>= flattenCPU
 
 tickPPU :: StateT NES IO ()
-tickPPU = do
-    nes <- get
-    let r2c02 = ppu nes
-    (liftIO $ execStateT PPU.tick (r2c02, nes)) >>= flattenPPU
+tickPPU = getPPU' >>= (liftIO . (execStateT PPU.tick)) >>= flattenPPU
 
 tick :: StateT NES IO ()
 tick = do
     tickCPU
     tickPPU
-    postTick
-    updateClock 1
+    tickPPU
+    tickPPU
+    updateClock 3
 
 getCPU :: StateT NES IO CPU.MOS6502
 getCPU = cpu <$> get
@@ -238,13 +238,6 @@ fetchPPUComplete = do
 
 setPPUComplete :: Bool -> StateT NES IO ()
 setPPUComplete b = modify (\nes -> nes{context = (context nes){nPPUComplete = b}})
-
-postTick :: StateT NES IO ()
-postTick = do
-    getPPU' >>= (liftIO . runStateT PPU.fetchComplete) >>= flattenPPU' >>= setPPUComplete
-    cpuc <- getCPU' >>= (liftIO . runStateT CPU.fetchComplete) >>= flattenCPU' >>= setCPUComplete
-    nmi  <- getPPU' >>= (liftIO . runStateT PPU.fetchNMI) >>= flattenPPU'
-    when nmi (getCPU' >>= (liftIO . execStateT CPU.iNMI) >>= flattenCPU)
 
 reset :: StateT NES IO ()
 reset = do

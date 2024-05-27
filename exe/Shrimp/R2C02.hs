@@ -7,13 +7,11 @@ module Shrimp.R2C02 (
     r2c02,
     mDispatcher,
     tick,
-    setNMI,
     reset,
     cpuRead,
     cpuWrite,
     nametableBase,
     fetchComplete,
-    fetchNMI
 ) where
 
 import Control.Monad (when)
@@ -24,10 +22,6 @@ import Shrimp.AbstractBus
 import Shrimp.Cartridge (Mirroring(..))
 import qualified Shrimp.Memory as Memory
 
-
--- REMOVE
-lcg a c m seed = iterate (\x -> (a * x + c) `mod` m) seed
--- END
 
 -- Registers
 
@@ -410,6 +404,12 @@ writeByte addr byte = do
     bus' <- lift $ pWriteByte addr byte bus
     put (ppu, bus')
 
+triggerNMI :: (PBus m a) => StateT (R2C02, a) m ()
+triggerNMI = do
+    (ppu, bus) <- get
+    bus' <- lift $ pTriggerNMI bus
+    put (ppu, bus')
+
 debug :: (PBus m a) => String -> StateT (R2C02, a) m ()
 debug str = do
     (ppu, bus) <- get
@@ -608,16 +608,6 @@ incCycle = do
 handleVisibleScanline :: (PBus m a) => StateT (R2C02, a) m ()
 handleVisibleScanline = return ()
 
-setNMI :: (PBus m a) => Bool -> StateT (R2C02, a) m ()
-setNMI b = modifyFst (\ppu -> ppu{context = (context ppu){ppuNMI = b}})
-
-fetchNMI :: (PBus m a) => StateT (R2C02, a) m Bool
-fetchNMI = do
-    (r2c02, _) <- get
-    let nmi = ppuNMI . context $ r2c02
-    setNMI False
-    return nmi
-
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
     scanline <- getScanline
@@ -625,23 +615,14 @@ handleEndOfFrame = do
     enableNMI <- getCTRLFlag C_ENABLE_NMI
     when (scanline == 241 && cycle == 1) (do
         setSTATUSFlag S_VERTICAL_BLANK True
-        when enableNMI (setNMI True)
+        when enableNMI triggerNMI
         )
 
 handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
 handleComposition = return ()
 
 renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
-renderPixel = do 
-    (ppu, _) <- get
-    scanline <- getScanline
-    cycle <- getCycle
-    when (scanline >= 0 && scanline < 240 && cycle >= 0 && cycle < 256) (do
-        let seed = cycle * scanline :: Int
-        let rn = foldl (+) 0 (take 6 $ lcg seed 16278361 (2^31) 24) :: Int
-        let c = if (mod rn 10) > 5 then 0 else 1 :: Word8 
-        setPixel (fromIntegral cycle, fromIntegral scanline) c
-        )
+renderPixel = return ()
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
