@@ -2,11 +2,10 @@ module Shrimp.Cartridge (
     CartData(..),
     emptyCartridge,
     Cartridge(..),
-    CartridgeIO,
-    CartridgeST,
+    Cartridge,
     fromCartData,
     fromCartDataIO,
-    loadCartridgeIO,
+    loadCartridge,
     Mirroring(..),
     Header(..),
     cpuRead,
@@ -18,7 +17,6 @@ module Shrimp.Cartridge (
     ppuWrite,
     ppuWriteIO,
     reset,
-    resetIO
 ) where
 
 import Data.Word
@@ -28,17 +26,14 @@ import qualified Shrimp.Memory as M
 import qualified Shrimp.Mapper.Mapper as Mapper
 import qualified Shrimp.Mapper.Mapper0 as Mapper0
 
-data Cartridge m = Cartridge
+data Cartridge = Cartridge
     { cartData :: CartData
-    , prgData :: M.RAM m
-    , chrData :: M.RAM m
+    , prgData :: M.IORAM
+    , chrData :: M.IORAM
     , mapper :: Mapper.Mapper
     }
 
-type CartridgeIO = Cartridge M.RealWorld
-type CartridgeST s = Cartridge s
-
-emptyCartridge :: (M.PrimMonad m) => m ( Cartridge (M.PrimState m))
+emptyCartridge ::  IO Cartridge
 emptyCartridge = do
     noram <- M.noRAM
     let nomapper = Mapper.Mapper (Mapper0.Mapper0 0 0)
@@ -49,7 +44,7 @@ emptyCartridge = do
                 , mapper = nomapper}
     return cart
 
-fromCartData :: (M.PrimMonad m) => CartData -> m ( Cartridge (M.PrimState m))
+fromCartData ::  CartData -> IO ( Cartridge )
 fromCartData cartdata = do
     let prgsize = 0x4000 * (fromIntegral . hPrgSize . cHeader $ cartdata) :: Int
     let chrsize = 0x2000 * (fromIntegral . hChrSize . cHeader $ cartdata) :: Int
@@ -65,61 +60,59 @@ fromCartData cartdata = do
                 , mapper = cmapper}
     return cart
 
-fromCartDataIO :: CartData -> IO CartridgeIO
+fromCartDataIO :: CartData -> IO Cartridge
 fromCartDataIO cart = fromCartData cart
 
-loadCartridgeIO :: FilePath -> IO CartridgeIO
-loadCartridgeIO fp = do
+loadCartridge :: FilePath -> IO Cartridge
+loadCartridge fp = do
     cartdata <- CL.loadCartData fp
     fromCartDataIO cartdata
 
 -- CPU
 
-cpuRead :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> m (Cartridge (M.PrimState m), Word8)
+cpuRead ::  Cartridge  -> Word16 -> IO (Cartridge, Word8)
 cpuRead cart addr = do
     let (mapper', addr') = Mapper.cpuRMap (mapper cart) addr
     byte <- M.readByte (prgData cart) addr'
     let cart' = cart{mapper = mapper'}
     return (cart', byte)
 
-cpuReadIO :: CartridgeIO -> Word16 -> IO (CartridgeIO, Word8)
+cpuReadIO :: Cartridge -> Word16 -> IO (Cartridge, Word8)
 cpuReadIO = cpuRead
 
-cpuWrite :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> Word8 -> m (Cartridge (M.PrimState m))
+cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO (Cartridge)
 cpuWrite cart addr byte = do
     let (mapper', addr') = Mapper.cpuWMap (mapper cart) addr
     M.writeByte (prgData cart) addr' byte
     let cart' = cart{mapper = mapper'}
     return cart'
 
-cpuWriteIO :: CartridgeIO -> Word16 -> Word8 -> IO CartridgeIO
+cpuWriteIO :: Cartridge -> Word16 -> Word8 -> IO Cartridge
 cpuWriteIO = cpuWrite
 
 -- PPU
 
-ppuRead :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> m (Cartridge (M.PrimState m), Word8)
+ppuRead ::  Cartridge  -> Word16 -> IO (Cartridge, Word8)
 ppuRead cart addr = do
     let (mapper', addr') = Mapper.ppuRMap (mapper cart) addr
     byte <- M.readByte (chrData cart) addr'
     let cart' = cart{mapper = mapper'}
     return (cart', byte)
 
-ppuReadIO :: CartridgeIO -> Word16 -> IO (CartridgeIO, Word8)
+ppuReadIO :: Cartridge -> Word16 -> IO (Cartridge, Word8)
 ppuReadIO = ppuRead
 
-ppuWrite :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> Word16 -> Word8 -> m (Cartridge (M.PrimState m))
+ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO (Cartridge)
 ppuWrite cart addr byte = do
     let (mapper', addr') = Mapper.ppuWMap (mapper cart) addr
     M.writeByte (chrData cart) addr' byte
     let cart' = cart{mapper = mapper'}
     return cart'
 
-ppuWriteIO :: CartridgeIO -> Word16 -> Word8 -> IO CartridgeIO
+ppuWriteIO :: Cartridge -> Word16 -> Word8 -> IO Cartridge
 ppuWriteIO = ppuWrite
 
 
-reset :: (M.PrimMonad m) => Cartridge (M.PrimState m) -> m (Cartridge (M.PrimState m))
+reset ::  Cartridge  -> IO (Cartridge)
 reset cart = undefined -- TODO
 
-resetIO :: CartridgeIO -> IO CartridgeIO
-resetIO = reset

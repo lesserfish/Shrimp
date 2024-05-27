@@ -16,7 +16,7 @@ data NESContext = NESContext
 data NES = NES
     { cpu :: !CPU.MOS6502
     , ppu :: !PPU.R2C02
-    , cartridge :: !Cart.CartridgeIO
+    , cartridge :: !Cart.Cartridge
     , cpuRAM :: !Memory.IORAM
     , nametableRAM :: !Memory.IORAM
     , paletteRAM :: !Memory.IORAM
@@ -247,7 +247,7 @@ empty = do
 
 loadNES :: FilePath -> IO NES
 loadNES fp = do
-    cart <- Cart.loadCartridgeIO fp
+    cart <- Cart.loadCartridge fp
     emptynes <- empty
     let nes' = emptynes{cartridge = cart}
     nes <- execStateT reset nes'
