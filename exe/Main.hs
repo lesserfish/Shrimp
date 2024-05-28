@@ -22,4 +22,4 @@ emuMain = do
     quitSDL $ rctx
 
 main :: IO ()
-main = emuMain
+main = demoMain
