@@ -21,6 +21,8 @@ import Data.Word
 import Shrimp.AbstractBus
 import Shrimp.Cartridge (Mirroring(..))
 import qualified Shrimp.Memory as Memory
+import SDL.Raw (getCurrentAudioDriver)
+import Control.Exception (getMaskingState)
 
 
 -- Registers
@@ -336,7 +338,69 @@ data Context = Context
     , ppuScanline :: Int
     , ppuCycle :: Int
     , complete :: Bool
+    , shifterPatternLo :: Word16
+    , shifterPatternHi :: Word16
+    , shifterAttribLo :: Word16
+    , shifterAttribHi :: Word16
+    , nextTileLsb :: Word16
+    , nextTileMsb :: Word16
+    , nextTileID :: Word16
+    , nextTileAttrib :: Word16
     }
+
+getShifterPatternLo :: (PBus m a) => StateT (R2C02, a) m Word16
+getShifterPatternLo = shifterPatternLo . context . fst <$> get
+
+getShifterPatternHi :: (PBus m a) => StateT (R2C02, a) m Word16
+getShifterPatternHi = shifterPatternHi . context . fst <$> get
+
+getShifterAttribLo :: (PBus m a) => StateT (R2C02, a) m Word16
+getShifterAttribLo = shifterAttribLo . context . fst <$> get
+
+getShifterAttribHi :: (PBus m a) => StateT (R2C02, a) m Word16
+getShifterAttribHi = shifterPatternHi . context . fst <$> get
+
+
+setShifterPatternLo :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setShifterPatternLo x = modifyFst(\ppu -> ppu{context = (context ppu){shifterPatternLo = x}})
+
+setShifterPatternHi :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setShifterPatternHi x = modifyFst(\ppu -> ppu{context = (context ppu){shifterPatternHi = x}})
+
+setShifterAttribLo :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setShifterAttribLo x = modifyFst(\ppu -> ppu{context = (context ppu){shifterAttribLo = x}})
+
+setShifterAttribHi :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setShifterAttribHi x = modifyFst(\ppu -> ppu{context = (context ppu){shifterAttribHi = x}})
+
+
+getNextTileLsb :: (PBus m a) => StateT (R2C02, a) m Word16
+getNextTileLsb = nextTileLsb . context . fst <$> get
+
+getNextTileMsb :: (PBus m a) => StateT (R2C02, a) m Word16
+getNextTileMsb = nextTileMsb . context . fst <$> get
+
+getNextTileID :: (PBus m a) => StateT (R2C02, a) m Word16
+getNextTileID = nextTileID . context . fst <$> get
+
+getNextTileAttrib :: (PBus m a) => StateT (R2C02, a) m Word16
+getNextTileAttrib = nextTileAttrib . context . fst <$> get
+
+
+
+setNextTileLsb :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setNextTileLsb x = modifyFst(\ppu -> ppu{context = (context ppu){nextTileLsb = x}})
+
+setNextTileMsb :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setNextTileMsb x = modifyFst(\ppu -> ppu{context = (context ppu){nextTileMsb = x}})
+
+setNextTileID :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setNextTileID x = modifyFst(\ppu -> ppu{context = (context ppu){nextTileID = x}})
+
+setNextTileAttrib :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
+setNextTileAttrib x = modifyFst(\ppu -> ppu{context = (context ppu){nextTileAttrib = x}})
+
+
 
 -- R2C02
 data R2C02 = R2C02
@@ -359,7 +423,16 @@ reset = do
     let ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False}
+    , complete = False
+    , shifterPatternHi = 0
+    , shifterPatternLo = 0
+    , shifterAttribLo = 0
+    , shifterAttribHi = 0
+    , nextTileAttrib = 0
+    , nextTileID = 0
+    , nextTileLsb = 0
+    , nextTileMsb = 0}
+
     let r2c02' = r2c02 {context = ctx, registers = reg}
     put (r2c02', bus)
 
@@ -382,7 +455,15 @@ r2c02 =
     ctx = Context {ppuNMI = False
     , ppuScanline = -1
     , ppuCycle = 0
-    , complete = False}
+    , complete = False
+    , shifterPatternHi = 0
+    , shifterPatternLo = 0
+    , shifterAttribHi = 0
+    , shifterAttribLo = 0    
+    , nextTileAttrib = 0
+    , nextTileID = 0
+    , nextTileLsb = 0
+    , nextTileMsb = 0}
 
 
 readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -514,13 +595,17 @@ writeData byte = do
 
 incCoarseX :: (PBus m a) => StateT (R2C02, a) m ()
 incCoarseX = do
-    coarseX <- getVRAMData L_COARSE_X
-    if coarseX < 31
-        then setVRAMData L_COARSE_X (coarseX + 1)
-        else do
-            setVRAMData L_COARSE_X 0
-            ntx <- getVRAMBit L_NAMETABLE_X
-            setVRAMBit L_NAMETABLE_X (not ntx)
+    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
+    fsFlag <- getMASKFlag M_RENDER_SPRITES 
+
+    when (rbgFlag || fsFlag) (do
+        coarseX <- getVRAMData L_COARSE_X
+        if coarseX < 31
+            then setVRAMData L_COARSE_X (coarseX + 1)
+            else do
+                setVRAMData L_COARSE_X 0
+                ntx <- getVRAMBit L_NAMETABLE_X
+                setVRAMBit L_NAMETABLE_X (not ntx))
 
 incCoarseY :: (PBus m a) => StateT (R2C02, a) m ()
 incCoarseY = do
@@ -539,12 +624,16 @@ incCoarseY = do
 
 incFineY :: (PBus m a) => StateT (R2C02, a) m ()
 incFineY = do
-    fineY <- getVRAMData L_FINE_Y
-    if fineY < 7
-        then setVRAMData L_FINE_Y (fineY + 1)
-        else do
-            setVRAMData L_FINE_Y 0
-            incCoarseY
+    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
+    fsFlag <- getMASKFlag M_RENDER_SPRITES 
+    when (rbgFlag || fsFlag) (do
+
+        fineY <- getVRAMData L_FINE_Y
+        if fineY < 7
+            then setVRAMData L_FINE_Y (fineY + 1)
+            else do
+                setVRAMData L_FINE_Y 0
+                incCoarseY)
 
 nametableBase :: Mirroring -> Word16 -> Word16
 nametableBase Horizontal addr
@@ -605,8 +694,92 @@ incCycle = do
     else do
         setCycle (cycle + 1)
 
+updateShifters :: (PBus m a) => StateT (R2C02, a) m()
+updateShifters = do
+    (ppu, bus) <- get
+    let ctx = context ppu
+    let shifterAttribHi'  = shiftL (shifterAttribHi  ctx) 1
+    let shifterAttribLo'  = shiftL (shifterAttribLo  ctx) 1
+    let shifterPatternHi' = shiftL (shifterPatternHi ctx) 1
+    let shifterPatternLo' = shiftL (shifterPatternLo ctx) 1
+    let ctx' = ctx{ shifterAttribHi  = shifterAttribHi'
+                  , shifterAttribLo  = shifterAttribLo'
+                  , shifterPatternHi = shifterPatternHi'
+                  , shifterPatternLo = shifterPatternLo'}
+    put (ppu{context = ctx'}, bus)
+    
+
+fetchNextInfo :: (PBus m a) => Int -> StateT (R2C02, a) m ()
+fetchNextInfo 0 = loadBackgroundShifters >> fetchNextTileID
+fetchNextInfo 2 = fetchNextTileAttrib
+fetchNextInfo 4 = fetchNextTileLsb
+fetchNextInfo 6 = fetchNextTileMsb
+fetchNextInfo 7 = incCoarseX
+fetchNextInfo _ = return ()
+
+loadBackgroundShifters :: (PBus m a) => StateT (R2C02, a) m ()
+loadBackgroundShifters = do
+    cShifterPatternLo  <- getShifterPatternLo
+    cShifterPatternHi  <- getShifterPatternHi
+    cNextTileLsb <- getNextTileLsb
+    cNextTileMsb <- getNextTileMsb
+    setShifterPatternLo (cNextTileLsb .|. (cShifterPatternLo .&. 0xFF00))
+    setShifterPatternHi (cNextTileMsb .|. (cShifterPatternHi .&. 0xFF00))
+
+    cShifterAttribLo  <- getShifterAttribLo
+    cShifterAttribHi  <- getShifterAttribHi
+    cNextTileAttrib <- getNextTileAttrib
+
+    let eLo = if testBit cNextTileAttrib 0 then 0xFF else 0x00
+    let eHi = if testBit cNextTileAttrib 1 then 0xFF else 0x00
+
+    setShifterAttribLo (eLo .|. (cShifterAttribLo .&. 0xFF00))
+    setShifterAttribHi (eHi .|. (cShifterAttribHi .&. 0xFF00))
+
+
+transferX :: (PBus m a) => StateT (R2C02, a) m ()
+transferX = do
+    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
+    fsFlag <- getMASKFlag M_RENDER_SPRITES 
+    when (rbgFlag || fsFlag) (do
+        getVRAMBit L_NAMETABLE_X >>= (setTRAMBit L_NAMETABLE_X)
+        getVRAMData L_COARSE_X   >>= (setTRAMData L_COARSE_X)
+        )
+
+transferY :: (PBus m a) => StateT (R2C02, a) m ()
+transferY = do
+    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
+    fsFlag <- getMASKFlag M_RENDER_SPRITES 
+    when (rbgFlag || fsFlag) (do
+        getVRAMData L_FINE_Y     >>= (setTRAMData L_FINE_Y)
+        getVRAMData L_COARSE_Y   >>= (setTRAMData L_COARSE_Y)
+        getVRAMBit L_NAMETABLE_Y >>= (setTRAMBit L_NAMETABLE_Y)
+        )
+
+fetchNextTileID :: (PBus m a) => StateT (R2C02, a) m ()
+fetchNextTileID = do
+    vram <- getVRAM
+    let addr = 0x2000 .|. (vram .&. 0x0FFF)
+    byte <- readByte addr
+    setNextTileID (fromIntegral byte)
+
+fetchNextTileAttrib :: (PBus m a) => StateT (R2C02, a) m ()
+fetchNextTileAttrib = return () -- NOW!
+fetchNextTileLsb :: (PBus m a) => StateT (R2C02, a) m ()
+fetchNextTileLsb = return () -- NOW!
+fetchNextTileMsb :: (PBus m a) => StateT (R2C02, a) m ()
+fetchNextTileMsb = return () -- NOW!
+
 handleVisibleScanline :: (PBus m a) => StateT (R2C02, a) m ()
-handleVisibleScanline = return ()
+handleVisibleScanline = do
+    scanline <- getScanline
+    cycle <- getCycle
+    when (cycle == (-1) && cycle == 1)  (setSTATUSFlag S_VERTICAL_BLANK False)
+    when (cycle >= 2    && cycle < 258) (fetchNextInfo (mod (cycle - 1) 8))
+    when (cycle >= 321  && cycle < 338) (fetchNextInfo (mod (cycle - 1) 8))
+    when (cycle == 256) incFineY
+    when (cycle == 257) (loadBackgroundShifters >> transferX)
+    when (cycle == 340) fetchNextTileID
 
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
@@ -619,25 +792,35 @@ handleEndOfFrame = do
         )
 
 handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
-handleComposition = return ()
+handleComposition = return () -- NOW!
+
 
 renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
 renderPixel = do
     cycle <- getCycle
     scanline <- getScanline
+    setPixel (fromIntegral cycle, fromIntegral scanline) 0x01 -- NOW!!!!!
 
-    when (cycle >= 0 && cycle < 256 && scanline >= 0 && scanline < 240) (do
-            setPixel (fromIntegral cycle, fromIntegral scanline) 0x01
-        )
+
+renderScanline :: (PBus m a) => StateT (R2C02, a) m ()
+renderScanline = do
+    cycle <- getCycle
+    when (cycle >= 0 && cycle < 256) renderPixel
+
+skipFirstCycle :: (PBus m a) => StateT (R2C02, a) m ()
+skipFirstCycle = do
+    cycle <- getCycle
+    when (cycle == 0) (setCycle 1)
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
     scanline <- getScanline
-    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
+    when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
     when (scanline >= 241  && scanline < 261) handleEndOfFrame
+    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
     when (renderBackground) handleComposition
-    renderPixel
+    when (scanline >= 0 && scanline < 240) renderScanline
     incCycle
 
 tick :: (PBus m a) => StateT (R2C02, a) m ()
