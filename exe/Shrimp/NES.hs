@@ -226,15 +226,11 @@ setCPUComplete b = modify (\nes -> nes{context = (context nes){nCPUComplete = b}
 
 fetchCPUComplete :: StateT NES IO Bool
 fetchCPUComplete = do
-    c <- nCPUComplete . context <$> get
-    setCPUComplete False
-    return c
+    getCPU' >>= (liftIO . runStateT CPU.fetchComplete) >>= flattenCPU'
 
 fetchPPUComplete :: StateT NES IO Bool
 fetchPPUComplete = do
-    c <- nPPUComplete . context <$> get
-    setPPUComplete False
-    return c
+    getPPU' >>= (liftIO . runStateT PPU.fetchComplete) >>= flattenPPU'
 
 setPPUComplete :: Bool -> StateT NES IO ()
 setPPUComplete b = modify (\nes -> nes{context = (context nes){nPPUComplete = b}})

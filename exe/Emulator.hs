@@ -62,7 +62,7 @@ runNES :: StateT EmulatorContext IO ()
 runNES = do
     ectx <- get
     let running = eRunning ectx
-    when running (fullTickNES >> fullTickNES >> fullTickNES >> fullTickNES >> fullTickNES >> do 
+    when running (fullTickNES >> do 
             ready <- frameReady
             when ready (sendInformation CPUCOMPLETE))
 

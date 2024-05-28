@@ -17,11 +17,9 @@ emuMain = do
     pipe <- createPipe nes
     rctx <- initializeRenderer pipe
     ectx <- initializeEmulator pipe
-    _ <- forkIO $ (do
-        execStateT rendererLoop rctx
-        return ())
-    startEmulationLoop ectx
+    _ <- forkIO $ startEmulationLoop ectx
+    execStateT rendererLoop rctx
     quitSDL $ rctx
 
 main :: IO ()
-main = demoMain
+main = emuMain
