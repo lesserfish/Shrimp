@@ -612,9 +612,9 @@ handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
     scanline <- getScanline
     cycle <- getCycle
-    enableNMI <- getCTRLFlag C_ENABLE_NMI
     when (scanline == 241 && cycle == 1) (do
         setSTATUSFlag S_VERTICAL_BLANK True
+        enableNMI <- getCTRLFlag C_ENABLE_NMI
         when enableNMI triggerNMI
         )
 
@@ -622,7 +622,13 @@ handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
 handleComposition = return ()
 
 renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
-renderPixel = return ()
+renderPixel = do
+    cycle <- getCycle
+    scanline <- getScanline
+
+    when (cycle >= 0 && cycle < 256 && scanline >= 0 && scanline < 240) (do
+            setPixel (fromIntegral cycle, fromIntegral scanline) 0x01
+        )
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do

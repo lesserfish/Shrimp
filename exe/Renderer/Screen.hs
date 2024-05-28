@@ -13,11 +13,6 @@ import Data.Word
 import qualified SDL as SDL
 import Shrimp.AbstractBus
 
-    
-toColor :: Word8 -> BS.ByteString
-toColor 0 = BS.pack [255, 255, 255, 255]
-toColor 1 = BS.pack [0, 0, 0, 0]
-toColor _ = error "bullshit"
 
 renderScreen :: SDLContext -> NES -> SDL.Texture -> IO()
 renderScreen ctx nes texture = do

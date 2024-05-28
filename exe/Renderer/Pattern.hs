@@ -43,17 +43,10 @@ getPatternTable pt nes = do
     fscreen <- UV.freeze screen
     return $ UV.toList fscreen
 
-toColor :: Word8 -> [Word8]
-toColor 0 = [255, 255, 255, 255]
-toColor 1 = [2, 255, 255, 255]
-toColor 2 = [255, 2, 255, 255]
-toColor 3 = [255, 255, 2, 255]
-toColor _ = [2, 2, 2, 2]
-
 renderPattern :: SDLContext -> SDL.Texture -> NES -> Int -> IO ()
 renderPattern ctx texture nes pt = do
     table <- getPatternTable pt nes
-    let bd = BS.pack . concat . (fmap toColor) $ table  :: BS.ByteString
+    let bd = BS.concat . (fmap toColor) $ table  :: BS.ByteString
     (targetPtr, pitch) <- SDL.lockTexture texture Nothing 
     BS.useAsCString bd (\ptr -> do
             let sourcePtr = castPtr ptr :: Ptr ()

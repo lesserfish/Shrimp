@@ -13,7 +13,7 @@ import Renderer.CPUInstructions
 
 emuMain :: IO ()
 emuMain = do
-    nes <- loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/Super_mario_brothers.nes"
+    nes <- loadNES "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
     pipe <- createPipe nes
     rctx <- initializeRenderer pipe
     ectx <- initializeEmulator pipe

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Renderer where
 
+import Renderer.Palette
 import Renderer.Screen
 import Renderer.Pattern
 import Renderer.Control
@@ -26,6 +27,7 @@ initializeSDL = do
     window <- SDL.createWindow "Shrimp" SDL.defaultWindow{SDL.windowInitialSize = SDL.V2 900 600}
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
     font <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 15
+    SDL.rendererDrawColor renderer SDL.$= SDL.V4 10 10 10 10
     return $ SDLContext window renderer font
 
 quitSDL :: RenderContext -> IO ()
@@ -40,6 +42,7 @@ initializeRenderer pipe = do
     insttext <- createInstructionTexture ctx
     nttext <- createNametableTexture ctx
     pttext <- createPatternTexture ctx
+    pltext <- createPaletteTexture ctx
     sctext <- createScreenTexture ctx
     now <- getCurrentTime
     return $ RenderContext
@@ -48,6 +51,7 @@ initializeRenderer pipe = do
         , rtCPUInstructions = insttext
         , rtNametable = nttext
         , rtPattern = pttext
+        , rtPalette = pltext
         , rtScreen = sctext
         , rPipe = pipe
         , rExit = False

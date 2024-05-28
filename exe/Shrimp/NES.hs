@@ -126,8 +126,20 @@ ppuReadNT addr = do
     let addr' = baseaddr + (addr .&. 0x03FF)
     liftIO $ Memory.readByte (nametableRAM nes) addr'
 
+ppuReadPL' :: Word16 -> StateT NES IO Word8
+ppuReadPL' 0x04 = ppuReadPL' 0
+ppuReadPL' 0x08 = ppuReadPL' 0
+ppuReadPL' 0x0C = ppuReadPL' 0
+ppuReadPL' 0x10 = ppuReadPL' 0
+ppuReadPL' 0x14 = ppuReadPL' 0
+ppuReadPL' 0x18 = ppuReadPL' 0
+ppuReadPL' 0x1C = ppuReadPL' 0
+ppuReadPL' addr = do
+    nes <- get
+    liftIO $ Memory.readByte (paletteRAM nes) addr
+
 ppuReadPL :: Word16 -> StateT NES IO Word8
-ppuReadPL addr = return 0 -- TODO: Implement Palette RAM support
+ppuReadPL addr = ppuReadPL' (addr .&. 0x1F)
 
 ppuWritePT :: Word16 -> Word8 -> StateT NES IO ()
 ppuWritePT addr byte = do
@@ -143,8 +155,20 @@ ppuWriteNT addr byte = do
     let addr' = baseaddr + (addr .&. 0x03FF)
     liftIO $ Memory.writeByte (nametableRAM nes) addr' byte
 
+ppuWritePL' :: Word16 -> Word8 -> StateT NES IO ()
+ppuWritePL' 0x04 byte = ppuWritePL' 0 byte
+ppuWritePL' 0x08 byte = ppuWritePL' 0 byte
+ppuWritePL' 0x0C byte = ppuWritePL' 0 byte
+ppuWritePL' 0x10 byte = ppuWritePL' 0 byte
+ppuWritePL' 0x14 byte = ppuWritePL' 0 byte
+ppuWritePL' 0x18 byte = ppuWritePL' 0 byte
+ppuWritePL' 0x1C byte = ppuWritePL' 0 byte
+ppuWritePL' addr byte = do
+    nes <- get
+    liftIO $ Memory.writeByte (paletteRAM nes) addr byte
+
 ppuWritePL :: Word16 -> Word8 -> StateT NES IO ()
-ppuWritePL addr byte = return () -- TODO: Implement Palette RAM support
+ppuWritePL addr byte = ppuWritePL' (addr .&. 0x1F) byte
 
 ppuSetPixel :: (Word16, Word16) -> Word8 -> StateT NES IO ()
 ppuSetPixel addr col = do
@@ -260,7 +284,7 @@ empty = do
     nocart <- Cart.emptyCartridge
     cpuram <- Memory.new 0x800 0
     nmtbram <- Memory.new 0x800 0
-    pltram <- Memory.new 0x1F 0
+    pltram <- Memory.new 0x20 0
     display <- Display.newDisplay
     return $ NES
         { cpu = CPU.mos6502

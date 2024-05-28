@@ -67,5 +67,5 @@ createCPUTexture :: SDLContext -> IO SDL.Texture
 createCPUTexture ctx = do
     let renderer = cRenderer ctx
 
-    let size = SDL.V2 250 300
+    let size = SDL.V2 300 200
     SDL.createTexture renderer SDL.RGBA8888 SDL.TextureAccessTarget size
