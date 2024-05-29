@@ -23,6 +23,13 @@ import Shrimp.Cartridge (Mirroring(..))
 import qualified Shrimp.Memory as Memory
 import SDL.Raw (getCurrentAudioDriver)
 import Control.Exception (getMaskingState)
+import Text.Printf
+
+toHex2  :: (Integral a) => a -> String
+toHex2 w = printf "%02X" (fromIntegral w :: Int)
+
+toHex4  :: (Integral a) => a -> String
+toHex4 w = printf "%04X" (fromIntegral w :: Int)
 
 
 -- Registers
@@ -199,11 +206,11 @@ setTRAMData L_COARSE_X val = do
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setTRAMData L_COARSE_Y val = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0xFC1F) + shiftL ((fromIntegral val) .&. 0x1F) 5
+    let loopy' = (loopy .&. 0xFC1F) + (((fromIntegral val) .&. 0x1F) .<<. 5)
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setTRAMData L_FINE_Y val = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0x47FF) + shiftL ((fromIntegral val) .&. 0x7) 12
+    let loopy' = (loopy .&. 0x47FF) + (((fromIntegral val) .&. 0x7) .<<. 12)
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setTRAMData _ _ = error "Incorrect Flag"
 
@@ -229,11 +236,11 @@ setVRAMData L_COARSE_X val = do
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData L_COARSE_Y val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0xfc1f) + shiftL ((fromIntegral val) .&. 0x1F) 5
+    let loopy' = (loopy .&. 0xfc1f) + (((fromIntegral val) .&. 0x1F) .<<. 5)
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData L_FINE_Y val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0x47FF) + shiftL ((fromIntegral val) .&. 0x7) 12
+    let loopy' = (loopy .&. 0x47FF) + (((fromIntegral val) .&. 0x7) .<<. 12)
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData _ _ = error "Incorrect Flag"
 
@@ -299,7 +306,7 @@ setVRAM t = do
     setReg VRAM t :: (PBus m a) => StateT (R2C02, a) m ()
 
 shiftTake :: (Bits a, Integral b, Num a) => Int -> b -> a -> a
-shiftTake s t x = (shiftR x s) .&. (2 ^ t - 1)
+shiftTake s t x = (x .>>. s) .&. (2 ^ t - 1)
 
 b0 x = testBit x 0
 
@@ -346,6 +353,8 @@ data Context = Context
     , nextTileMsb :: Word16
     , nextTileID :: Word16
     , nextTileAttrib :: Word16
+    , bgPixel :: Word8
+    , bgPalette :: Word8
     }
 
 getShifterPatternLo :: (PBus m a) => StateT (R2C02, a) m Word16
@@ -402,6 +411,21 @@ setNextTileAttrib x = modifyFst(\ppu -> ppu{context = (context ppu){nextTileAttr
 
 
 
+getBGPixel :: (PBus m a) => StateT (R2C02, a) m Word8
+getBGPixel = bgPixel . context . fst <$> get
+
+setBGPixel :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+setBGPixel x = modifyFst(\ppu -> ppu{context = (context ppu){bgPixel = x}})
+
+getBGPalette :: (PBus m a) => StateT (R2C02, a) m Word8
+getBGPalette = bgPalette . context . fst <$> get
+
+setBGPalette :: (PBus m a) => Word8 -> StateT (R2C02, a) m ()
+setBGPalette x = modifyFst(\ppu -> ppu{context = (context ppu){bgPalette = x}})
+
+
+
+
 -- R2C02
 data R2C02 = R2C02
     { registers :: Registers
@@ -421,7 +445,7 @@ reset = do
     , ppuDataBuffer = 0
     }
     let ctx = Context {ppuNMI = False
-    , ppuScanline = -1
+    , ppuScanline = 0
     , ppuCycle = 0
     , complete = False
     , shifterPatternHi = 0
@@ -431,7 +455,9 @@ reset = do
     , nextTileAttrib = 0
     , nextTileID = 0
     , nextTileLsb = 0
-    , nextTileMsb = 0}
+    , nextTileMsb = 0
+    , bgPixel = 0
+    , bgPalette = 0}
 
     let r2c02' = r2c02 {context = ctx, registers = reg}
     put (r2c02', bus)
@@ -453,7 +479,7 @@ r2c02 =
     , ppuDataBuffer = 0
     }
     ctx = Context {ppuNMI = False
-    , ppuScanline = -1
+    , ppuScanline = 0
     , ppuCycle = 0
     , complete = False
     , shifterPatternHi = 0
@@ -463,7 +489,9 @@ r2c02 =
     , nextTileAttrib = 0
     , nextTileID = 0
     , nextTileLsb = 0
-    , nextTileMsb = 0}
+    , nextTileMsb = 0
+    , bgPixel = 0
+    , bgPalette = 0}
 
 
 readByte :: (PBus m a) => Word16 -> StateT (R2C02, a) m Word8
@@ -576,7 +604,7 @@ writeAddress byte = do
             setWriteToggle True
             let fullbyte = fromIntegral byte :: Word16
             t <- getTRAM
-            let t' = (shiftL (shiftTake 0 6 fullbyte) 8) .|. (t .&. 0x00FF)
+            let t' = ((shiftTake 0 6 fullbyte) .<<. 8) .|. (t .&. 0x00FF)
             setTRAM t'
         else do
             setWriteToggle False
@@ -635,20 +663,10 @@ incFineY = do
                 setVRAMData L_FINE_Y 0
                 incCoarseY)
 
-nametableBase :: Mirroring -> Word16 -> Word16
-nametableBase Horizontal addr
-    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
-    | (addr >= 0x2400 && addr <= 0x27FF) = 0x400
-    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x000
-    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
-    | otherwise = error "Address out of range"
-nametableBase Vertical addr
-    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
-    | (addr >= 0x2400 && addr <= 0x27FF) = 0x000
-    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
-    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
-    | otherwise = error "Address out of range"
-
+nametableBase :: Bool -> Bool -> Word16
+nametableBase nx ny = x + y where
+    x = if nx then 0x400 else 0
+    y = if ny then 0x800 else 0
 
 -- Tick
 
@@ -698,10 +716,10 @@ updateShifters :: (PBus m a) => StateT (R2C02, a) m()
 updateShifters = do
     (ppu, bus) <- get
     let ctx = context ppu
-    let shifterAttribHi'  = shiftL (shifterAttribHi  ctx) 1
-    let shifterAttribLo'  = shiftL (shifterAttribLo  ctx) 1
-    let shifterPatternHi' = shiftL (shifterPatternHi ctx) 1
-    let shifterPatternLo' = shiftL (shifterPatternLo ctx) 1
+    let shifterAttribHi'  = (shifterAttribHi  ctx) .<<. 1
+    let shifterAttribLo'  = (shifterAttribLo  ctx) .<<. 1
+    let shifterPatternHi' = (shifterPatternHi ctx) .<<. 1
+    let shifterPatternLo' = (shifterPatternLo ctx) .<<. 1
     let ctx' = ctx{ shifterAttribHi  = shifterAttribHi'
                   , shifterAttribLo  = shifterAttribLo'
                   , shifterPatternHi = shifterPatternHi'
@@ -763,12 +781,44 @@ fetchNextTileID = do
     byte <- readByte addr
     setNextTileID (fromIntegral byte)
 
+getAttribInfo :: Word8 -> Word8 -> Word8 -> Word16
+getAttribInfo tx ty byte = fromIntegral output where
+    shiftX = if b1 tx then 0x2 else 0x0
+    shiftY = if b1 ty then 0x4 else 0x0
+    shift = shiftX + shiftY
+    output = (byte .>>. shift) .&. 0x3
+
 fetchNextTileAttrib :: (PBus m a) => StateT (R2C02, a) m ()
-fetchNextTileAttrib = return () -- NOW!
+fetchNextTileAttrib = do
+    nx <- getVRAMBit L_NAMETABLE_X
+    ny <- getVRAMBit L_NAMETABLE_Y
+    tx <- getVRAMData L_COARSE_X
+    ty <- getVRAMData L_COARSE_Y
+    let base = 0x03C0 + (nametableBase nx ny)
+    let offset = fromIntegral $ 8 * (ty .>>. 2) + (tx .>>. 2)
+    let addr = base + offset
+    byte <- readByte addr
+    setNextTileAttrib $ getAttribInfo tx ty byte
+
 fetchNextTileLsb :: (PBus m a) => StateT (R2C02, a) m ()
-fetchNextTileLsb = return () -- NOW!
+fetchNextTileLsb = do
+    ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
+    let base = if ptrn then 0x1000 else 0x0000
+    ntID <- getNextTileID
+    fineY <- fromIntegral <$> (getVRAMData L_FINE_Y)
+    let addr = base + ntID * 16 + fineY
+    byte <- fromIntegral <$> (readByte addr)
+    setNextTileLsb byte
+
 fetchNextTileMsb :: (PBus m a) => StateT (R2C02, a) m ()
-fetchNextTileMsb = return () -- NOW!
+fetchNextTileMsb = do
+    ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
+    let base = if ptrn then 0x1000 else 0x0000
+    ntID <- getNextTileID
+    fineY <- fromIntegral <$> (getVRAMData L_FINE_Y)
+    let addr = base + ntID * 16 + fineY + 8
+    byte <- fromIntegral <$> (readByte addr)
+    setNextTileMsb byte
 
 handleVisibleScanline :: (PBus m a) => StateT (R2C02, a) m ()
 handleVisibleScanline = do
@@ -792,15 +842,45 @@ handleEndOfFrame = do
         )
 
 handleComposition :: (PBus m a) => StateT (R2C02, a) m ()
-handleComposition = return () -- NOW!
+handleComposition = do
+    fineX <- fromIntegral <$> getFineX
+    bgPatternLo <- getShifterPatternLo
+    bgPatternHi <- getShifterPatternHi
+    bgAttribLo <- getShifterAttribLo
+    bgAttribHi <- getShifterAttribHi
 
+    let mux = 0x8000 .>>. fineX
+
+    let px0 = if (bgPatternLo .&. mux) > 0 then 0x1 else 0x0
+    let px1 = if (bgPatternHi .&. mux) > 0 then 0x2 else 0x0
+    let px = px0 + px1
+
+
+    let pl0 = if (bgAttribLo .&. mux) > 0 then 0x1 else 0x0
+    let pl1 = if (bgAttribHi .&. mux) > 0 then 0x2 else 0x0
+    let pl = pl0 + pl1
+
+    setBGPixel px
+    setBGPalette pl
+
+
+fetchColor :: (PBus m a) => StateT (R2C02, a) m Word8
+fetchColor = do
+    pixel <- fromIntegral <$> getBGPixel
+    palette <- fromIntegral <$> getBGPalette
+    debug $ "\tPixel: " ++ show pixel ++ "    Palette: " ++ show palette
+    let offset = 0x3F00
+    let addr = offset + 4 * palette + pixel :: Word16
+    byte <- readByte addr
+    return byte
 
 renderPixel :: (PBus m a) => StateT (R2C02, a) m ()
 renderPixel = do
     cycle <- getCycle
     scanline <- getScanline
-    setPixel (fromIntegral cycle, fromIntegral scanline) 0x01 -- NOW!!!!!
-
+    color <- fetchColor
+    debug $ "\tRendering color: " ++ toHex2 color
+    setPixel (fromIntegral cycle, fromIntegral scanline) color
 
 renderScanline :: (PBus m a) => StateT (R2C02, a) m ()
 renderScanline = do
@@ -812,8 +892,36 @@ skipFirstCycle = do
     cycle <- getCycle
     when (cycle == 0) (setCycle 1)
 
+debugBackground :: (PBus m a) => StateT (R2C02, a) m ()
+debugBackground = do
+    debug $ "Background tick: "
+    cycle <- getCycle
+    scanline <- getScanline
+    debug $ "\tScanline: " ++ show scanline ++ "  Cycle: " ++ show cycle
+    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
+    fsFlag <- getMASKFlag M_RENDER_SPRITES 
+    debug $ "\tRender Background Flag: " ++ show rbgFlag ++ "   Render Sprite flag: " ++ show fsFlag
+    ntID <- getNextTileID
+    debug $ "\tCurrent Tile ID: " ++ show ntID
+    coarseX <- getVRAMData L_COARSE_X
+    coarseY <- getVRAMData L_COARSE_Y
+    fineY <- getVRAMData L_FINE_Y
+    fineX <- getFineX
+    debug $ "\tCoarse X: " ++ show coarseX ++ "    Coarse Y: " ++ show coarseY ++ "    FineX: " ++ show fineX ++ "    FineY: " ++ show fineY
+    bgPatternLo <- getShifterPatternLo
+    bgPatternHi <- getShifterPatternHi
+    bgAttribLo <- getShifterAttribLo
+    bgAttribHi <- getShifterAttribHi
+    debug $ "\tPattern: " ++ toHex2 bgPatternHi ++ toHex2 bgPatternLo
+    debug $ "\tAttribute: " ++ toHex2 bgAttribHi ++ toHex2 bgAttribLo
+    vram <- getVRAM
+    debug $ "\tVRAM: " ++ toHex4 vram
+
+
+
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
+    debugBackground
     scanline <- getScanline
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
@@ -822,6 +930,7 @@ tickBackground = do
     when (renderBackground) handleComposition
     when (scanline >= 0 && scanline < 240) renderScanline
     incCycle
+
 
 tick :: (PBus m a) => StateT (R2C02, a) m ()
 tick = do

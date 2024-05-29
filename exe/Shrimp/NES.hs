@@ -112,6 +112,20 @@ instance CBus IO NES where
 
 -- PPU Interface 
 
+mirrorNametable :: Cart.Mirroring -> Word16 -> Word16
+mirrorNametable Cart.Horizontal addr
+    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
+    | (addr >= 0x2400 && addr <= 0x27FF) = 0x400
+    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x000
+    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
+    | otherwise = error "Address out of range"
+mirrorNametable Cart.Vertical addr
+    | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
+    | (addr >= 0x2400 && addr <= 0x27FF) = 0x000
+    | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
+    | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
+    | otherwise = error "Address out of range"
+
 ppuReadPT :: Word16 -> StateT NES IO Word8
 ppuReadPT addr = do
     nes <- get
@@ -122,7 +136,7 @@ ppuReadNT :: Word16 -> StateT NES IO Word8
 ppuReadNT addr = do
     nes <- get
     let mirroring = Cart.hMirroring . Cart.cHeader . Cart.cartData . cartridge $ nes
-    let baseaddr = PPU.nametableBase mirroring addr
+    let baseaddr = mirrorNametable mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
     liftIO $ Memory.readByte (nametableRAM nes) addr'
 
@@ -151,7 +165,7 @@ ppuWriteNT :: Word16 -> Word8 -> StateT NES IO ()
 ppuWriteNT addr byte = do
     nes <- get
     let mirroring = Cart.hMirroring . Cart.cHeader . Cart.cartData . cartridge $ nes
-    let baseaddr = PPU.nametableBase mirroring addr
+    let baseaddr = mirrorNametable mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
     liftIO $ Memory.writeByte (nametableRAM nes) addr' byte
 

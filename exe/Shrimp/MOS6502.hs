@@ -189,13 +189,13 @@ data ADDR_MODE
     deriving (Show)
 
 joinBytes :: Word8 -> Word8 -> Word16
-joinBytes hb lb = fromIntegral hb `shiftL` 8 .|. fromIntegral lb
+joinBytes hb lb = (fromIntegral hb .<<. 8) .|. fromIntegral lb
 
 splitBytes :: Word16 -> (Word8, Word8)
 splitBytes byte = (hb, lb)
   where
     lb = fromIntegral (0x00FF .&. byte)
-    hb = fromIntegral ((shiftR byte 8) .&. 0x00FF)
+    hb = fromIntegral ((byte .>>. 8) .&. 0x00FF)
 
 b0 x = testBit x 0
 
@@ -233,7 +233,7 @@ encodeBCD :: Word8 -> Word8
 encodeBCD word = result
   where
     lb = word .&. 0x0F
-    hb = (shiftR word 4)
+    hb = (word .>>. 4)
     result = mod (lb + 10 * hb .&. 0xFF) 100
 
 decodeBCD :: Word8 -> Word8
@@ -242,7 +242,7 @@ decodeBCD word = result
     ld = word `mod` 10
     hd = word `div` 10
     lb = ld
-    hb = (shiftL hd 4) .&. 0xF0
+    hb = (hd .<<. 4) .&. 0xF0
     result = lb + hb
 
 getAddr :: (CBus m a) => ADDR_MODE -> StateT (MOS6502, a) m Word16
@@ -967,9 +967,9 @@ opADC addr_mode = do
             let r = (fromIntegral acc .&. 0xF0) + (fromIntegral byte .&. 0xF0) + ln' :: Word16
             setFlag NEGATIVE (b7 r)
             -- setFlag OVERFLOW (not (b7 (iacc `xor` ibyte)) && (b7 (iacc `xor` result)))
-            setFlag OVERFLOW ((shiftR (((r `xor` fromIntegral acc) .&. (r `xor` fromIntegral byte)) .&. 0x80) 1) /= 0)
+            setFlag OVERFLOW (((((r `xor` fromIntegral acc) .&. (r `xor` fromIntegral byte)) .&. 0x80) .>>. 1) /= 0)
             let r' = if r >= 0xA0 then r + 0x60 else r
-            setFlag CARRY (shiftR r' 8 /= 0)
+            setFlag CARRY (r' .>>. 8 /= 0)
             let acc' = fromIntegral r' :: Word8
             setReg ACC acc'
         else do
@@ -1006,7 +1006,7 @@ opASL INDIRECT_Y = error "Operation ASL does not support INDIRECT_Y addressing m
 opASL ACCUMULATOR = do
     old_acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the Accumulator registers prior to changes
     let carry_flag = b7 old_acc -- Carry flag is set to contents of old bit 7
-    mapReg ACC ((\x -> shiftL x 1) :: Word8 -> Word8) -- Shifts byte one bit to the left
+    mapReg ACC ((\x -> x .<<. 1) :: Word8 -> Word8) -- Shifts byte one bit to the left
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8 -- Get the updated Accumulator
     setFlag CARRY carry_flag -- Sets the Carry flag
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1015,7 +1015,7 @@ opASL addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     byte <- readByte addr -- Read byte from the Bus
     let carry_flag = b7 byte -- Carry flag is set to contents of old bit 7
-    let new_byte = shiftL byte 1 :: Word8 -- Perform the L Shift
+    let new_byte = byte .<<. 1 :: Word8 -- Perform the L Shift
     writeByte addr new_byte -- Write new byte to same address
     setFlag CARRY carry_flag -- Sets the Carry flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1556,7 +1556,7 @@ opLSR INDIRECT_Y = error "Operation LSR does not support INDIRECT_Y addressing m
 opLSR ACCUMULATOR = do
     old_acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8
     let carry_flag = b0 old_acc -- Carry flag is set to contents of old bit 0
-    mapReg ACC ((\x -> shiftR x 1) :: Word8 -> Word8)
+    mapReg ACC ((\x -> x .>>. 1) :: Word8 -> Word8)
     acc <- getReg ACC :: (CBus m a1) => StateT (MOS6502, a1) m Word8
     setFlag CARRY carry_flag
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1565,7 +1565,7 @@ opLSR addr_mode = do
     addr <- getAddr addr_mode
     byte <- readByte addr
     let carry_flag = b0 byte -- Carry flag is set to contents of old bit 0
-    let new_byte = shiftR byte 1 :: Word8
+    let new_byte = byte .>>. 1 :: Word8
     writeByte addr new_byte
     setFlag CARRY carry_flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
@@ -1687,7 +1687,7 @@ opROL ACCUMULATOR = do
     carry_flag <- getFlag CARRY
     let new_carry = b7 acc
     let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
-    let acc' = (shiftL acc 1) .|. bit0
+    let acc' = (acc .<<. 1) .|. bit0
     setReg ACC acc'
     setFlag ZERO (acc' == 0)
     setFlag NEGATIVE (b7 acc')
@@ -1698,7 +1698,7 @@ opROL addr_mode = do
     carry_flag <- getFlag CARRY
     let new_carry = b7 byte
     let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
-    let byte' = (shiftL byte 1) .|. bit0
+    let byte' = (byte .<<. 1) .|. bit0
     writeByte addr byte'
     setFlag ZERO (byte' == 0)
     setFlag NEGATIVE (b7 byte')
@@ -1718,7 +1718,7 @@ opROR ACCUMULATOR = do
     carry_flag <- getFlag CARRY
     let new_carry = b0 acc
     let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
-    let acc' = (shiftR acc 1) .|. bit0
+    let acc' = (acc .>>. 1) .|. bit0
     setReg ACC acc'
     setFlag ZERO (acc' == 0)
     setFlag NEGATIVE (b7 acc')
@@ -1729,7 +1729,7 @@ opROR addr_mode = do
     carry_flag <- getFlag CARRY
     let new_carry = b0 byte
     let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
-    let byte' = (shiftR byte 1) .|. bit0
+    let byte' = (byte .>>. 1) .|. bit0
     writeByte addr byte'
     setFlag ZERO (byte' == 0)
     setFlag NEGATIVE (b7 byte')
@@ -1812,7 +1812,7 @@ opSBC addr_mode = do
             let temp165 = if temp164 > 0xff then temp164 - 0x60 else temp164
             let r = fromIntegral temp165 :: Word8
             let ovf = ((decimal_result `xor` acc16) .&. (complement (decimal_result `xor` operand16))) .&. 0x80
-            let ovf2 = shiftR ovf 1
+            let ovf2 = ovf .>>. 1
             setFlag OVERFLOW (ovf2 /= 0)
             setFlag CARRY (not (temp164 > 0xFF))
             setFlag NEGATIVE (b7 decimal_result)
