@@ -46,7 +46,7 @@ renderCPU = do
     liftIO $ updateNametableTexture ctx nes (rtNametable rctx) (rNChoice rctx)
     liftIO $ updateScreenTexture ctx nes (rtScreen rctx)
     liftIO $ updatePaletteTexture ctx nes (rtPalette rctx)
-    --liftIO $ updatePatternTexture ctx nes (rtPattern rctx) (rNChoice rctx)
+    liftIO $ updatePatternTexture ctx nes (rtPattern rctx) (rNChoice rctx)
     put rctx{rUpdateCPU = False}
 
 render :: StateT RenderContext IO ()
@@ -61,7 +61,9 @@ render = do
 
     SDL.copy renderer (rtCPUStatus rctx) Nothing (windowSegment (600, 0) (300, 200))
     SDL.copy renderer (rtPalette rctx) Nothing (windowSegment (630, 210) (300, 64))
-    SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 300) (300, 350))
-    SDL.copy renderer (rtScreen rctx) Nothing (windowSegment (0, 0) (600, 600))
+    --SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 300) (300, 350))
+    SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (600, 300) (300, 350))
+    when (rDisplayMode rctx == DM_SCREEN) (SDL.copy renderer (rtScreen rctx) Nothing (windowSegment (0, 0) (600, 600)))
+    when (rDisplayMode rctx == DM_NAMETABLE) (SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600)))
 
     SDL.present renderer

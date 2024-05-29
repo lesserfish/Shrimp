@@ -78,15 +78,13 @@ getNES = do
 
 modeUp :: StateT RenderContext IO ()
 modeUp = modify (\rctx -> rctx{rDisplayMode = nextMode . rDisplayMode $ rctx}) where
-    nextMode DM_CPUSTATUS = DM_NAMETABLE
-    nextMode DM_NAMETABLE = DM_PATTERNTABLE
-    nextMode DM_PATTERNTABLE = DM_CPUSTATUS
+    nextMode DM_NAMETABLE = DM_SCREEN
+    nextMode DM_SCREEN = DM_NAMETABLE
 
 modeDown :: StateT RenderContext IO ()
 modeDown = modify (\rctx -> rctx{rDisplayMode = prevMode . rDisplayMode $ rctx}) where
-    prevMode DM_NAMETABLE = DM_CPUSTATUS
-    prevMode DM_PATTERNTABLE = DM_NAMETABLE
-    prevMode DM_CPUSTATUS = DM_PATTERNTABLE
+    prevMode DM_NAMETABLE = DM_SCREEN
+    prevMode DM_SCREEN = DM_NAMETABLE
 
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram

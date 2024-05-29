@@ -26,9 +26,10 @@ initializeSDL = do
     Font.initialize
     window <- SDL.createWindow "Shrimp" SDL.defaultWindow{SDL.windowInitialSize = SDL.V2 900 600}
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer{SDL.rendererTargetTexture = True}
-    font <- Font.load "/home/lesserfish/Documents/Files/Roboto-Light.ttf" 15
+    font <- Font.load "/home/lesserfish/Documents/Code/Shrimp/Fonts/SpaceMono-Regular.ttf" 15
+    font2 <- Font.load "/home/lesserfish/Documents/Code/Shrimp/Fonts/SpaceMono-Regular.ttf" 10
     SDL.rendererDrawColor renderer SDL.$= SDL.V4 10 10 10 10
-    return $ SDLContext window renderer font
+    return $ SDLContext window renderer font font2
 
 quitSDL :: RenderContext -> IO ()
 quitSDL ctx = do
@@ -58,7 +59,7 @@ initializeRenderer pipe = do
         , rRunning = False
         , rUpdateCPU = True
         , rLastTime = now
-        , rDisplayMode = DM_CPUSTATUS
+        , rDisplayMode = DM_SCREEN
         , rNChoice = nt1
         , rPChoice = pt1
         }

@@ -10,7 +10,7 @@ data Display = Display
 
 newDisplay :: IO Display
 newDisplay = do
-    buffer <- M.new (256 * 240) 0
+    buffer <- M.new (256 * 240) 0x3F
     return $ Display buffer
 
 
@@ -30,4 +30,4 @@ toByteString' :: Display -> (Word8 -> [BS.ByteString]) -> IO BS.ByteString
 toByteString' d colorMap = (BS.concat . concat . (fmap colorMap)) <$> (toList d)
 
 reset :: Display -> IO ()
-reset d = M.reset (dVideoBuffer d)
+reset d = return () --M.reset (dVideoBuffer d)

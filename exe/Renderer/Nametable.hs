@@ -1,5 +1,6 @@
 module Renderer.Nametable where
 
+import Data.List
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import qualified Data.ByteString as BS
@@ -22,13 +23,18 @@ getNametableTile nes nt (nx, ny) = do
 
 renderNametableLine :: SDLContext -> NES -> Int -> Int -> IO ()
 renderNametableLine ctx nes nt ny = do
-    let renderData = RenderData (cRenderer ctx) (cStatusFont ctx)
+    let renderData = RenderData (cRenderer ctx) (cNametableFont ctx)
+    let col = if mod ny 2 == 0 then white else gray
     tiles <- mapM (\nx -> getNametableTile nes nt (nx, ny)) [0..31] :: IO [Word8]
-    let content = concat . (map toHex2) $ tiles 
-    renderString renderData content (0, ny * 20) white
+    let content = (toHex2 ny) ++ "  " ++ (concat . (intersperse " ") . (map toHex2) $ tiles)
+    renderString renderData content (0, ny * 20 + 20) col
     
 renderNametable :: SDLContext -> NES -> Int -> IO()
 renderNametable ctx nes nt = do
+    let renderData = RenderData (cRenderer ctx) (cNametableFont ctx)
+    let content = "    " ++ (concat . (intersperse " ") .(map toHex2) $ [0..0x1F])
+    renderString renderData content (0, 0) white
+
     mapM_ (renderNametableLine ctx nes nt) [0..29]
 
 updateNametableTexture :: (MonadIO m) => SDLContext -> NES -> SDL.Texture -> NTChoice -> m()

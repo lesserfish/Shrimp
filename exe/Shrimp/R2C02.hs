@@ -210,7 +210,7 @@ setTRAMData L_COARSE_Y val = do
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setTRAMData L_FINE_Y val = do
     loopy <- getReg TRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0x47FF) + (((fromIntegral val) .&. 0x7) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake 0 3 (fromIntegral val) ) .<<. 12)
     setReg TRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setTRAMData _ _ = error "Incorrect Flag"
 
@@ -232,15 +232,15 @@ getVRAMData _ = error "Incorrect Flag"
 setVRAMData :: (PBus m a) => LOOPYFLAG -> Word8 -> StateT (R2C02, a) m ()
 setVRAMData L_COARSE_X val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0xffe0) + ((fromIntegral val) .&. 0x1F)
+    let loopy' = (loopy .&. 0xffe0) + (shiftTake 0 5 (fromIntegral val))
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData L_COARSE_Y val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0xfc1f) + (((fromIntegral val) .&. 0x1F) .<<. 5)
+    let loopy' = (loopy .&. 0xfc1f) + ((shiftTake 0 5 (fromIntegral val)) .<<. 5)
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData L_FINE_Y val = do
     loopy <- getReg VRAM :: (PBus m a) => StateT (R2C02, a) m Word16
-    let loopy' = (loopy .&. 0x47FF) + (((fromIntegral val) .&. 0x7) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake 0 3 (fromIntegral val) ) .<<. 12)
     setReg VRAM loopy' :: (PBus m a) => StateT (R2C02, a) m ()
 setVRAMData _ _ = error "Incorrect Flag"
 
@@ -655,7 +655,6 @@ incFineY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
     when (rbgFlag || fsFlag) (do
-
         fineY <- getVRAMData L_FINE_Y
         if fineY < 7
             then setVRAMData L_FINE_Y (fineY + 1)
@@ -760,8 +759,8 @@ transferX = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
     when (rbgFlag || fsFlag) (do
-        getVRAMBit L_NAMETABLE_X >>= (setTRAMBit L_NAMETABLE_X)
-        getVRAMData L_COARSE_X   >>= (setTRAMData L_COARSE_X)
+        getTRAMBit L_NAMETABLE_X >>= (setVRAMBit L_NAMETABLE_X)
+        getTRAMData L_COARSE_X   >>= (setVRAMData L_COARSE_X)
         )
 
 transferY :: (PBus m a) => StateT (R2C02, a) m ()
@@ -769,17 +768,19 @@ transferY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
     when (rbgFlag || fsFlag) (do
-        getVRAMData L_FINE_Y     >>= (setTRAMData L_FINE_Y)
-        getVRAMData L_COARSE_Y   >>= (setTRAMData L_COARSE_Y)
-        getVRAMBit L_NAMETABLE_Y >>= (setTRAMBit L_NAMETABLE_Y)
+        getTRAMData L_FINE_Y     >>= (setVRAMData L_FINE_Y)
+        getTRAMData L_COARSE_Y   >>= (setVRAMData L_COARSE_Y)
+        getTRAMBit L_NAMETABLE_Y >>= (setVRAMBit L_NAMETABLE_Y)
         )
 
 fetchNextTileID :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileID = do
+    debug $ "\n\n\n\n\nFETCH START\n\n"
     vram <- getVRAM
     let addr = 0x2000 .|. (vram .&. 0x0FFF)
     byte <- readByte addr
     setNextTileID (fromIntegral byte)
+    debug $ "NEXT TILE ID: " ++ toHex2 byte
 
 getAttribInfo :: Word8 -> Word8 -> Word8 -> Word16
 getAttribInfo tx ty byte = fromIntegral output where
@@ -830,6 +831,7 @@ handleVisibleScanline = do
     when (cycle == 256) incFineY
     when (cycle == 257) (loadBackgroundShifters >> transferX)
     when (cycle == 340) fetchNextTileID
+    debugBackground
 
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
@@ -902,12 +904,12 @@ debugBackground = do
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
     debug $ "\tRender Background Flag: " ++ show rbgFlag ++ "   Render Sprite flag: " ++ show fsFlag
     ntID <- getNextTileID
-    debug $ "\tCurrent Tile ID: " ++ show ntID
+    debug $ "\tCurrent Tile ID: " ++ toHex2 ntID
     coarseX <- getVRAMData L_COARSE_X
     coarseY <- getVRAMData L_COARSE_Y
     fineY <- getVRAMData L_FINE_Y
     fineX <- getFineX
-    debug $ "\tCoarse X: " ++ show coarseX ++ "    Coarse Y: " ++ show coarseY ++ "    FineX: " ++ show fineX ++ "    FineY: " ++ show fineY
+    debug $ "\tCoarse X: " ++ toHex2 coarseX ++ "    Coarse Y: " ++ toHex2 coarseY ++ "    FineX: " ++ show fineX ++ "    FineY: " ++ show fineY
     bgPatternLo <- getShifterPatternLo
     bgPatternHi <- getShifterPatternHi
     bgAttribLo <- getShifterAttribLo
@@ -916,12 +918,17 @@ debugBackground = do
     debug $ "\tAttribute: " ++ toHex2 bgAttribHi ++ toHex2 bgAttribLo
     vram <- getVRAM
     debug $ "\tVRAM: " ++ toHex4 vram
+    ntlsb <- getNextTileLsb
+    ntmsb <- getNextTileMsb
+    debug $ "\tNex tile LSB: " ++ show ntlsb++ "   Next Tile Msb: " ++ show ntmsb
+    ntx <- getVRAMBit L_NAMETABLE_X
+    nty <- getVRAMBit L_NAMETABLE_Y
+    debug $ "\tNametable X: " ++ show ntx ++ "   Nametable Y: " ++ show nty
 
 
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
-    debugBackground
     scanline <- getScanline
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline

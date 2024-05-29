@@ -14,6 +14,7 @@ data SDLContext = SDLContext
     { cWindow :: SDL.Window
     , cRenderer :: SDL.Renderer
     , cStatusFont :: Font.Font
+    , cNametableFont :: Font.Font
     }
 
 data RenderData = RenderData
@@ -21,7 +22,7 @@ data RenderData = RenderData
     , rdFont :: Font.Font
     }
 
-data DisplayMode = DM_CPUSTATUS | DM_NAMETABLE | DM_PATTERNTABLE deriving (Show, Eq)
+data DisplayMode = DM_SCREEN | DM_NAMETABLE deriving (Show, Eq)
 
 type NTChoice = Bool
 type PTChoice = Bool
@@ -54,6 +55,8 @@ data RenderContext = RenderContext
 type Color = Font.Color
 black :: Color
 black = SDL.V4 0 0 0 255
+gray :: Color
+gray = SDL.V4 180 180 180 255
 white :: Color
 white = SDL.V4 255 255 255 255
 red :: Color
