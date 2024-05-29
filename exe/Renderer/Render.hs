@@ -61,9 +61,9 @@ render = do
 
     SDL.copy renderer (rtCPUStatus rctx) Nothing (windowSegment (600, 0) (300, 200))
     SDL.copy renderer (rtPalette rctx) Nothing (windowSegment (630, 210) (300, 64))
-    --SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 300) (300, 350))
-    SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (600, 300) (300, 350))
-    when (rDisplayMode rctx == DM_SCREEN) (SDL.copy renderer (rtScreen rctx) Nothing (windowSegment (0, 0) (600, 600)))
-    when (rDisplayMode rctx == DM_NAMETABLE) (SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600)))
+    when (rRDisplayMode rctx == DM_INSTRUCTION) (SDL.copy renderer (rtCPUInstructions rctx) Nothing (windowSegment (600, 300) (300, 350)))
+    when (rRDisplayMode rctx == DM_PATTERN) (SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (600, 300) (300, 350)))
+    when (rLDisplayMode rctx == DM_SCREEN) (SDL.copy renderer (rtScreen rctx) Nothing (windowSegment (0, 0) (600, 600)))
+    when (rLDisplayMode rctx == DM_NAMETABLE) (SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600)))
 
     SDL.present renderer

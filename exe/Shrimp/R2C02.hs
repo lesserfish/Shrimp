@@ -775,12 +775,10 @@ transferY = do
 
 fetchNextTileID :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileID = do
-    debug $ "\n\n\n\n\nFETCH START\n\n"
     vram <- getVRAM
     let addr = 0x2000 .|. (vram .&. 0x0FFF)
     byte <- readByte addr
     setNextTileID (fromIntegral byte)
-    debug $ "NEXT TILE ID: " ++ toHex2 byte
 
 getAttribInfo :: Word8 -> Word8 -> Word8 -> Word16
 getAttribInfo tx ty byte = fromIntegral output where
@@ -804,12 +802,13 @@ fetchNextTileAttrib = do
 fetchNextTileLsb :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileLsb = do
     ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
-    let base = if ptrn then 0x1000 else 0x0000
+    let base = if ptrn then 0x1000 else 0x0000 :: Word16
     ntID <- getNextTileID
     fineY <- fromIntegral <$> (getVRAMData L_FINE_Y)
     let addr = base + ntID * 16 + fineY
     byte <- fromIntegral <$> (readByte addr)
     setNextTileLsb byte
+    -- I think this is working (?). 
 
 fetchNextTileMsb :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileMsb = do
@@ -826,12 +825,12 @@ handleVisibleScanline = do
     scanline <- getScanline
     cycle <- getCycle
     when (cycle == (-1) && cycle == 1)  (setSTATUSFlag S_VERTICAL_BLANK False)
-    when (cycle >= 2    && cycle < 258) (fetchNextInfo (mod (cycle - 1) 8))
-    when (cycle >= 321  && cycle < 338) (fetchNextInfo (mod (cycle - 1) 8))
+    when (cycle >= 2    && cycle < 258) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
+    when (cycle >= 321  && cycle < 338) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
     when (cycle == 256) incFineY
     when (cycle == 257) (loadBackgroundShifters >> transferX)
     when (cycle == 340) fetchNextTileID
-    debugBackground
+    --debugBackground
 
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
@@ -870,7 +869,6 @@ fetchColor :: (PBus m a) => StateT (R2C02, a) m Word8
 fetchColor = do
     pixel <- fromIntegral <$> getBGPixel
     palette <- fromIntegral <$> getBGPalette
-    debug $ "\tPixel: " ++ show pixel ++ "    Palette: " ++ show palette
     let offset = 0x3F00
     let addr = offset + 4 * palette + pixel :: Word16
     byte <- readByte addr
@@ -881,7 +879,6 @@ renderPixel = do
     cycle <- getCycle
     scanline <- getScanline
     color <- fetchColor
-    debug $ "\tRendering color: " ++ toHex2 color
     setPixel (fromIntegral cycle, fromIntegral scanline) color
 
 renderScanline :: (PBus m a) => StateT (R2C02, a) m ()
@@ -924,7 +921,8 @@ debugBackground = do
     ntx <- getVRAMBit L_NAMETABLE_X
     nty <- getVRAMBit L_NAMETABLE_Y
     debug $ "\tNametable X: " ++ show ntx ++ "   Nametable Y: " ++ show nty
-
+    ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
+    debug $ "\tPattern background: " ++ show ptrn
 
 
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()

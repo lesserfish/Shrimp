@@ -59,7 +59,8 @@ initializeRenderer pipe = do
         , rRunning = False
         , rUpdateCPU = True
         , rLastTime = now
-        , rDisplayMode = DM_SCREEN
+        , rLDisplayMode = DM_SCREEN
+        , rRDisplayMode = DM_PATTERN
         , rNChoice = nt1
         , rPChoice = pt1
         }

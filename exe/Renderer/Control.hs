@@ -77,14 +77,28 @@ getNES = do
 
 
 modeUp :: StateT RenderContext IO ()
-modeUp = modify (\rctx -> rctx{rDisplayMode = nextMode . rDisplayMode $ rctx}) where
+modeUp = modify (\rctx -> rctx{rLDisplayMode = nextMode . rLDisplayMode $ rctx}) where
     nextMode DM_NAMETABLE = DM_SCREEN
     nextMode DM_SCREEN = DM_NAMETABLE
+    nextMode _ = DM_NAMETABLE
 
 modeDown :: StateT RenderContext IO ()
-modeDown = modify (\rctx -> rctx{rDisplayMode = prevMode . rDisplayMode $ rctx}) where
+modeDown = modify (\rctx -> rctx{rLDisplayMode = prevMode . rLDisplayMode $ rctx}) where
     prevMode DM_NAMETABLE = DM_SCREEN
     prevMode DM_SCREEN = DM_NAMETABLE
+    prevMode _ = DM_NAMETABLE
+
+modeLeft :: StateT RenderContext IO ()
+modeLeft = modify (\rctx -> rctx{rRDisplayMode = nextMode . rRDisplayMode $ rctx}) where
+    nextMode DM_PATTERN = DM_INSTRUCTION
+    nextMode DM_INSTRUCTION = DM_PATTERN
+    nextMode _ = DM_PATTERN
+
+modeRight :: StateT RenderContext IO ()
+modeRight = modify (\rctx -> rctx{rRDisplayMode = prevMode . rRDisplayMode $ rctx}) where
+    prevMode DM_PATTERN = DM_INSTRUCTION
+    prevMode DM_INSTRUCTION = DM_PATTERN
+    prevMode _ = DM_PATTERN
 
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram
@@ -93,8 +107,8 @@ handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
 handleKeydown SDL.KeycodeRight = modeUp
 handleKeydown SDL.KeycodeLeft = modeDown
---handleKeydown SDL.KeycodeUp = modify (\rctx -> rctx{rNChoice = not . rNChoice $ rctx})
---handleKeydown SDL.KeycodeDown = modify (\rctx -> rctx{rPChoice = not . rPChoice $ rctx})
+handleKeydown SDL.KeycodeUp = modeRight
+handleKeydown SDL.KeycodeDown = modeLeft
 handleKeydown _ = return ()
 
 handleKeyboard :: SDL.KeyboardEventData -> StateT RenderContext IO ()
