@@ -90,15 +90,17 @@ modeDown = modify (\rctx -> rctx{rLDisplayMode = prevMode . rLDisplayMode $ rctx
 
 modeLeft :: StateT RenderContext IO ()
 modeLeft = modify (\rctx -> rctx{rRDisplayMode = nextMode . rRDisplayMode $ rctx}) where
-    nextMode DM_PATTERN = DM_INSTRUCTION
-    nextMode DM_INSTRUCTION = DM_PATTERN
-    nextMode _ = DM_PATTERN
+    nextMode DM_PATTERN_1 = DM_PATTERN_2
+    nextMode DM_PATTERN_2 = DM_INSTRUCTION
+    nextMode DM_INSTRUCTION = DM_PATTERN_1
+    nextMode _ = DM_PATTERN_1
 
 modeRight :: StateT RenderContext IO ()
 modeRight = modify (\rctx -> rctx{rRDisplayMode = prevMode . rRDisplayMode $ rctx}) where
-    prevMode DM_PATTERN = DM_INSTRUCTION
-    prevMode DM_INSTRUCTION = DM_PATTERN
-    prevMode _ = DM_PATTERN
+    prevMode DM_PATTERN_1 = DM_INSTRUCTION
+    prevMode DM_PATTERN_2 = DM_PATTERN_1
+    prevMode DM_INSTRUCTION = DM_PATTERN_2
+    prevMode _ = DM_PATTERN_1
 
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram

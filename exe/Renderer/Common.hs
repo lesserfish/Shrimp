@@ -22,7 +22,7 @@ data RenderData = RenderData
     , rdFont :: Font.Font
     }
 
-data DisplayMode = DM_SCREEN | DM_NAMETABLE | DM_INSTRUCTION | DM_PATTERN deriving (Show, Eq)
+data DisplayMode = DM_SCREEN | DM_NAMETABLE | DM_INSTRUCTION | DM_PATTERN_1 | DM_PATTERN_2 deriving (Show, Eq)
 
 type NTChoice = Bool
 type PTChoice = Bool

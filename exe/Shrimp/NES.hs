@@ -141,6 +141,10 @@ ppuReadNT addr = do
     liftIO $ Memory.readByte (nametableRAM nes) addr'
 
 ppuReadPL' :: Word16 -> StateT NES IO Word8
+ppuReadPL' 0x04 = ppuReadPL' 0x0
+ppuReadPL' 0x08 = ppuReadPL' 0x0
+ppuReadPL' 0x0C = ppuReadPL' 0x0
+
 ppuReadPL' 0x10 = ppuReadPL' 0x0
 ppuReadPL' 0x14 = ppuReadPL' 0x4
 ppuReadPL' 0x18 = ppuReadPL' 0x8
@@ -167,6 +171,10 @@ ppuWriteNT addr byte = do
     liftIO $ Memory.writeByte (nametableRAM nes) addr' byte
 
 ppuWritePL' :: Word16 -> Word8 -> StateT NES IO ()
+ppuWritePL' 0x04 byte = ppuWritePL' 0x00 byte
+ppuWritePL' 0x08 byte = ppuWritePL' 0x00 byte
+ppuWritePL' 0x0C byte = ppuWritePL' 0x00 byte
+
 ppuWritePL' 0x10 byte = ppuWritePL' 0x00 byte
 ppuWritePL' 0x14 byte = ppuWritePL' 0x04 byte
 ppuWritePL' 0x18 byte = ppuWritePL' 0x08 byte
