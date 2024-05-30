@@ -1,0 +1,38 @@
+cabal-version:      2.4
+name:               Criterion
+version:            0.1.0.0
+synopsis:
+
+-- A longer description of the package.
+-- description:
+homepage:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+license:            NONE
+author:             lesserfish
+maintainer:         lesserfish@pm.me
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+executable Criterion
+    main-is: Main.hs
+    other-modules: MOS6502, Utils, R2C02
+    build-depends: base ^>=4.18.0.0,
+                  mtl >= 2.3.1,
+                  bytestring >= 0.11.4.0,
+                  array >= 0.5.5.0,
+                  vector >= 0.13.0.0,
+                  containers >= 0.6.8,
+                  sdl2 >= 2.5.5.0, 
+                  sdl2-ttf >= 2.1.3,
+                  text >= 2.0,
+                  stm >= 2.5.1.0,
+                  time >= 1.12.2,
+                  split >= 0.2.5
+
+    hs-source-dirs:   app
+    default-language: Haskell2010

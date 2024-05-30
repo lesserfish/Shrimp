@@ -19,10 +19,10 @@ new :: Int -> Word8 -> IO RAM
 new size e = UMV.replicate (fromIntegral size) e
 
 readByte :: RAM -> Word16 -> IO Word8
-readByte ram addr = UMV.read ram (fromIntegral addr)
+readByte ram addr = UMV.unsafeRead ram (fromIntegral addr)
 
 writeByte :: RAM -> Word16 -> Word8 -> IO ()
-writeByte ram addr byte = UMV.write ram (fromIntegral addr) byte
+writeByte ram addr byte = UMV.unsafeWrite ram (fromIntegral addr) byte
 
 noRAM :: IO RAM
 noRAM = UMV.new 0
