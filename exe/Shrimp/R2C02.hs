@@ -880,7 +880,7 @@ renderPixel = do
     cycle <- getCycle
     scanline <- getScanline
     color <- fetchColor
-    setPixel (fromIntegral cycle, fromIntegral scanline) color
+    setPixel (fromIntegral cycle - 1, fromIntegral scanline) color
 
 renderScanline :: (PBus m a) => StateT (R2C02, a) m ()
 renderScanline = do
@@ -895,8 +895,6 @@ skipFirstCycle = do
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
     scanline <- getScanline
-    cycle <- getCycle
-    fineY <- getVRAMData L_FINE_Y
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
     when (scanline >= 241  && scanline < 261) handleEndOfFrame
