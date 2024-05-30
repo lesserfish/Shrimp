@@ -2245,12 +2245,17 @@ disassemble addr bus = do
             return (opname ++ " " ++ args ++ (replicate (15 - length args) ' ') ++ show addr_mode, offset + 1)
         Nothing -> return $ ("", 1)
 
+overflows :: Word16 -> Word16 -> Bool
+overflows a b = s < a || s < b where
+    s = a + b
+
 disassembleL :: (CBus m a) => Word16 -> Word16 -> a -> m [(Word16, String)]
 disassembleL start end bus
-    | start > end = return []
+    | start >= end = return []
     | otherwise = do
         (str, offset) <- disassemble start bus
-        rest <- disassembleL (start + offset) end bus
+        let start' = if (overflows start offset) then end else start + offset
+        rest <- disassembleL start' end bus
         return $ [(start, str)] ++ rest
 
 disassembleM :: (CBus m a) => Word16 -> Word16 -> a -> m (Map.Map Word16 String)

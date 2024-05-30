@@ -367,7 +367,7 @@ getShifterAttribLo :: (PBus m a) => StateT (R2C02, a) m Word16
 getShifterAttribLo = shifterAttribLo . context . fst <$> get
 
 getShifterAttribHi :: (PBus m a) => StateT (R2C02, a) m Word16
-getShifterAttribHi = shifterPatternHi . context . fst <$> get
+getShifterAttribHi = shifterAttribHi . context . fst <$> get
 
 
 setShifterPatternLo :: (PBus m a) => Word16 -> StateT (R2C02, a) m ()
@@ -781,12 +781,12 @@ fetchNextTileID = do
     byte <- readByte addr
     setNextTileID (fromIntegral byte)
 
-getAttribInfo :: Word8 -> Word8 -> Word8 -> Word16
+getAttribInfo :: Word16 -> Word16 -> Word8 -> Word16
 getAttribInfo tx ty byte = fromIntegral output where
     shiftX = if b1 tx then 0x2 else 0x0
     shiftY = if b1 ty then 0x4 else 0x0
     shift = shiftX + shiftY
-    output = (byte .>>. shift) .&. 0x3
+    output = (byte .>>. shift) .&. 0x03
 
 fetchNextTileAttrib :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileAttrib = do
@@ -795,7 +795,7 @@ fetchNextTileAttrib = do
     tx <- fromIntegral <$> getVRAMData L_COARSE_X
     ty <- fromIntegral <$> getVRAMData L_COARSE_Y
     let base = 0x23C0 + (nametableBase nx ny) 
-    let offset = fromIntegral $ 8 * (ty .>>. 2) + (tx .>>. 2) :: Word16
+    let offset = 8 * (ty .>>. 2) + (tx .>>. 2) :: Word16
     let addr = base + offset
     byte <- readByte addr
     setNextTileAttrib $ getAttribInfo tx ty byte

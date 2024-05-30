@@ -17,10 +17,10 @@ import qualified SDL as SDL
 
 getPalette :: Word16 -> NES -> IO [Word8]
 getPalette pl nes = do
-    let c0 = 0x3F01 + pl * 0x04 + 0x00
-    let c1 = 0x3F01 + pl * 0x04 + 0x01
-    let c2 = 0x3F01 + pl * 0x04 + 0x02
-    let c3 = 0x3F01 + pl * 0x04 + 0x03
+    let c0 = 0x3F00 + pl * 0x04 + 0x00
+    let c1 = 0x3F00 + pl * 0x04 + 0x01
+    let c2 = 0x3F00 + pl * 0x04 + 0x02
+    let c3 = 0x3F00 + pl * 0x04 + 0x03
     let colors = [c0, c1, c2, c3]
     mapM (\addr -> pPeek addr nes) colors
 

@@ -65,5 +65,4 @@ render = do
     when (rRDisplayMode rctx == DM_PATTERN) (SDL.copy renderer (rtPattern rctx) Nothing (windowSegment (600, 300) (300, 350)))
     when (rLDisplayMode rctx == DM_SCREEN) (SDL.copy renderer (rtScreen rctx) Nothing (windowSegment (0, 0) (600, 600)))
     when (rLDisplayMode rctx == DM_NAMETABLE) (SDL.copy renderer (rtNametable rctx) Nothing (windowSegment (0, 0) (600, 600)))
-
     SDL.present renderer
