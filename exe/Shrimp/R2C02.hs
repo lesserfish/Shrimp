@@ -791,10 +791,10 @@ fetchNextTileAttrib :: (PBus m a) => StateT (R2C02, a) m ()
 fetchNextTileAttrib = do
     nx <- getVRAMBit L_NAMETABLE_X
     ny <- getVRAMBit L_NAMETABLE_Y
-    tx <- getVRAMData L_COARSE_X
-    ty <- getVRAMData L_COARSE_Y
-    let base = 0x03C0 + (nametableBase nx ny)
-    let offset = fromIntegral $ 8 * (ty .>>. 2) + (tx .>>. 2)
+    tx <- fromIntegral <$> getVRAMData L_COARSE_X
+    ty <- fromIntegral <$> getVRAMData L_COARSE_Y
+    let base = 0x23C0 + (nametableBase nx ny) 
+    let offset = fromIntegral $ 8 * (ty .>>. 2) + (tx .>>. 2) :: Word16
     let addr = base + offset
     byte <- readByte addr
     setNextTileAttrib $ getAttribInfo tx ty byte
