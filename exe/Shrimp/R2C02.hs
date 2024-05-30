@@ -638,11 +638,10 @@ incCoarseX = do
 incCoarseY :: (PBus m a) => StateT (R2C02, a) m ()
 incCoarseY = do
     coarseY <- getVRAMData L_COARSE_Y
-    if coarseY == 27
+    if coarseY == 29
         then do
             setVRAMData L_COARSE_Y 0
-            nty <- getVRAMBit L_NAMETABLE_Y
-            setVRAMBit L_NAMETABLE_Y (not nty)
+            (not <$> getVRAMBit L_NAMETABLE_Y) >>= (setVRAMBit L_NAMETABLE_Y)
         else
             if coarseY == 31
                 then do
@@ -655,6 +654,8 @@ incFineY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
     when (rbgFlag || fsFlag) (do
+        cycle <- getCycle
+        scanline <- getScanline
         fineY <- getVRAMData L_FINE_Y
         if fineY < 7
             then setVRAMData L_FINE_Y (fineY + 1)
@@ -830,7 +831,7 @@ handleVisibleScanline = do
     when (cycle == 256) incFineY
     when (cycle == 257) (loadBackgroundShifters >> transferX)
     when (cycle == 340) fetchNextTileID
-    --debugBackground
+    when (scanline == (-1) && cycle == 304) transferY -- TODO: THIS IS NOT ACCURATE. THIS HAPPENS FOR EVERY CYCLE BETWEEN 280 AND 304. BUT I THINK IT SHOULD BE FIEN
 
 handleEndOfFrame :: (PBus m a) => StateT (R2C02, a) m ()
 handleEndOfFrame = do
@@ -891,43 +892,11 @@ skipFirstCycle = do
     cycle <- getCycle
     when (cycle == 0) (setCycle 1)
 
-debugBackground :: (PBus m a) => StateT (R2C02, a) m ()
-debugBackground = do
-    debug $ "Background tick: "
-    cycle <- getCycle
-    scanline <- getScanline
-    debug $ "\tScanline: " ++ show scanline ++ "  Cycle: " ++ show cycle
-    rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
-    fsFlag <- getMASKFlag M_RENDER_SPRITES 
-    debug $ "\tRender Background Flag: " ++ show rbgFlag ++ "   Render Sprite flag: " ++ show fsFlag
-    ntID <- getNextTileID
-    debug $ "\tCurrent Tile ID: " ++ toHex2 ntID
-    coarseX <- getVRAMData L_COARSE_X
-    coarseY <- getVRAMData L_COARSE_Y
-    fineY <- getVRAMData L_FINE_Y
-    fineX <- getFineX
-    debug $ "\tCoarse X: " ++ toHex2 coarseX ++ "    Coarse Y: " ++ toHex2 coarseY ++ "    FineX: " ++ show fineX ++ "    FineY: " ++ show fineY
-    bgPatternLo <- getShifterPatternLo
-    bgPatternHi <- getShifterPatternHi
-    bgAttribLo <- getShifterAttribLo
-    bgAttribHi <- getShifterAttribHi
-    debug $ "\tPattern: " ++ toHex2 bgPatternHi ++ toHex2 bgPatternLo
-    debug $ "\tAttribute: " ++ toHex2 bgAttribHi ++ toHex2 bgAttribLo
-    vram <- getVRAM
-    debug $ "\tVRAM: " ++ toHex4 vram
-    ntlsb <- getNextTileLsb
-    ntmsb <- getNextTileMsb
-    debug $ "\tNex tile LSB: " ++ show ntlsb++ "   Next Tile Msb: " ++ show ntmsb
-    ntx <- getVRAMBit L_NAMETABLE_X
-    nty <- getVRAMBit L_NAMETABLE_Y
-    debug $ "\tNametable X: " ++ show ntx ++ "   Nametable Y: " ++ show nty
-    ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
-    debug $ "\tPattern background: " ++ show ptrn
-
-
 tickBackground :: (PBus m a) => StateT (R2C02, a) m ()
 tickBackground = do
     scanline <- getScanline
+    cycle <- getCycle
+    fineY <- getVRAMData L_FINE_Y
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
     when (scanline >= 241  && scanline < 261) handleEndOfFrame
