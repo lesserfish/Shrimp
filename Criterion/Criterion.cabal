@@ -20,7 +20,7 @@ extra-source-files: CHANGELOG.md
 
 executable Criterion
     main-is: Main.hs
-    other-modules: MOS6502, Utils, R2C02
+    other-modules: MOS6502, Utils, R2C02, Memory, Display, Cartridge, Cartridge.Loader, Mapper.Type, Mapper, Mapper.Mapper0
     build-depends: base ^>=4.18.0.0,
                   mtl >= 2.3.1,
                   bytestring >= 0.11.4.0,
