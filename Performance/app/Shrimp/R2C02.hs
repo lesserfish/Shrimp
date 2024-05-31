@@ -377,11 +377,11 @@ getShifterPatternHi = shifterPatternHi . context <$> get
 
 
 getShifterAttribLo :: StateT R2C02 IO Word16
-getShifterAttribLo = shifterPatternLo . context <$> get
+getShifterAttribLo = shifterAttribLo . context <$> get
 
 
 getShifterAttribHi :: StateT R2C02 IO Word16
-getShifterAttribHi = shifterPatternHi . context <$> get
+getShifterAttribHi = shifterAttribHi . context <$> get
 
 
 getNextTileLsb :: StateT R2C02 IO Word16

@@ -17,9 +17,10 @@ import Control.Monad.State
 
 exitProgram :: StateT RenderContext IO ()
 exitProgram = do
+    liftIO . putStrLn $ "Exiting"
     comm <- getRTE
     liftIO . atomically $ writeTChan comm EXIT
-    (not <$> getRunning) >>= setRunning
+    setExit True
 
 toggleEmulation :: StateT RenderContext IO ()
 toggleEmulation = do
