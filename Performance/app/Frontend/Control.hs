@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Frontend.Control where
+module Frontend.Control (control) where
 
 import Frontend.Common
 import Data.Time.Clock

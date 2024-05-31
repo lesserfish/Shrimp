@@ -1,4 +1,5 @@
 module Main where
+import qualified Launcher
 
 main :: IO()
-main = undefined
+main = Launcher.main

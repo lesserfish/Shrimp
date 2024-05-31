@@ -93,7 +93,7 @@ cpuInterface ppuref ram cart = MOS6502.Interface cReadByte cWriteByte cPeekByte 
         | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl addr byte
         | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart cart addr byte
         | otherwise = return () -- TODO: Log error ?
-    cPeekByte addr = undefined
+    cPeekByte = cReadByte -- TODO: THIS IS WRONG. FIX IT.
 
 
 -- PPU Interface 

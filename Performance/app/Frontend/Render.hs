@@ -1,4 +1,4 @@
-module Frontend.Render where
+module Frontend.Render (render) where
 
 import Foreign.C.Types (CInt)
 import Control.Monad

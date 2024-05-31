@@ -45,7 +45,6 @@ data RenderStatus = RenderStatus
 data RenderTextures = RenderTextures
     { rtCPUStatus :: SDL.Texture
     , rtCPUInstructions :: SDL.Texture
-    , rtNametable :: SDL.Texture
     , rtPattern :: SDL.Texture
     , rtPalette :: SDL.Texture
     , rtDisplay :: SDL.Texture

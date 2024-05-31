@@ -20,7 +20,8 @@ extra-source-files: CHANGELOG.md
 
 executable Criterion
     main-is: Main.hs
-    other-modules: Shrimp.MOS6502, 
+    other-modules: Launcher,
+                   Shrimp.MOS6502, 
                    Shrimp.Utils, 
                    Shrimp.R2C02, 
                    Shrimp.Memory, 
@@ -33,6 +34,7 @@ executable Criterion
                    Shrimp.BUS,
                    Shrimp.NES,
                    Communication,
+                   Frontend.Main,
                    Frontend.Common,
                    Frontend.Control,
                    Frontend.Render,
@@ -40,7 +42,8 @@ executable Criterion
                    Frontend.Renderer.Instructions,
                    Frontend.Renderer.Pattern,
                    Frontend.Renderer.Palette,
-                   Frontend.Renderer.Display
+                   Frontend.Renderer.Display,
+                   Emulator.Main
 
     build-depends: base ^>=4.18.0.0,
                   mtl >= 2.3.1,
