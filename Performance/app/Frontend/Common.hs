@@ -28,7 +28,7 @@ data RenderData = RenderData
     , rdFont :: Font.Font
     }
 
-data DisplayMode = DM_SCREEN 
+data DisplayMode = DM_DISPLAY
                  | DM_NAMETABLE 
                  | DM_INSTRUCTION 
                  | DM_PATTERN_1 
@@ -48,6 +48,7 @@ data RenderTextures = RenderTextures
     , rtPattern :: SDL.Texture
     , rtPalette :: SDL.Texture
     , rtDisplay :: SDL.Texture
+    , rtNametable :: SDL.Texture
     }
 
 data RenderContext = RenderContext

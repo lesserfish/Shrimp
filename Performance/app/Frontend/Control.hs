@@ -70,6 +70,18 @@ modeRight = modify (\rctx -> rctx{rcRDisplayMode = prevMode . rcRDisplayMode $ r
     prevMode DM_INSTRUCTION = DM_PATTERN_2
     prevMode _ = DM_PATTERN_1
 
+modeUp :: StateT RenderContext IO ()
+modeUp = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx}) where
+    prevMode DM_DISPLAY = DM_NAMETABLE
+    prevMode DM_NAMETABLE = DM_DISPLAY
+    prevMode _ = DM_DISPLAY
+
+modeDown :: StateT RenderContext IO ()
+modeDown = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx}) where
+    prevMode DM_DISPLAY = DM_NAMETABLE
+    prevMode DM_NAMETABLE = DM_DISPLAY
+    prevMode _ = DM_DISPLAY
+
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram
 handleKeydown SDL.KeycodeSpace = toggleEmulation
@@ -77,6 +89,8 @@ handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
 handleKeydown SDL.KeycodeRight = modeRight
 handleKeydown SDL.KeycodeLeft = modeLeft
+handleKeydown SDL.KeycodeUp = modeUp
+handleKeydown SDL.KeycodeDown = modeDown
 handleKeydown _ = return ()
 
 handleKeyboard :: SDL.KeyboardEventData -> StateT RenderContext IO ()

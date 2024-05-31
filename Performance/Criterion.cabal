@@ -39,6 +39,7 @@ executable Criterion
                    Frontend.Control,
                    Frontend.Render,
                    Frontend.Renderer.Status,
+                   Frontend.Renderer.Nametable,
                    Frontend.Renderer.Instructions,
                    Frontend.Renderer.Pattern,
                    Frontend.Renderer.Palette,

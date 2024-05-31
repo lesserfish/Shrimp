@@ -15,6 +15,7 @@ import qualified Frontend.Renderer.Instructions as FRInstructions
 import qualified Frontend.Renderer.Palette as FRPalette
 import qualified Frontend.Renderer.Pattern as FRPattern
 import qualified Frontend.Renderer.Status as FRStatus
+import qualified Frontend.Renderer.Nametable as FRNametable
 import Frontend.Control
 import Frontend.Render
 
@@ -42,6 +43,7 @@ initializeTextures ctx = do
    displayTexture <- FRDisplay.new ctx
    paletteTexture <- FRPalette.new ctx
    patternTexture <- FRPattern.new ctx
+   nametableTexture <- FRNametable.new ctx
 
    return $ RenderTextures 
                 { rtCPUStatus = statusTexture
@@ -49,6 +51,7 @@ initializeTextures ctx = do
                 , rtPattern = patternTexture
                 , rtPalette = paletteTexture
                 , rtDisplay = displayTexture
+                , rtNametable = nametableTexture
                 }
 
 
@@ -69,7 +72,7 @@ initializeFrontend pipe = do
                 { rcTextures = textures
                 , rcStatus = rs
                 , rcCommunicationPipe = pipe
-                , rcLDisplayMode = DM_SCREEN
+                , rcLDisplayMode = DM_DISPLAY
                 , rcRDisplayMode = DM_INSTRUCTION
                 , rcSDLContext = ctx
                 }
