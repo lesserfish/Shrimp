@@ -7,10 +7,10 @@ import Mapper.Mapper0
 import Cartridge.Loader
 
 
-chooseMapper :: CartData -> Mapper
+chooseMapper :: CartData -> IO Mapper
 chooseMapper = chooseMapperH . cHeader
 
-chooseMapperH :: Header -> Mapper
+chooseMapperH :: Header -> IO Mapper
 chooseMapperH header
     | (hMapper header) == 0 = (chooseMapper0 header)
     | otherwise = error ("Unsupported Mapper: " ++ show (hMapper header))

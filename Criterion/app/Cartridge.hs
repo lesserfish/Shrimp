@@ -17,7 +17,7 @@ data Cartridge = Cartridge
 emptyCartridge ::  IO Cartridge
 emptyCartridge = do
     noram <- M.noRAM
-    let nomapper = Mapper0.chooseMapper0' (0, 0)
+    nomapper <- Mapper0.chooseMapper0' (0, 0)
     let cart = Cartridge
                 { cartData = CL.emptyCartData
                 , prgData = noram
@@ -33,7 +33,7 @@ fromCartData cartdata = do
     chrram <- M.new chrsize 0
     M.loadList prgram 0 (cPRGData cartdata)
     M.loadList chrram 0 (cCHRData cartdata)
-    let cmapper = Mapper.chooseMapper cartdata
+    cmapper <- Mapper.chooseMapper cartdata
     let cart = Cartridge
                 { cartData = cartdata
                 , prgData = prgram

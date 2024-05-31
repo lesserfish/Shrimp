@@ -32,12 +32,12 @@ mapper0_pw _ addr = return $ addr
 mapper0 :: Mapper0 -> Mapper
 mapper0 m = Mapper (mapper0_cr m) (mapper0_cw m) (mapper0_pr m) (mapper0_pw m)
 
-chooseMapper0 :: Header -> Mapper
-chooseMapper0 header = mapper0 m0 
+chooseMapper0 :: Header -> IO Mapper
+chooseMapper0 header = return $ mapper0 m0 
     where
         m0 = Mapper0{prgBanks0 = (hPrgSize header), chrBanks0 = (hChrSize header)}
 
-chooseMapper0' :: (Word8, Word8) -> Mapper
-chooseMapper0' (prgBanks, chrBanks) = mapper0 m0
+chooseMapper0' :: (Word8, Word8) -> IO Mapper
+chooseMapper0' (prgBanks, chrBanks) = return $ mapper0 m0
     where
         m0 = Mapper0{prgBanks0 = prgBanks, chrBanks0 = chrBanks}
