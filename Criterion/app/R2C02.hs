@@ -10,14 +10,6 @@ import Utils
 
 -- Registers
 
-data REGISTER
-    = PPUCTRL
-    | PPUMASK
-    | PPUSTATUS
-    | FINEX
-    | VRAM
-    | TRAM
-
 data CTRLFLAG
     = C_NAMETABLE_X
     | C_NAMETABLE_Y
@@ -52,9 +44,9 @@ data LOOPYFLAG
 
 data Context = Context
     { ppuNMI :: Bool
+    , complete :: Bool
     , ppuScanline :: Int
     , ppuCycle :: Int
-    , complete :: Bool
     , shifterPatternLo :: Word16
     , shifterPatternHi :: Word16
     , shifterAttribLo :: Word16
@@ -80,8 +72,8 @@ data Registers = Registers
 
 
 data Interface = Interface
-    { iWriteByte :: Word16 -> Word8 -> IO ()
-    , iReadByte :: Word16 -> IO Word8
+    { iReadByte :: Word16 -> IO Word8
+    , iWriteByte :: Word16 -> Word8 -> IO ()
     , iSetPixel :: (Word16, Word16) -> Word8 -> IO ()
     , iTriggerNMI :: IO ()
     , iPeekByte :: Word16 -> IO Word8
@@ -93,6 +85,18 @@ data R2C02 = R2C02
     , interface :: Interface
     }
 
+-- Creation
+
+new :: Interface -> R2C02
+new interface = R2C02 reg ctx interface where
+    reg = Registers 0 0 0 0 0 0 0 False
+    ctx = Context False False 0 0 0 0 0 0 0 0 0 0 0 0
+
+reset :: StateT R2C02 IO ()
+reset = do
+    ppu <- get
+    let ppu' = new (interface ppu)
+    put ppu'
 
 -- Registers Setters / Getters
 

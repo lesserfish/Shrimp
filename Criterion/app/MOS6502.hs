@@ -16,15 +16,6 @@ data Interface = Interface
     , iPeekByte :: Word16 -> IO Word8
     }
 
-data REGISTER
-    = PC
-    | SP
-    | ACC
-    | IDX
-    | IDY
-    | PS
-    deriving (Show)
-
 data Registers = Registers
     { pc :: !Word16
     , sp :: !Word8
@@ -38,14 +29,6 @@ data Context = Context
     { complete :: Bool 
     }
     deriving (Show)
-
-data MOS6502 = MOS6502
-    { registers :: !Registers
-    , clock :: !Int
-    , cycles :: !Int
-    , context :: !Context
-    , interface :: !Interface
-    }
 
 data FLAG
     = CARRY
@@ -73,21 +56,45 @@ data ADDR_MODE
     | INDIRECT_Y
     deriving (Show)
 
+data MOS6502 = MOS6502
+    { registers :: !Registers
+    , clock :: !Int
+    , cycles :: !Int
+    , context :: !Context
+    , interface :: !Interface
+    }
+
+
+-- Creation
+
+
+new :: Interface -> MOS6502
+new interface = MOS6502 reg 0 0 ctx interface where
+    reg = Registers 0 0 0 0 0 0
+    ctx = Context False
+
+-- Setters / Getters
+
 
 mapPC :: (Word16 -> Word16) -> StateT MOS6502 IO ()
 mapPC f = modify (\mos -> mos{registers = (registers mos){pc = f . pc . registers $ mos}})
 
+
 mapSP :: (Word8 -> Word8) -> StateT MOS6502 IO ()
 mapSP f = modify (\mos -> mos{registers = (registers mos){sp = f . sp . registers $ mos}})
+
 
 mapACC :: (Word8 -> Word8) -> StateT MOS6502 IO ()
 mapACC f = modify (\mos -> mos{registers = (registers mos){acc = f . acc . registers $ mos}})
 
+
 mapIDX :: (Word8 -> Word8) -> StateT MOS6502 IO ()
 mapIDX f = modify (\mos -> mos{registers = (registers mos){idx = f . idx . registers $ mos}})
 
+
 mapIDY :: (Word8 -> Word8) -> StateT MOS6502 IO ()
 mapIDY f = modify (\mos -> mos{registers = (registers mos){idy = f . idy . registers $ mos}})
+
 
 mapPS :: (Word8 -> Word8) -> StateT MOS6502 IO ()
 mapPS f = modify (\mos -> mos{registers = (registers mos){ps = f . ps . registers $ mos}})
@@ -97,17 +104,22 @@ mapPS f = modify (\mos -> mos{registers = (registers mos){ps = f . ps . register
 setPC :: Word16 -> StateT MOS6502 IO ()
 setPC v = mapPC (\_ -> v)
 
+
 setSP :: Word8 -> StateT MOS6502 IO ()
 setSP v = mapSP (\_ -> v)
+
 
 setACC :: Word8 -> StateT MOS6502 IO ()
 setACC v = mapACC (\_ -> v)
 
+
 setIDX :: Word8 -> StateT MOS6502 IO ()
 setIDX v = mapIDX (\_ -> v)
 
+
 setIDY :: Word8 -> StateT MOS6502 IO ()
 setIDY v = mapIDY (\_ -> v)
+
 
 setPS :: Word8 -> StateT MOS6502 IO ()
 setPS v = mapPS (\_ -> v)
@@ -117,17 +129,22 @@ setPS v = mapPS (\_ -> v)
 setPCIf :: Bool -> Word16 -> StateT MOS6502 IO ()
 setPCIf condition v = if condition then setPC v else return ()
 
+
 setSPIf :: Bool -> Word8 -> StateT MOS6502 IO ()
 setSPIf condition v = if condition then setSP v else return ()
+
 
 setACCIf :: Bool -> Word8 -> StateT MOS6502 IO ()
 setACCIf condition v = if condition then setACC v else return ()
 
+
 setIDXIf :: Bool -> Word8 -> StateT MOS6502 IO ()
 setIDXIf condition v = if condition then setIDX v else return ()
 
+
 setIDYIf :: Bool -> Word8 -> StateT MOS6502 IO ()
 setIDYIf condition v = if condition then setIDY v else return ()
+
 
 setPSIf :: Bool -> Word8 -> StateT MOS6502 IO ()
 setPSIf condition v = if condition then setPS v else return ()
@@ -137,20 +154,26 @@ setPSIf condition v = if condition then setPS v else return ()
 getPC :: StateT MOS6502 IO Word16 
 getPC = (pc . registers) <$> get
 
+
 getSP :: StateT MOS6502 IO Word8 
 getSP = (sp . registers) <$> get
+
 
 getACC :: StateT MOS6502 IO Word8 
 getACC = (acc . registers) <$> get
 
+
 getIDX :: StateT MOS6502 IO Word8 
 getIDX = (idx . registers) <$> get
+
 
 getIDY :: StateT MOS6502 IO Word8 
 getIDY = (idy . registers) <$> get
 
+
 getPS :: StateT MOS6502 IO Word8 
 getPS = (ps . registers) <$> get
+
 
 getFlag :: FLAG -> StateT MOS6502 IO Bool
 getFlag CARRY             = b0 <$> getPS
@@ -161,6 +184,7 @@ getFlag BREAK_CMD         = b4 <$> getPS
 getFlag OVERFLOW          = b6 <$> getPS
 getFlag NEGATIVE          = b7 <$> getPS
 
+
 setFlag :: FLAG -> Bool -> StateT MOS6502 IO ()
 setFlag CARRY flag             = mapPS (\reg -> if flag then setBit reg 0 else clearBit reg 0)
 setFlag ZERO flag              = mapPS (\reg -> if flag then setBit reg 1 else clearBit reg 1)
@@ -170,8 +194,10 @@ setFlag BREAK_CMD flag         = mapPS (\reg -> if flag then setBit reg 4 else c
 setFlag OVERFLOW flag          = mapPS (\reg -> if flag then setBit reg 6 else clearBit reg 6)
 setFlag NEGATIVE flag          = mapPS (\reg -> if flag then setBit reg 7 else clearBit reg 7)
 
+
 setFlagIf :: Bool -> FLAG -> Bool -> StateT MOS6502 IO ()
 setFlagIf condition flag value = when condition (setFlag flag value)
+
 
 readByte :: Word16 -> StateT MOS6502 IO Word8
 readByte addr = do
@@ -180,13 +206,17 @@ readByte addr = do
     byte <- lift $ read addr
     return byte
 
+
 writeByte :: Word16 -> Word8 -> StateT MOS6502 IO ()
 writeByte addr byte = do
     mos6502 <- get
     let write = iWriteByte . interface $ mos6502
     liftIO $ write addr byte
 
+
+
 -- Addresing Modes
+
 
 getAddr :: ADDR_MODE -> StateT MOS6502 IO Word16
 getAddr IMPLICIT = return 0 -- Implicit does not require getAddr
@@ -283,12 +313,14 @@ getAddr INDIRECT_Y = do
     setPC (cPC + 1)
     return faddr
 
+
 writeStack :: Word8 -> StateT MOS6502 IO ()
 writeStack byte = do
     sp <- getSP
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
     writeByte addr byte -- Write byte to stack
     mapSP (\x -> x - 1) -- Decrement stack pointer
+
 
 readStack :: StateT MOS6502 IO Word8
 readStack = do
@@ -297,23 +329,30 @@ readStack = do
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
     readByte addr -- Read byte
 
+
 getCycles :: StateT MOS6502 IO Int
 getCycles = cycles <$> get
+
 
 incClock :: StateT MOS6502 IO ()
 incClock = modify (\mos -> mos{clock = 1 + (clock mos)})
 
+
 resetCycles :: StateT MOS6502 IO ()
 resetCycles = modify (\mos -> mos{cycles = 0})
+
 
 resetClock :: StateT MOS6502 IO ()
 resetClock = modify (\mos -> mos{clock = 0})
 
+
 updateCycles :: Int -> StateT MOS6502 IO ()
 updateCycles offset = modify (\mos -> mos{cycles = offset + cycles mos})
 
+
 setComplete :: Bool -> StateT MOS6502 IO ()
 setComplete b = modify (\mos -> mos{context = (context mos){complete = b}})
+
 
 fetchComplete :: StateT MOS6502 IO Bool
 fetchComplete = do
@@ -321,6 +360,7 @@ fetchComplete = do
     let c = complete . context $ mos
     setComplete False
     return c
+
 
 tick :: StateT MOS6502 IO ()
 tick = do
@@ -334,12 +374,14 @@ tick = do
             execute opcode
             setComplete True
 
+
 fetch :: StateT MOS6502 IO Word8
 fetch = do
     pc <- getPC
     opcode <- readByte pc
     setPC (pc + 1)
     return opcode
+
 
 
 execute :: Word8 -> StateT MOS6502 IO ()

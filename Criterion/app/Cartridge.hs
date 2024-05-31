@@ -1,4 +1,16 @@
-module Cartridge where
+module Cartridge (
+    Cartridge(..),
+    CartData(..),
+    Mirroring(..),
+    Header(..),
+    fromCartData,
+    loadCartridge,
+    cpuWrite,
+    cpuRead,
+    ppuWrite,
+    ppuRead,
+    reset
+    ) where
 
 import Data.Word
 import Cartridge.Loader (CartData(..), Mirroring(..), Header(..))
@@ -72,6 +84,6 @@ ppuWrite cart addr byte = do
     addr' <- Mapper.ppuWMap (mapper cart) addr
     M.writeByte (chrData cart) addr' byte
 
-reset ::  Cartridge  -> IO Cartridge
-reset cart = undefined -- TODO
+reset ::  Cartridge  -> IO ()
+reset cart = return () -- TODO
 
