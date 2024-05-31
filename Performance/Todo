@@ -1,0 +1,13 @@
+1. Implement Nametable
+2. Fix Rendering Bug
+3. Implement Fulltick and Fullframe
+4. Try to render only once per frame
+5. Implement Debug
+6. Implement Debug in the original 
+7. Performane comparison
+8. If performance is still slow then:
+
+        1. Bus will not use an IORef to the CPU. It will just hold the CPU as value
+        2. R2C02 Tick will return True, where True is whether or not we should send an NMI request to the CPU
+        3. Bus will tick R2C02, check the result and only then trigger the CPU.
+

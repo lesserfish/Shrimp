@@ -30,7 +30,7 @@ mapper0_pw :: Mapper0 -> Word16 -> IO Word16
 mapper0_pw _ addr = return $ addr 
 
 mapper0 :: Mapper0 -> Mapper
-mapper0 m = Mapper (mapper0_cr m) (mapper0_cw m) (mapper0_pr m) (mapper0_pw m)
+mapper0 m = Mapper (mapper0_cr m) (mapper0_cw m) (mapper0_pr m) (mapper0_pw m) (mapper0_cr m) (mapper0_pr m)
 
 chooseMapper0 :: Header -> IO Mapper
 chooseMapper0 header = return $ mapper0 m0 

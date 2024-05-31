@@ -24,9 +24,10 @@ data BUS = BUS
     }
 
 
--- CPU Interface
+-- CPU
 
 
+-- READ
 cpuReadRAM :: Memory.RAM -> Word16 -> IO Word8
 cpuReadRAM ram addr = do
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
@@ -45,6 +46,7 @@ cpuReadPPU ppuref addr = do
 cpuReadAPU :: Word16 -> IO Word8
 cpuReadAPU addr = return 0 -- TODO: Implement APU Support
 
+
 cpuReadControl :: Word16 -> IO Word8
 cpuReadControl addr = return 0 -- TODO: Implement Control Support
 
@@ -54,10 +56,40 @@ cpuReadCart cart addr = Cartridge.cpuRead cart addr
 
 
 
+-- PEEK
+
+cpuPeekRAM :: Memory.RAM -> Word16 -> IO Word8
+cpuPeekRAM = cpuReadRAM
+
+
+cpuPeekPPU :: (IORef R2C02.R2C02) -> Word16 -> IO Word8
+cpuPeekPPU ppuref addr = do
+    ppu <- readIORef ppuref
+    let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
+    byte <- R2C02.cpuPeek real_addr ppu
+    return byte
+
+
+cpuPeekAPU :: Word16 -> IO Word8
+cpuPeekAPU addr = return 0 -- TODO: Implement APU Support
+
+
+cpuPeekControl :: Word16 -> IO Word8
+cpuPeekControl addr = return 0 -- TODO: Implement Control Support
+
+
+cpuPeekCart :: Cartridge.Cartridge -> Word16 -> IO Word8
+cpuPeekCart cart addr = Cartridge.cpuPeek cart addr
+
+
+
+-- WRITE
+
 cpuWriteRAM :: Memory.RAM -> Word16 -> Word8 -> IO ()
 cpuWriteRAM ram addr byte = do
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     Memory.writeByte ram real_addr byte
+
 
 cpuWritePPU :: (IORef R2C02.R2C02) -> Word16 -> Word8 -> IO ()
 cpuWritePPU ppuref addr byte = do
@@ -66,16 +98,21 @@ cpuWritePPU ppuref addr byte = do
     ppu' <- execStateT (R2C02.cpuWrite real_addr byte) ppu
     writeIORef ppuref ppu'
 
+
 cpuWriteAPU :: Word16 -> Word8 -> IO ()
 cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
 
+
 cpuWriteControl :: Word16 -> Word8 -> IO ()
 cpuWriteControl addr byte = return () -- TODO: Implement Control Support
+
 
 cpuWriteCart :: Cartridge.Cartridge -> Word16 -> Word8 -> IO ()
 cpuWriteCart cart addr byte = Cartridge.cpuWrite cart addr byte
 
 
+
+-- CPU INTERFACE
 
 cpuInterface :: (IORef R2C02.R2C02) -> Memory.RAM -> Cartridge.Cartridge -> MOS6502.Interface
 cpuInterface ppuref ram cart = MOS6502.Interface cReadByte cWriteByte cPeekByte where
@@ -93,10 +130,19 @@ cpuInterface ppuref ram cart = MOS6502.Interface cReadByte cWriteByte cPeekByte 
         | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl addr byte
         | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart cart addr byte
         | otherwise = return () -- TODO: Log error ?
-    cPeekByte = cReadByte -- TODO: THIS IS WRONG. FIX IT.
+    cPeekByte addr
+        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuPeekRAM ram addr
+        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuPeekPPU ppuref addr
+        | (addr >= 0x4000 && addr <= 0x4015) = cpuPeekAPU addr
+        | (addr >= 0x4016 && addr <= 0x4017) = cpuPeekControl addr
+        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuPeekCart cart addr
+        | otherwise = return 0 -- TODO: Log error ?
 
 
--- PPU Interface 
+
+
+
+-- PPU
 
 mirrorNametable :: Cartridge.Mirroring -> Word16 -> Word16
 mirrorNametable Cartridge.Horizontal addr
@@ -111,6 +157,10 @@ mirrorNametable Cartridge.Vertical addr
     | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
     | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
     | otherwise = error "Address out of range"
+
+
+
+-- READ
 
 
 ppuReadPT :: Cartridge.Cartridge -> Word16 -> IO Word8
@@ -142,6 +192,25 @@ ppuReadPL :: Memory.RAM -> Word16 -> IO Word8
 ppuReadPL plram addr = ppuReadPL' plram (addr .&. 0x1F)
 
 
+
+-- PEEK
+
+ppuPeekPT :: Cartridge.Cartridge -> Word16 -> IO Word8
+ppuPeekPT cart addr = Cartridge.ppuPeek cart addr
+
+
+ppuPeekNT :: Cartridge.Cartridge -> Memory.RAM -> Word16 -> IO Word8
+ppuPeekNT = ppuReadNT
+
+
+ppuPeekPL :: Memory.RAM -> Word16 -> IO Word8
+ppuPeekPL = ppuReadPL
+
+
+
+-- WRITE
+
+
 ppuWritePT :: Cartridge.Cartridge -> Word16 -> Word8 -> IO ()
 ppuWritePT cart addr byte = Cartridge.ppuWrite cart addr byte
 
@@ -168,6 +237,11 @@ ppuWritePL' plram addr byte = Memory.writeByte plram addr byte
 ppuWritePL :: Memory.RAM -> Word16 -> Word8 -> IO ()
 ppuWritePL plram addr byte = ppuWritePL' plram (addr .&. 0x1F) byte
 
+
+
+-- AUXILIARY
+
+
 ppuSetPixel :: Display.Display -> (Word16, Word16) -> Word8 -> IO ()
 ppuSetPixel display addr col = Display.setPixel display addr col
 
@@ -177,6 +251,9 @@ ppuTriggerNMI cpuref = do
     cpu' <- execStateT MOS6502.iNMI cpu
     writeIORef cpuref cpu'
     
+
+
+-- PPU INTERFACE
 
 ppuInterface :: (IORef MOS6502.MOS6502) -> Cartridge.Cartridge -> Display.Display -> Memory.RAM -> Memory.RAM -> R2C02.Interface
 ppuInterface cpuref cart display plram ntram = R2C02.Interface pReadByte pWriteByte pSetPixel pTriggerNMI pPeekByte where
@@ -190,13 +267,17 @@ ppuInterface cpuref cart display plram ntram = R2C02.Interface pReadByte pWriteB
         | (addr >= 0x2000 && addr <= 0x3EFF) = ppuWriteNT cart ntram addr byte
         | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuWritePL plram addr byte
         | otherwise = return ()
+    pPeekByte addr
+        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuPeekPT cart addr
+        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuPeekNT cart ntram addr
+        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuPeekPL plram addr
+        | otherwise = return 0
     pSetPixel addr col = ppuSetPixel display addr col
     pTriggerNMI = ppuTriggerNMI cpuref
-    pPeekByte addr = undefined
-    pDebug log nes = do
-        liftIO $ putStrLn log
-        return nes
 
+
+
+-- BUS Interface
 
 tickCPU :: BUS -> IO ()
 tickCPU bus = do
@@ -279,3 +360,17 @@ reset bus = do
     writeIORef ppuref ppu'
     
 
+
+ppuPeek :: BUS -> Word16 -> IO Word8
+ppuPeek bus addr = do
+   let ppuref = bPPU bus 
+   ppu <- readIORef ppuref
+   let peeker = R2C02.iPeekByte . R2C02.interface $ ppu
+   peeker addr
+
+cpuPeek :: BUS -> Word16 -> IO Word8
+cpuPeek bus addr = do
+   let cpuref = bCPU bus 
+   cpu <- readIORef cpuref
+   let peeker = MOS6502.iPeekByte . MOS6502.interface $ cpu
+   peeker addr

@@ -40,6 +40,15 @@ renderCycles ctx nes = do
     let content = "Cycles: " ++ cycles
     renderString renderData content (120, 79) white
 
+renderClock :: SDLContext -> NES -> IO()
+renderClock ctx nes = do
+    let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
+    let cpuref = B.bCPU nes
+    cpu <- readIORef cpuref
+    let clock = show . MOS.clock $ cpu
+    let content = "Clock: " ++ clock
+    renderString renderData content (5, 40) white
+
 renderRegisters :: SDLContext -> NES -> IO ()
 renderRegisters ctx nes = do
     let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
@@ -62,6 +71,7 @@ update ctx nes texture = do
     SDL.clear renderer
     liftIO $ renderPS ctx nes
     liftIO $ renderCycles ctx nes
+    liftIO $ renderClock ctx nes
     liftIO $ renderRegisters ctx nes
     SDL.rendererRenderTarget renderer SDL.$= Nothing
 

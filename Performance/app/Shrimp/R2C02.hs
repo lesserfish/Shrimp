@@ -481,6 +481,12 @@ readByte addr = do
     let read = iReadByte . interface $ ppu
     lift $ read addr
 
+peekByte :: Word16 -> StateT R2C02 IO Word8
+peekByte addr = do
+    ppu <- get
+    let peek = iPeekByte . interface $ ppu
+    lift $ peek addr
+
 
 setPixel :: (Word16, Word16) -> Word8 -> StateT R2C02 IO ()
 setPixel addr byte = do
@@ -533,6 +539,37 @@ readData = do
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
     return byte
 
+
+cpuPeek :: Word16 -> R2C02 -> IO Word8
+cpuPeek addr ppu
+    | addr == 0x0000 = return 0 -- Control: Write Only
+    | addr == 0x0001 = return 0 -- Mask: Write Only
+    | addr == 0x0002 = fst <$> (runStateT peekStatus ppu) -- Status
+    | addr == 0x0003 = return 0 -- OAM Address: Write Only
+    | addr == 0x0004 = return 0 -- OAM Data: TODO
+    | addr == 0x0005 = return 0 -- Scroll: Write Only
+    | addr == 0x0006 = return 0 -- Address: WriteOnly
+    | addr == 0x0007 = fst <$> (runStateT peekData ppu)-- Data
+    | otherwise = error "CPU Attempted to read out of turn"
+
+
+
+peekStatus :: StateT R2C02 IO Word8
+peekStatus = do
+    buff <- getDataBuffer
+    status <- getStatus
+    let byte = (status .&. 0xE0) .|. (buff .&. 0x1F)
+    return $ byte
+
+
+peekData :: StateT R2C02 IO Word8
+peekData = do
+    v <- getVRAM
+    oldbuff <- getDataBuffer
+    newbuff <- readByte v
+    let byte = if v >= 0x3F00 then newbuff else oldbuff
+    return byte
+    
 
 cpuWrite :: Word16 -> Word8 -> StateT R2C02 IO ()
 cpuWrite addr byte

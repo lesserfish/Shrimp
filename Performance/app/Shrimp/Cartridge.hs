@@ -7,8 +7,10 @@ module Shrimp.Cartridge (
     loadCartridge,
     cpuWrite,
     cpuRead,
+    cpuPeek,
     ppuWrite,
     ppuRead,
+    ppuPeek,
     reset
     ) where
 
@@ -62,26 +64,34 @@ loadCartridge fp = do
 cpuRead ::  Cartridge  -> Word16 -> IO Word8
 cpuRead cart addr = do
     addr' <- Mapper.cpuRMap (mapper cart) addr
-    byte <- Memory.readByte (prgData cart) addr'
-    return byte
+    Memory.readByte (prgData cart) addr'
 
 cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO ()
 cpuWrite cart addr byte = do
     addr' <- Mapper.cpuWMap (mapper cart) addr
     Memory.writeByte (prgData cart) addr' byte
 
+cpuPeek :: Cartridge -> Word16 -> IO Word8
+cpuPeek cart addr = do
+    addr' <- Mapper.cpuPMap (mapper cart) addr
+    Memory.readByte (prgData cart) addr'
+
 -- PPU
 
 ppuRead ::  Cartridge  -> Word16 -> IO Word8
 ppuRead cart addr = do
     addr' <- Mapper.ppuRMap (mapper cart) addr
-    byte <- Memory.readByte (chrData cart) addr'
-    return byte
+    Memory.readByte (chrData cart) addr'
 
 ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO ()
 ppuWrite cart addr byte = do
     addr' <- Mapper.ppuWMap (mapper cart) addr
     Memory.writeByte (chrData cart) addr' byte
+
+ppuPeek :: Cartridge -> Word16 -> IO Word8
+ppuPeek cart addr = do
+    addr' <- Mapper.ppuPMap (mapper cart) addr
+    Memory.readByte (chrData cart) addr'
 
 reset ::  Cartridge  -> IO ()
 reset cart = return () -- TODO

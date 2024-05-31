@@ -9,32 +9,14 @@ import qualified Shrimp.Memory as Memory
 import qualified Shrimp.BUS as B
 import Data.Bits
 
-ppuReadPL' :: Memory.RAM -> Word16 -> IO Word8
-ppuReadPL' plram 0x04 = ppuReadPL' plram 0x0
-ppuReadPL' plram 0x08 = ppuReadPL' plram 0x0
-ppuReadPL' plram 0x0C = ppuReadPL' plram 0x0
-
-
-ppuReadPL' plram 0x10 = ppuReadPL' plram 0x0
-ppuReadPL' plram 0x14 = ppuReadPL' plram 0x4
-ppuReadPL' plram 0x18 = ppuReadPL' plram 0x8
-ppuReadPL' plram 0x1C = ppuReadPL' plram 0xC
-ppuReadPL' plram addr = Memory.readByte plram addr
-
-
-ppuReadPL :: Memory.RAM -> Word16 -> IO Word8
-ppuReadPL plram addr = ppuReadPL' plram (addr .&. 0x1F)
-
-
 getPalette :: NES -> Word16 -> IO [Word8]
 getPalette nes pl = do
-    let plram = B.bPLRAM nes
-    let c0 = pl * 0x04 + 0x00
-    let c1 = pl * 0x04 + 0x01
-    let c2 = pl * 0x04 + 0x02
-    let c3 = pl * 0x04 + 0x03
+    let c0 = 0x3F00 + pl * 0x04 + 0x00
+    let c1 = 0x3F00 + pl * 0x04 + 0x01
+    let c2 = 0x3F00 + pl * 0x04 + 0x02
+    let c3 = 0x3F00 + pl * 0x04 + 0x03
     let colors = [c0, c1, c2, c3]
-    mapM (\addr -> ppuReadPL plram addr) colors
+    mapM (\addr -> B.ppuPeek nes addr) colors
 
 renderPalette :: SDLContext -> SDL.Texture -> NES -> Word16 -> IO ()
 renderPalette ctx texture nes pl = do

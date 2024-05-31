@@ -20,15 +20,11 @@ patternColor 2 = BS.pack [255, 80, 80, 80]
 patternColor 3 = BS.pack [255, 0, 0, 0]
 patternColor _ = BS.pack [255, 0, 0, 0]
 
-ppuReadPT :: Cartridge.Cartridge -> Word16 -> IO Word8
-ppuReadPT cart addr = Cartridge.ppuRead cart addr
 
 getPatternTable :: NES -> IO [Word8]
 getPatternTable nes = do
-    let cart = B.bCart nes
-
     patternData <- mapM (\addr -> do
-        byte <- ppuReadPT cart addr
+        byte <- B.ppuPeek nes addr
         return byte) [0..0x1FFF]
 
     screen <- UMV.replicate (256 * 128) 0 :: IO (UMV.IOVector Word8)
