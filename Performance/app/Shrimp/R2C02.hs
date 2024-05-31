@@ -346,8 +346,8 @@ getVRAMBit L_NAMETABLE_Y = b11 <$> getVRAM
 getVRAMBit _ = error "Incorrect Flag"
 
 setVRAMBit :: LOOPYFLAG -> Bool -> StateT R2C02 IO ()
-setVRAMBit L_NAMETABLE_X v = mapVRAM (\tram -> if v then setBit tram 10 else clearBit tram 10)
-setVRAMBit L_NAMETABLE_Y v = mapVRAM (\tram -> if v then setBit tram 11 else clearBit tram 11)
+setVRAMBit L_NAMETABLE_X v = mapVRAM (\vram -> if v then setBit vram 10 else clearBit vram 10)
+setVRAMBit L_NAMETABLE_Y v = mapVRAM (\vram -> if v then setBit vram 11 else clearBit vram 11)
 setVRAMBit _ _ = error "Incorrect Flag"
 
 

@@ -11,13 +11,10 @@ import qualified Shrimp.Cartridge as Cartridge
 
 getNametableTile :: NES -> Int -> (Int, Int) -> IO Word8
 getNametableTile nes nt (nx, ny) = do
-    let cart = B.bCart nes
-    let ntram = B.bNTRAM nes
-    let baseAddr = nt * 0x400
+    let baseAddr = 0x2000 + nt * 0x400
     let offset = ny * 32 + nx
     let addr = fromIntegral $ baseAddr + offset :: Word16
-    byte <- B.ppuPeek nes addr
-    return byte
+    B.ppuPeek nes addr
 
 renderNametableLine :: SDLContext -> NES -> Int -> Int -> IO ()
 renderNametableLine ctx nes nt ny = do
