@@ -1,20 +1,18 @@
-module Shrimp.INES (
-    Mirroring,
-    ConsoleType,
-    Header (..),
+module Shrimp.Cartridge.Loader (
+    Mirroring(..),
+    ConsoleType(..),
+    Header(..),
+    CartData(..),
+    emptyCartData,
     emptyHeader,
-    loadHeader,
-)
-where
+    loadCartData
+) where
 
 import Control.Monad.State
 import Data.Bits
 import qualified Data.ByteString as BS
-import Data.Char
 import Data.Word
 import System.IO
-
-import Data.Word
 
 data Mirroring = Horizontal | Vertical deriving (Eq, Show)
 data ConsoleType = NES | NVS | Playchoice10 | Extended | Undefined deriving (Eq, Show)
@@ -37,14 +35,13 @@ data Header = Header
     }
     deriving (Show)
 
-getConsoleType :: Word8 -> ConsoleType
-getConsoleType 0 = NES
-getConsoleType 1 = NVS
-getConsoleType 2 = Playchoice10
-getConsoleType 3 = Extended
-getConsoleType _ = Undefined
+data CartData = CartData
+    { cHeader :: Header
+    , cPRGData :: [Word8]
+    , cCHRData :: [Word8]
+    }
+    deriving (Show)
 
--- A default empty Header
 emptyHeader :: Header
 emptyHeader =
     Header
@@ -64,14 +61,29 @@ emptyHeader =
         , hPRGRamSize = 0 -- Default Word8 value
         }
 
--- Reads a singly byte from file and return a Word8
+emptyCartData :: CartData
+emptyCartData = 
+    CartData
+        { cHeader = emptyHeader
+        , cPRGData = []
+        , cCHRData = []
+        }
+
+getConsoleType :: Word8 -> ConsoleType
+getConsoleType 0 = NES
+getConsoleType 1 = NVS
+getConsoleType 2 = Playchoice10
+getConsoleType 3 = Extended
+getConsoleType _ = Undefined
+
+-- Helper Functions
+
 readByteFromFile :: Handle -> IO Word8
 readByteFromFile file = do
     byte' <- BS.hGet file 1
     let byte = BS.index byte' 0
     return byte
 
--- Reads N bytes from file and returns a [Word8]
 readBytesFromFile :: Handle -> Int -> IO [Word8]
 readBytesFromFile file count = do
     bytes' <- BS.hGet file count
@@ -79,17 +91,24 @@ readBytesFromFile file count = do
     return bytes
 
 b0 x = testBit x 0
-
 b1 x = testBit x 1
-
 b2 x = testBit x 2
-
 b3 x = testBit x 3
 
+getH :: (Monad m) => StateT CartData m Header
+getH = cHeader <$> get
+
+putH :: (Monad m) => Header -> StateT CartData m ()
+putH h = modify (\cart -> cart {cHeader = h})
+
+
+-- Header extraction
+
+
 -- Load the Magic number, and PRG and CHR sizing information
-loadHSize :: Handle -> StateT Header IO ()
+loadHSize :: Handle -> StateT CartData IO ()
 loadHSize file = do
-    header <- get
+    header <- getH
     _magicNumber <- liftIO $ readBytesFromFile file 4
     _prgSize <- liftIO $ readByteFromFile file
 
@@ -101,14 +120,14 @@ loadHSize file = do
                 , hPrgSize = _prgSize
                 , hChrSize = _chrSize
                 }
-    put header'
+    putH header'
 
 -- Load Flag 6
-loadHFlag6 :: Handle -> StateT Header IO ()
+loadHFlag6 :: Handle -> StateT CartData IO ()
 loadHFlag6 file = do
-    header <- get
+    header <- getH
     _flag6 <- liftIO $ readByteFromFile file
-    let _mirroring = if (b0 _flag6) then Vertical else Horizontal
+    let _mirroring = if (b0 _flag6) then Horizontal else Vertical
     let _battery = b1 _flag6
     let _trainer = b2 _flag6
     let _fsvram = b3 _flag6
@@ -122,12 +141,12 @@ loadHFlag6 file = do
                 , hFSVRam = _fsvram
                 , hlMapper = _lmapper
                 }
-    put header'
+    putH header'
 
 -- Load Flag 7
-loadHFlag7 :: Handle -> StateT Header IO ()
+loadHFlag7 :: Handle -> StateT CartData IO ()
 loadHFlag7 file = do
-    header <- get
+    header <- getH
     _flag7 <- liftIO $ readByteFromFile file
     let _console = getConsoleType (_flag7 .&. 0x03)
     let _useNES2f = b2 _flag7
@@ -140,35 +159,40 @@ loadHFlag7 file = do
                 , huMapper = _umapper
                 , hMapper = _mapper
                 }
-    put header'
+    putH header'
 
 -- Load Flag 8
-loadHFlag8 :: Handle -> StateT Header IO ()
+loadHFlag8 :: Handle -> StateT CartData IO ()
 loadHFlag8 file = do
-    header <- get
+    header <- getH
     _flag8 <- liftIO $ readByteFromFile file
     let header' = header{hPRGRamSize = _flag8}
-    put header
+    putH header
 
 -- Load Flag 9
-loadHFlag9 :: Handle -> StateT Header IO ()
+loadHFlag9 :: Handle -> StateT CartData IO ()
 loadHFlag9 file = do
-    header <- get
+    header <- getH
     _flag9 <- liftIO $ readByteFromFile file
     -- TODO: Finishthis
-    put header
+    putH header
 
 -- Load Flag 10
-loadHFlag10 :: Handle -> StateT Header IO ()
+loadHFlag10 :: Handle -> StateT CartData IO ()
 loadHFlag10 file = do
-    header <- get
+    header <- getH
     _flag10 <- liftIO $ readByteFromFile file
     -- TODO: Finish this
-    put header
+    putH header
+
+loadPadding :: Handle -> StateT CartData IO ()
+loadPadding file = do
+    padding <- liftIO $ readBytesFromFile file 5
+    return ()
 
 -- Loads the Header
 -- TODO: Implement INES2.0 compatibility
-loadHeader :: Handle -> StateT Header IO ()
+loadHeader :: Handle -> StateT CartData IO ()
 loadHeader file = do
     loadHSize file
     loadHFlag6 file
@@ -176,3 +200,65 @@ loadHeader file = do
     loadHFlag8 file
     loadHFlag9 file
     loadHFlag10 file
+    loadPadding file
+
+-- Cartridge Data
+
+
+-- Loads the PRG Data
+loadCPRG :: Handle -> StateT CartData IO ()
+loadCPRG file = do
+    cartridge <- get
+    let header = cHeader cartridge
+    let prgBanks = hPrgSize header
+    let size = (fromIntegral prgBanks) * 16 * 1024 :: Int
+    prgData <- liftIO $ readBytesFromFile file size 
+    let cartridge' = cartridge{cPRGData = prgData}
+    put cartridge'
+
+--
+-- Loads the CHR Data
+loadCCHR :: Handle -> StateT CartData IO ()
+loadCCHR file = do
+    cartridge <- get
+    let header = cHeader cartridge
+    let chrBanks = hChrSize header
+    let size = (fromIntegral chrBanks) * 8 * 1024 :: Int
+    charData <- liftIO $ readBytesFromFile file size
+    let cartridge' = cartridge{cCHRData = charData}
+    put cartridge'
+
+loadCTrainer :: Handle -> StateT CartData IO ()
+loadCTrainer file = do
+    cartridge <- get
+    -- TODO: Implement this
+    put cartridge
+
+-- Loads the PlayChoice INST-ROM, if present
+-- TODO: Implement this
+loadCPCInstROM :: Handle -> StateT CartData IO ()
+loadCPCInstROM file = do
+    cartridge <- get
+    put cartridge
+
+-- Loads the PlayChoice PROM, if present
+-- TODO: Implement this
+loadCPCPROM :: Handle -> StateT CartData IO ()
+loadCPCPROM file = do
+    cartridge <- get
+    put cartridge
+
+loadCartDataT :: Handle -> StateT CartData IO ()
+loadCartDataT file = do
+    loadHeader file -- Loads the Header
+    loadCTrainer file -- Loads the Trainer section, if present
+    loadCPRG file -- Loads the PRG Data
+    loadCCHR file -- Loads the CHR Data
+    loadCPCInstROM file -- Loads the PlayChoice INST-ROM, if present
+    loadCPCPROM file -- Loads the PlayChoice PROM, if present
+
+loadCartData :: FilePath -> IO CartData
+loadCartData filepath = do
+    file <- openBinaryFile filepath ReadMode
+    cartridge <- execStateT (loadCartDataT file) emptyCartData
+    return cartridge

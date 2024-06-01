@@ -1,3 +1,7 @@
-1. Write Cartridge readCPU, writeCPU, readPPU, writePPU
-2. Create the NES data type, it should include a cycle which calls PPU cycle three times for every cpu cycle.
-3. Create the PPU data type.
+1. Implement the PPU
+    a. Registers
+    b. CPUInterface
+    c. Tick
+3. Create CPU.new, PPU.new, NES.new
+4. Implement a Memory Tracker in the MOS6502, so we can keep track of the current and following instructions being executed.
+4. Create a Frontend 

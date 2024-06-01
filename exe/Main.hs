@@ -1,7 +1,6 @@
 module Main where
+import qualified Launcher
+import qualified Debug
 
-import Shrimp.Cartridge
-
-main :: IO ()
-main = do
-    putStrLn $ ""
+main :: IO()
+main = Launcher.main

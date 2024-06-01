@@ -1,33 +1,44 @@
 module Shrimp.Memory (
     RAM (..),
     new,
-    fromList,
-    readByte,
     writeByte,
+    loadList,
+    toList,
+    readByte,
     noRAM,
+    reset
 ) where
 
-import qualified Data.Vector.Unboxed as V
+import Control.Exception
+import qualified Data.Vector.Unboxed.Mutable as UMV
+import qualified Data.Vector.Unboxed as UV
 import Data.Word
 
-data RAM = RAM {memory :: V.Vector Word8}
+type RAM = UMV.IOVector Word8
 
-instance Show RAM where
-    show r = "Memory of size: " ++ (show . V.length . memory $ r)
+new :: Int -> Word8 -> IO RAM
+new size e = UMV.replicate (fromIntegral size) e
 
-new :: Word16 -> Word8 -> RAM
-new size e = RAM{memory = V.fromList (replicate (fromIntegral size) e)}
+readByte :: RAM -> Word16 -> IO Word8
+readByte ram addr = UMV.unsafeRead ram (fromIntegral addr)
 
-fromList :: [Word8] -> RAM
-fromList list = RAM{memory = V.fromList list}
+writeByte :: RAM -> Word16 -> Word8 -> IO ()
+writeByte ram addr byte = UMV.unsafeWrite ram (fromIntegral addr) byte
 
-readByte :: RAM -> Word16 -> Word8
-readByte ram addr = (memory ram) V.! (fromIntegral addr)
+noRAM :: IO RAM
+noRAM = UMV.new 0
 
-writeByte :: RAM -> Word16 -> Word8 -> RAM
-writeByte ram addr byte = ram{memory = new_memory}
-  where
-    new_memory = (memory ram) V.// [(fromIntegral addr, byte)]
+loadList :: RAM -> Int -> [Word8] -> IO ()
+loadList ram offset list = do
+    let size = length list 
+    let address = [fromIntegral $ offset + x | x <- [0..(size-1)]] :: [Word16]
+    let info = zip address list
+    mapM_ (\(addr, byte) -> writeByte ram addr byte) info
 
--- Empty RAM
-noRAM = new 0 0
+reset :: RAM -> IO ()
+reset ram = do mapM_ (\idx -> UMV.write ram idx 0) [0.. ((fromIntegral . UMV.length $ ram) - 1)]
+
+toList :: RAM -> IO [Word8]
+toList ram = do
+   fram <- UV.freeze ram 
+   return $ UV.toList fram

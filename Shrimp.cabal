@@ -16,27 +16,52 @@ extra-doc-files:    CHANGELOG.md
 common warnings
 ghc-options: -Wall
 
-executable Shrimp
+executable Shrimp-exe
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Shrimp.AbstractBus, 
+
+
+  other-modules:    Launcher,
+                    Debug,
                     Shrimp.MOS6502, 
-                    Shrimp.Mapper.Mapper, 
-                    Shrimp.Mapper.AbstractMapper, 
-                    Shrimp.Mapper.Mapper0, 
-                    Shrimp.Cartridge, 
-                    Shrimp.NES, 
+                    Shrimp.Utils, 
                     Shrimp.R2C02, 
-                    Shrimp.Interface,
-                    Shrimp.INES,
-                    Shrimp.Memory
+                    Shrimp.Memory, 
+                    Shrimp.Display, 
+                    Shrimp.Cartridge, 
+                    Shrimp.Cartridge.Loader, 
+                    Shrimp.Mapper.Type, 
+                    Shrimp.Mapper, 
+                    Shrimp.Mapper.Mapper0, 
+                    Shrimp.BUS,
+                    Shrimp.NES,
+                    Communication,
+                    Frontend.Main,
+                    Frontend.Common,
+                    Frontend.Control,
+                    Frontend.Render,
+                    Frontend.Renderer.Status,
+                    Frontend.Renderer.Nametable,
+                    Frontend.Renderer.Instructions,
+                    Frontend.Renderer.Pattern,
+                    Frontend.Renderer.Palette,
+                    Frontend.Renderer.Display,
+                    Emulator.Main
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,
                     mtl >= 2.3.1,
                     bytestring >= 0.11.4.0,
                     array >= 0.5.5.0,
-                    vector >= 0.13.0.0
+                    vector >= 0.13.0.0,
+                    containers >= 0.6.8,
+                    sdl2 >= 2.5.5.0, 
+                    sdl2-ttf >= 2.1.3,
+                    text >= 2.0,
+                    stm >= 2.5.1.0,
+                    time >= 1.12.2,
+                    split >= 0.2.5
+
   hs-source-dirs:   exe
   default-language: Haskell2010
 test-suite Shrimp-Test
@@ -44,11 +69,14 @@ test-suite Shrimp-Test
     type:             exitcode-stdio-1.0
     hs-source-dirs:   exe
     main-is:          Test/Main.hs
-    other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Test.CPU
+    other-modules:    Shrimp.MOS6502, Shrimp.Memory, Test.CPU, Shrimp.Utils
     build-depends:    base >=4.16.4.0,
                       hspec >= 2.11.1,
-                      aeson >= 2.1.2.1,
+                      aeson >= 2.2.1.0,
                       mtl >= 2.3.1,
                       bytestring >= 0.11.4.0,
                       filepath >= 1.4.100.1,
-                      array >= 0.5.5.0
+                      array >= 0.5.5.0,
+                      vector >= 0.13.0.0,
+                      containers >= 0.6.8,
+
