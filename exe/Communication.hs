@@ -5,11 +5,11 @@ import Control.Concurrent.STM.TChan
 import Shrimp.NES
 
 data Command = START | STOP | TICK | FULLTICK | EXIT
-data Information = CPUCOMPLETE
+data Feedback = CPUCOMPLETE
 
 data CommPipe = CommPipe
     { rte :: TChan Command
-    , etr :: TChan Information
+    , etr :: TChan Feedback
     , tNES :: TVar NES
     }
 

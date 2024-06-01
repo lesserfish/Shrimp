@@ -1,36 +1,36 @@
 module Shrimp.Cartridge (
-    CartData(..),
-    emptyCartridge,
     Cartridge(..),
-    fromCartData,
-    loadCartridge,
+    CartData(..),
     Mirroring(..),
     Header(..),
-    cpuRead,
+    fromCartData,
+    loadCartridge,
     cpuWrite,
-    ppuRead,
+    cpuRead,
+    cpuPeek,
     ppuWrite,
-    reset,
-) where
+    ppuRead,
+    ppuPeek,
+    reset
+    ) where
 
 import Data.Word
 import Shrimp.Cartridge.Loader (CartData(..), Mirroring(..), Header(..))
 import qualified Shrimp.Cartridge.Loader as CL
-import qualified Shrimp.Memory as M
-import qualified Shrimp.Mapper.Mapper as Mapper
-import qualified Shrimp.Mapper.Mapper0 as Mapper0
+import qualified Shrimp.Memory as Memory
+import qualified Shrimp.Mapper as Mapper
 
 data Cartridge = Cartridge
     { cartData :: CartData
-    , prgData :: M.RAM
-    , chrData :: M.RAM
+    , prgData :: Memory.RAM
+    , chrData :: Memory.RAM
     , mapper :: Mapper.Mapper
     }
 
 emptyCartridge ::  IO Cartridge
 emptyCartridge = do
-    noram <- M.noRAM
-    let nomapper = Mapper.Mapper (Mapper0.Mapper0 0 0)
+    noram <- Memory.noRAM
+    nomapper <- Mapper.noMapper
     let cart = Cartridge
                 { cartData = CL.emptyCartData
                 , prgData = noram
@@ -42,13 +42,13 @@ fromCartData ::  CartData -> IO Cartridge
 fromCartData cartdata = do
     let prgsize = 0x4000 * (fromIntegral . hPrgSize . cHeader $ cartdata) :: Int
     let chrsize = 0x2000 * (fromIntegral . hChrSize . cHeader $ cartdata) :: Int
-    prgram <- M.new prgsize 0
-    chrram <- M.new chrsize 0
-    M.loadList prgram 0 (cPRGData cartdata)
-    M.loadList chrram 0 (cCHRData cartdata)
-    let cmapper = Mapper.chooseMapper cartdata
+    prgram <- Memory.new prgsize 0
+    chrram <- Memory.new chrsize 0
+    Memory.loadList prgram 0 (cPRGData cartdata)
+    Memory.loadList chrram 0 (cCHRData cartdata)
+    cmapper <- Mapper.chooseMapper cartdata
     let cart = Cartridge
-                { cartData = CL.emptyCartData
+                { cartData = cartdata
                 , prgData = prgram
                 , chrData = chrram
                 , mapper = cmapper}
@@ -61,36 +61,38 @@ loadCartridge fp = do
 
 -- CPU
 
-cpuRead ::  Cartridge  -> Word16 -> IO (Cartridge, Word8)
+cpuRead ::  Cartridge  -> Word16 -> IO Word8
 cpuRead cart addr = do
-    let (mapper', addr') = Mapper.cpuRMap (mapper cart) addr
-    byte <- M.readByte (prgData cart) addr'
-    let cart' = cart{mapper = mapper'}
-    return (cart', byte)
+    addr' <- Mapper.cpuRMap (mapper cart) addr
+    Memory.readByte (prgData cart) addr'
 
-cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO Cartridge
+cpuWrite ::  Cartridge  -> Word16 -> Word8 -> IO ()
 cpuWrite cart addr byte = do
-    let (mapper', addr') = Mapper.cpuWMap (mapper cart) addr
-    M.writeByte (prgData cart) addr' byte
-    let cart' = cart{mapper = mapper'}
-    return cart'
+    addr' <- Mapper.cpuWMap (mapper cart) addr
+    Memory.writeByte (prgData cart) addr' byte
+
+cpuPeek :: Cartridge -> Word16 -> IO Word8
+cpuPeek cart addr = do
+    addr' <- Mapper.cpuPMap (mapper cart) addr
+    Memory.readByte (prgData cart) addr'
 
 -- PPU
 
-ppuRead ::  Cartridge  -> Word16 -> IO (Cartridge, Word8)
+ppuRead ::  Cartridge  -> Word16 -> IO Word8
 ppuRead cart addr = do
-    let (mapper', addr') = Mapper.ppuRMap (mapper cart) addr
-    byte <- M.readByte (chrData cart) addr'
-    let cart' = cart{mapper = mapper'}
-    return (cart', byte)
+    addr' <- Mapper.ppuRMap (mapper cart) addr
+    Memory.readByte (chrData cart) addr'
 
-ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO Cartridge
+ppuWrite ::  Cartridge  -> Word16 -> Word8 -> IO ()
 ppuWrite cart addr byte = do
-    let (mapper', addr') = Mapper.ppuWMap (mapper cart) addr
-    M.writeByte (chrData cart) addr' byte
-    let cart' = cart{mapper = mapper'}
-    return cart'
+    addr' <- Mapper.ppuWMap (mapper cart) addr
+    Memory.writeByte (chrData cart) addr' byte
 
-reset ::  Cartridge  -> IO Cartridge
-reset cart = undefined -- TODO
+ppuPeek :: Cartridge -> Word16 -> IO Word8
+ppuPeek cart addr = do
+    addr' <- Mapper.ppuPMap (mapper cart) addr
+    Memory.readByte (chrData cart) addr'
+
+reset ::  Cartridge  -> IO ()
+reset cart = return () -- TODO
 

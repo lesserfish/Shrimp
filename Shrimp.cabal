@@ -17,33 +17,35 @@ common warnings
 ghc-options: -Wall
 
 executable Shrimp-exe
-  ghc-options: -prof -fprof-auto
   import:           warnings
   main-is:          Main.hs
-  other-modules:    Shrimp.AbstractBus, 
+
+
+  other-modules:    Launcher,
                     Shrimp.MOS6502, 
-                    Shrimp.Mapper.Mapper, 
-                    Shrimp.Display,
-                    Shrimp.Mapper.AbstractMapper, 
-                    Shrimp.Mapper.Mapper0, 
+                    Shrimp.Utils, 
+                    Shrimp.R2C02, 
+                    Shrimp.Memory, 
+                    Shrimp.Display, 
                     Shrimp.Cartridge, 
                     Shrimp.Cartridge.Loader, 
-                    Shrimp.NES, 
-                    Shrimp.R2C02, 
-                    Shrimp.Memory,
+                    Shrimp.Mapper.Type, 
+                    Shrimp.Mapper, 
+                    Shrimp.Mapper.Mapper0, 
+                    Shrimp.BUS,
+                    Shrimp.NES,
                     Communication,
-                    Emulator,
-                    Demo,
-                    Renderer,
-                    Renderer.CPUState,
-                    Renderer.Nametable,
-                    Renderer.Pattern,
-                    Renderer.Palette,
-                    Renderer.CPUInstructions,
-                    Renderer.Common,
-                    Renderer.Control, 
-                    Renderer.Screen, 
-                    Renderer.Render
+                    Frontend.Main,
+                    Frontend.Common,
+                    Frontend.Control,
+                    Frontend.Render,
+                    Frontend.Renderer.Status,
+                    Frontend.Renderer.Nametable,
+                    Frontend.Renderer.Instructions,
+                    Frontend.Renderer.Pattern,
+                    Frontend.Renderer.Palette,
+                    Frontend.Renderer.Display,
+                    Emulator.Main
                    -- Add other necessary modules here
   -- other-extensions:
   build-depends:    base >= 4.18.0.0,

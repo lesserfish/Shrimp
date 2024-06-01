@@ -127,7 +127,7 @@ loadHFlag6 :: Handle -> StateT CartData IO ()
 loadHFlag6 file = do
     header <- getH
     _flag6 <- liftIO $ readByteFromFile file
-    let _mirroring = if (b0 _flag6) then Vertical else Horizontal
+    let _mirroring = if (b0 _flag6) then Horizontal else Vertical
     let _battery = b1 _flag6
     let _trainer = b2 _flag6
     let _fsvram = b3 _flag6
