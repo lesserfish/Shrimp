@@ -68,7 +68,7 @@ test-suite Shrimp-Test
     type:             exitcode-stdio-1.0
     hs-source-dirs:   exe
     main-is:          Test/Main.hs
-    other-modules:    Shrimp.AbstractBus, Shrimp.MOS6502, Test.CPU
+    other-modules:    Shrimp.MOS6502, Shrimp.Memory, Test.CPU, Shrimp.Utils
     build-depends:    base >=4.16.4.0,
                       hspec >= 2.11.1,
                       aeson >= 2.2.1.0,
@@ -76,5 +76,6 @@ test-suite Shrimp-Test
                       bytestring >= 0.11.4.0,
                       filepath >= 1.4.100.1,
                       array >= 0.5.5.0,
+                      vector >= 0.13.0.0,
                       containers >= 0.6.8,
 
