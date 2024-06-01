@@ -20,6 +20,10 @@ update = do
     rctx <- get
     ctx <- getSDLContext 
 
+    let lDisplayMode = rcLDisplayMode rctx
+    let rDisplayMode = rcRDisplayMode rctx
+
+
     let statusTexture  = rtCPUStatus . rcTextures $ rctx
     let paletteTexture = rtPalette   . rcTextures $ rctx
     let patternTexture = rtPattern   . rcTextures $ rctx
@@ -28,12 +32,13 @@ update = do
     let nametableTexture = rtNametable . rcTextures $ rctx
 
 
-    liftIO $ FRInstructions.update ctx nes instructionTexture 
     liftIO $ FRStatus.update ctx nes statusTexture
-    liftIO $ FRDisplay.update ctx nes displayTexture
     liftIO $ FRPalette.update ctx nes paletteTexture
-    liftIO $ FRPattern.update ctx nes patternTexture
-    liftIO $ FRNametable.update ctx nes nametableTexture
+    when (rDisplayMode == DM_INSTRUCTION) (liftIO $ FRInstructions.update ctx nes instructionTexture)
+    when (rDisplayMode == DM_PATTERN_1) (liftIO $ FRPattern.update ctx nes patternTexture)
+    when (rDisplayMode == DM_PATTERN_2) (liftIO $ FRPattern.update ctx nes patternTexture)
+    when (lDisplayMode == DM_NAMETABLE) (liftIO $ FRNametable.update ctx nes nametableTexture)
+    when (lDisplayMode == DM_DISPLAY) (liftIO $ FRDisplay.update ctx nes displayTexture)
     setUpdateTextures False
 
 render :: StateT RenderContext IO ()

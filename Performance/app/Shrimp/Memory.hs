@@ -9,6 +9,7 @@ module Shrimp.Memory (
     reset
 ) where
 
+import Control.Exception
 import qualified Data.Vector.Unboxed.Mutable as UMV
 import qualified Data.Vector.Unboxed as UV
 import Data.Word

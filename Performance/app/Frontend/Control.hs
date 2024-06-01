@@ -87,10 +87,10 @@ handleKeydown SDL.KeycodeQ = exitProgram
 handleKeydown SDL.KeycodeSpace = toggleEmulation
 handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
-handleKeydown SDL.KeycodeRight = modeRight
-handleKeydown SDL.KeycodeLeft = modeLeft
-handleKeydown SDL.KeycodeUp = modeUp
-handleKeydown SDL.KeycodeDown = modeDown
+handleKeydown SDL.KeycodeRight = modeRight >> (setUpdateTextures True)
+handleKeydown SDL.KeycodeLeft = modeLeft >> (setUpdateTextures True)
+handleKeydown SDL.KeycodeUp = modeUp >> (setUpdateTextures True)
+handleKeydown SDL.KeycodeDown = modeDown >> (setUpdateTextures True)
 handleKeydown _ = return ()
 
 handleKeyboard :: SDL.KeyboardEventData -> StateT RenderContext IO ()
