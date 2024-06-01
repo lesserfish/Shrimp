@@ -17,20 +17,21 @@ loadJSON filePath = do
         Left err_msg -> error ("Could not parse JSON file to Tests data: " ++ err_msg)
         Right output -> return output
 
-test :: Test -> Bool
-test t = status
-  where
-    init_state = initial t
-    final_state = final t
-    barebones = bLoad init_state
-    barebones' = bTick barebones
-    status = verify barebones' final_state
+test :: Test -> IO Bool
+test t = do 
+    let init_state = initial t
+    let final_state = final t
+    barebones <- bLoad init_state
+    barebones' <- bTick barebones
+    verify barebones' final_state
+
 
 hTest' :: Test -> Spec
 hTest' t = describe "MOS6502 CPU Test" $ do
     let n = name t
     it (show n) $ do
-        test t `shouldBe` True
+        result <- test t
+        result  `shouldBe` True
 
 hTest :: [Test] -> IO ()
 hTest [] = return ()
@@ -52,7 +53,8 @@ testFiles (y : ys) = do
 testTilFail :: [Test] -> IO ()
 testTilFail [] = return ()
 testTilFail (y : ys) = do
-    if test y
+    result <- test y
+    if result
         then do
             testTilFail ys
         else do
@@ -62,7 +64,8 @@ testTilFail (y : ys) = do
 printFails :: [Test] -> IO ()
 printFails [] = return ()
 printFails (y : ys) = do
-    if test y
+    result <- test y
+    if result
         then do
             printFails ys
         else do
@@ -74,15 +77,16 @@ showDiff :: Test -> IO ()
 showDiff t = do
     let init_state = initial t
     let final_state = final t
-    let b = bLoad init_state
-    let prediction = bTick b
+    b <- bLoad init_state
+    prediction <- bTick b
     let cyc = cycles t
-    putStrLn $ "Success: " ++ show (verify prediction final_state)
+    result <- verify prediction final_state
+    putStrLn $ "Success: " ++ show result
     putStrLn $ show init_state
     putStrLn $ show final_state
-    putStrLn $ showLog cyc
+    --putStrLn $ showLog cyc
     putStrLn $ ""
-    putStrLn $ show prediction
+    --putStrLn $ show prediction
 
 showPaddedHex x = (padHex $ showHex x "")
   where
