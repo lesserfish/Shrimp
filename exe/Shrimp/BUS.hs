@@ -1,5 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Shrimp.BUS where
+module Shrimp.BUS (
+    BUS(..),
+    tick,
+    load,
+    reset,
+    ppuPeek,
+    cpuPeek
+) where
 
 import Control.Monad (when)
 import Control.Monad.State

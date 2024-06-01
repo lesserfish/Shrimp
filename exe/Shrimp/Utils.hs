@@ -4,6 +4,8 @@ import Text.Printf
 import Data.Word
 import Data.Bits
 
+
+-- TODO: Check if this is affecting performance. Perhaps specifying a data type would be best. I.e. Just support Word16 and cast everything to word16?
 b0 x = testBit x 0
 b1 x = testBit x 1
 b2 x = testBit x 2
@@ -20,6 +22,7 @@ b12 x = testBit x 12
 b13 x = testBit x 13
 b14 x = testBit x 14
 b15 x = testBit x 15
+
 
 
 joinBytes :: Word8 -> Word8 -> Word16

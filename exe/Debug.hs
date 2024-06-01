@@ -1,4 +1,6 @@
-module Debug where
+module Debug (
+    main
+) where
 
 import Data.Time.Clock
 import Data.Time.Clock.POSIX

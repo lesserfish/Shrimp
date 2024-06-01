@@ -1,8 +1,6 @@
 module Shrimp.Cartridge (
+    module Shrimp.Cartridge.Loader,
     Cartridge(..),
-    CartData(..),
-    Mirroring(..),
-    Header(..),
     fromCartData,
     loadCartridge,
     cpuWrite,
@@ -15,8 +13,7 @@ module Shrimp.Cartridge (
     ) where
 
 import Data.Word
-import Shrimp.Cartridge.Loader (CartData(..), Mirroring(..), Header(..))
-import qualified Shrimp.Cartridge.Loader as CL
+import Shrimp.Cartridge.Loader
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.Mapper as Mapper
 
@@ -32,7 +29,7 @@ emptyCartridge = do
     noram <- Memory.noRAM
     nomapper <- Mapper.noMapper
     let cart = Cartridge
-                { cartData = CL.emptyCartData
+                { cartData = emptyCartData
                 , prgData = noram
                 , chrData = noram
                 , mapper = nomapper}
@@ -56,7 +53,7 @@ fromCartData cartdata = do
 
 loadCartridge :: FilePath -> IO Cartridge
 loadCartridge fp = do
-    cartdata <- CL.loadCartData fp
+    cartdata <- loadCartData fp
     fromCartData cartdata
 
 -- CPU

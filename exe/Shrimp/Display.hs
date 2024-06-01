@@ -1,4 +1,13 @@
-module Shrimp.Display where
+module Shrimp.Display (
+    Display (..),
+    newDisplay,
+    setPixel,
+    getPixel,
+    toList,
+    toByteString,
+    toByteString',
+    reset
+) where
 
 import Data.Word
 import qualified Data.ByteString as BS

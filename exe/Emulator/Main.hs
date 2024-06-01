@@ -1,4 +1,8 @@
-module Emulator.Main where
+module Emulator.Main (
+   startLoop,
+   loop,
+   initializeEmulator
+) where
 
 import Data.Time.Clock
 import Control.Exception
@@ -67,16 +71,16 @@ handleCommands = do
 getExit :: StateT EmulatorContext IO Bool
 getExit = ecExit <$> get
 
-emulationLoop :: StateT EmulatorContext IO ()
-emulationLoop = do
+loop :: StateT EmulatorContext IO ()
+loop = do
     handleCommands
     runNES
     exit <- getExit
-    if exit then return () else emulationLoop
+    if exit then return () else loop
     
-startEmulationLoop :: EmulatorContext -> IO ()
-startEmulationLoop ectx = do
-    result <- try $ execStateT emulationLoop ectx
+startLoop :: EmulatorContext -> IO ()
+startLoop ectx = do
+    result <- try $ execStateT loop ectx
     case result of
         Left e -> putStrLn $ "ERROR: " ++ show (e :: SomeException)
         Right _ -> return ()

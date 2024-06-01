@@ -1,4 +1,19 @@
-module Shrimp.MOS6502 where
+module Shrimp.MOS6502 (
+    Interface (..),
+    Registers (..),
+    Context (..),
+    MOS6502 (..),
+    new,
+    reset,
+    iIRQ,
+    iNMI,
+    disassemble,
+    disassembleL,
+    disassembleM,
+    disassembleL',
+    disassembleM',
+    tick
+) where
 
 import Shrimp.Utils
 import Control.Monad
@@ -2201,8 +2216,8 @@ disassembleArg interface INDIRECT_Y addr = do
     a <- (iPeekByte interface) addr
     return ("($" ++ toHex2 a ++ "), Y", 1)
 
-disassemble' :: Interface -> Word16 -> IO (String, Word16)
-disassemble' interface addr = do
+disassemble :: Interface -> Word16 -> IO (String, Word16)
+disassemble interface addr = do
     opcode <- (iPeekByte interface) addr
     let info = opInfo opcode
     case info of
@@ -2219,7 +2234,7 @@ disassembleL' :: Interface -> Word16 -> Word16 -> IO [(Word16, String)]
 disassembleL' interface start end 
     | start >= end = return []
     | otherwise = do
-        (str, offset) <- disassemble' interface start
+        (str, offset) <- disassemble interface start
         let start' = if (overflows start offset) then end else start + offset
         rest <- disassembleL' interface start' end 
         return $ [(start, str)] ++ rest

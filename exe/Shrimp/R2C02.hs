@@ -1,4 +1,15 @@
-module Shrimp.R2C02 where
+module Shrimp.R2C02 (
+    Context (..),
+    Registers (..),
+    Interface (..),
+    R2C02 (..),
+    new, 
+    reset,
+    tick,
+    cpuPeek,
+    cpuWrite,
+    cpuRead
+) where
 
 import Control.Monad (when)
 import Control.Monad.State

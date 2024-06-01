@@ -1,4 +1,9 @@
-module Shrimp.Mapper.Mapper0 where
+module Shrimp.Mapper.Mapper0 (
+    Mapper0 (..),
+    mapper0,
+    chooseMapper0,
+    chooseMapper0'
+) where
 
 import Shrimp.Cartridge.Loader
 import Data.Bits

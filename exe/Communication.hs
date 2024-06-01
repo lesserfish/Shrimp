@@ -1,4 +1,9 @@
-module Communication where
+module Communication (
+    Command (..),
+    Feedback (..),
+    createPipe,
+    CommPipe (..)
+) where
 
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TChan

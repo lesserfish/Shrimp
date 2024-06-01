@@ -1,5 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Frontend.Main where
+module Frontend.Main ( 
+    initializeFrontend,
+    quit,
+    startLoop,
+    loop
+) where
 
 import Communication
 import Data.Time.Clock
@@ -30,8 +35,8 @@ initializeSDL = do
     SDL.rendererDrawColor renderer SDL.$= SDL.V4 10 10 10 10
     return $ SDLContext window renderer font font2
 
-quitSDL :: RenderContext -> IO ()
-quitSDL rctx = do
+quit :: RenderContext -> IO ()
+quit rctx = do
     SDL.destroyWindow . sdlWindow . rcSDLContext $ rctx
     Font.quit
 
@@ -77,14 +82,14 @@ initializeFrontend pipe = do
                 , rcSDLContext = ctx
                 }
 
-rendererLoop :: StateT RenderContext IO ()
-rendererLoop = do
+loop :: StateT RenderContext IO ()
+loop = do
     control
     render
     exit <- getExit
-    if exit then return () else rendererLoop
+    if exit then return () else loop
 
-startRendererLoop :: RenderContext -> IO ()
-startRendererLoop s = do
-    _ <- execStateT rendererLoop s
+startLoop :: RenderContext -> IO ()
+startLoop s = do
+    _ <- execStateT loop s
     return ()

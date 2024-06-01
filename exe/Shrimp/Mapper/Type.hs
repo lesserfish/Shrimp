@@ -1,4 +1,6 @@
-module Shrimp.Mapper.Type where
+module Shrimp.Mapper.Type ( 
+    Mapper(..)
+) where
 
 import Data.Word
 

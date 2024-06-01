@@ -1,6 +1,9 @@
 {-# LANGUAGE GADTs #-}
 
-module Shrimp.Mapper (chooseMapper, Mapper(..), noMapper) where
+module Shrimp.Mapper (
+    module Shrimp.Mapper.Type,
+    chooseMapper, 
+    noMapper ) where
 
 import Shrimp.Mapper.Type
 import Shrimp.Mapper.Mapper0
