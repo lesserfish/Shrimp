@@ -56,6 +56,9 @@ toHex2 w = printf "%02X" w
 toHex4 :: Word16 -> String
 toHex4 w = printf "%04X" w
 
-shiftTake :: (Bits a, Integral b, Num a) => Int -> b -> a -> a
+shiftTake :: Int -> Integer -> Word8 -> Word8
 shiftTake s t x = (x .>>. s) .&. (2 ^ t - 1)
+
+shiftTake' :: Int -> Integer -> Word16 -> Word16
+shiftTake' s t x = (x .>>. s) .&. (2 ^ t - 1)
 

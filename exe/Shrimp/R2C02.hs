@@ -276,15 +276,15 @@ setSTATUSFlag S_VERTICAL_BLANK v        = mapStatus (\ctrl -> if v then setBit c
 getTRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getTRAMData L_COARSE_X = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake 0 5) $ loopy :: Word8
+    let bits = fromIntegral . (shiftTake' 0 5) $ loopy :: Word8
     return bits
 getTRAMData L_COARSE_Y = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake 5 5) $ loopy :: Word8
+    let bits = fromIntegral . (shiftTake' 5 5) $ loopy :: Word8
     return bits
 getTRAMData L_FINE_Y = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake 12 3)$ loopy :: Word8
+    let bits = fromIntegral . (shiftTake' 12 3)$ loopy :: Word8
     return bits
 getTRAMData _ = error "Incorrect Flag"
 
@@ -300,7 +300,7 @@ setTRAMData L_COARSE_Y val = do
     setTRAM loopy'
 setTRAMData L_FINE_Y val = do
     loopy <- getTRAM
-    let loopy' = (loopy .&. 0x8fff) + ((shiftTake 0 3 (fromIntegral val) ) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake' 0 3 (fromIntegral val) ) .<<. 12)
     setTRAM loopy'
 setTRAMData _ _ = error "Incorrect Flag"
 
@@ -323,15 +323,15 @@ setTRAMBit _ _ = error "Incorrect Flag"
 getVRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getVRAMData L_COARSE_X = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake 0 5 loopy :: Word8
+    let bits = fromIntegral $ shiftTake' 0 5 loopy :: Word8
     return bits
 getVRAMData L_COARSE_Y = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake 5 5 loopy :: Word8
+    let bits = fromIntegral $ shiftTake' 5 5 loopy :: Word8
     return bits
 getVRAMData L_FINE_Y = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake 12 3 loopy :: Word8
+    let bits = fromIntegral $ shiftTake' 12 3 loopy :: Word8
     return bits
 getVRAMData _ = error "Incorrect Flag"
 
@@ -339,15 +339,15 @@ getVRAMData _ = error "Incorrect Flag"
 setVRAMData :: LOOPYFLAG -> Word8 -> StateT R2C02 IO ()
 setVRAMData L_COARSE_X val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0xffe0) + (shiftTake 0 5 (fromIntegral val))
+    let loopy' = (loopy .&. 0xffe0) + (shiftTake' 0 5 (fromIntegral val))
     setVRAM loopy'
 setVRAMData L_COARSE_Y val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0xfc1f) + ((shiftTake 0 5 (fromIntegral val)) .<<. 5)
+    let loopy' = (loopy .&. 0xfc1f) + ((shiftTake' 0 5 (fromIntegral val)) .<<. 5)
     setVRAM loopy'
 setVRAMData L_FINE_Y val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0x8fff) + ((shiftTake 0 3 (fromIntegral val) ) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake' 0 3 (fromIntegral val) ) .<<. 12)
     setVRAM loopy'
 setVRAMData _ _ = error "Incorrect Flag"
 
@@ -631,7 +631,7 @@ writeAddress byte = do
             setWriteToggle True
             let fullbyte = fromIntegral byte :: Word16
             t <- getTRAM
-            let t' = ((shiftTake 0 6 fullbyte) .<<. 8) .|. (t .&. 0x00FF)
+            let t' = ((shiftTake' 0 6 fullbyte) .<<. 8) .|. (t .&. 0x00FF)
             setTRAM t'
         else do
             setWriteToggle False
@@ -839,7 +839,7 @@ handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     scanline <- getScanline
     cycle <- getCycle
-    when (cycle == (-1) && cycle == 1)  (setSTATUSFlag S_VERTICAL_BLANK False)
+    when (scanline == (-1) && cycle == 1)  (setSTATUSFlag S_VERTICAL_BLANK False)
     when (cycle >= 2    && cycle < 258) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
     when (cycle >= 321  && cycle < 338) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
     when (cycle == 256) incFineY
