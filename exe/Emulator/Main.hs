@@ -4,6 +4,7 @@ module Emulator.Main (
    initializeEmulator
 ) where
 
+import Data.Word
 import Data.Time.Clock
 import Control.Exception
 import Control.Monad
@@ -28,6 +29,9 @@ getETR = etr . ecPipe <$> get
 
 getTNES :: StateT EmulatorContext IO (TVar NES)
 getTNES = tNES . ecPipe <$> get
+
+getTCONTROLLER :: StateT EmulatorContext IO (TVar Word8)
+getTCONTROLLER = tControllerA . ecPipe <$> get
 
 
 initializeEmulator :: CommPipe -> IO EmulatorContext
@@ -85,9 +89,19 @@ handleCommands = do
 getExit :: StateT EmulatorContext IO Bool
 getExit = ecExit <$> get
 
+updateController :: StateT EmulatorContext IO ()
+updateController = do
+    tnes <- getTNES
+    tcontroller <- getTCONTROLLER
+    nes <- liftIO . atomically $ readTVar tnes
+    controllerData <- liftIO . atomically $ readTVar tcontroller
+    liftIO $ B.setControllerA nes controllerData
+
+
 loop :: StateT EmulatorContext IO ()
 loop = do
     handleCommands
+    updateController
     runNES
     exit <- getExit
     if exit then return () else loop

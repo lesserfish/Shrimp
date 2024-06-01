@@ -69,6 +69,8 @@ initializeFrontend pipe = do
     textures <- initializeTextures ctx
     now <- getCurrentTime
 
+    let controller = Controller False False False False False False False False
+
     let rs = RenderStatus
                 { rsExit = False
                 , rsLastRender = now
@@ -84,6 +86,7 @@ initializeFrontend pipe = do
                 , rcLDisplayMode = DM_DISPLAY
                 , rcRDisplayMode = DM_INSTRUCTION
                 , rcSDLContext = ctx
+                , rcController = controller
                 }
 
 loop :: StateT RenderContext IO ()

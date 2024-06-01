@@ -6,10 +6,13 @@ module Shrimp.BUS (
     fullFrame,
     load,
     reset,
+    setControllerA,
+    setControllerB,
     ppuPeek,
     cpuPeek
 ) where
 
+import Shrimp.Utils
 import Control.Monad (when)
 import Control.Monad.State
 import Data.Word
@@ -19,6 +22,7 @@ import qualified Shrimp.MOS6502 as MOS6502
 import qualified Shrimp.Memory as Memory
 import qualified Shrimp.R2C02 as R2C02
 import qualified Shrimp.Display as Display
+import qualified Shrimp.Controller as Controller
 import Data.IORef
 
 
@@ -30,6 +34,8 @@ data BUS = BUS
     , bNTRAM :: !Memory.RAM
     , bPLRAM :: !Memory.RAM
     , bDisplay :: !Display.Display
+    , bControllerA :: !Controller.Controller
+    , bControllerB :: !Controller.Controller
     }
 
 
@@ -56,9 +62,12 @@ cpuReadAPU :: Word16 -> IO Word8
 cpuReadAPU addr = return 0 -- TODO: Implement APU Support
 
 
-cpuReadControl :: Word16 -> IO Word8
-cpuReadControl addr = return 0 -- TODO: Implement Control Support
-
+cpuReadControl :: (Controller.Controller, Controller.Controller) -> Word16 -> IO Word8
+cpuReadControl (controllerA, controllerB) addr = do
+    let addr' = addr .&. 0x01
+    let controller = if addr' == 0 then controllerA else controllerB
+    Controller.readController controller
+    
 
 cpuReadCart :: Cartridge.Cartridge -> Word16 -> IO Word8
 cpuReadCart cart addr = Cartridge.cpuRead cart addr
@@ -112,8 +121,12 @@ cpuWriteAPU :: Word16 -> Word8 -> IO ()
 cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
 
 
-cpuWriteControl :: Word16 -> Word8 -> IO ()
-cpuWriteControl addr byte = return () -- TODO: Implement Control Support
+cpuWriteControl :: (Controller.Controller, Controller.Controller) -> Word16 -> Word8 -> IO ()
+cpuWriteControl (controllerA, controllerB) addr byte = do
+    let addr' = addr .&. 0x01
+    let controller = if addr' == 0 then controllerA else controllerB
+    Controller.writeController controller
+
 
 
 cpuWriteCart :: Cartridge.Cartridge -> Word16 -> Word8 -> IO ()
@@ -123,20 +136,20 @@ cpuWriteCart cart addr byte = Cartridge.cpuWrite cart addr byte
 
 -- CPU INTERFACE
 
-cpuInterface :: (IORef R2C02.R2C02) -> Memory.RAM -> Cartridge.Cartridge -> MOS6502.Interface
-cpuInterface ppuref ram cart = MOS6502.Interface cReadByte cWriteByte cPeekByte where
+cpuInterface :: (IORef R2C02.R2C02) -> Memory.RAM -> Cartridge.Cartridge -> (Controller.Controller, Controller.Controller) -> MOS6502.Interface
+cpuInterface ppuref ram cart (ca, cb) = MOS6502.Interface cReadByte cWriteByte cPeekByte where
     cReadByte addr
         | (addr >= 0x0000 && addr <= 0x1FFF) = cpuReadRAM ram addr
         | (addr >= 0x2000 && addr <= 0x3FFF) = cpuReadPPU ppuref addr
         | (addr >= 0x4000 && addr <= 0x4015) = cpuReadAPU addr
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuReadControl addr
+        | (addr >= 0x4016 && addr <= 0x4017) = cpuReadControl (ca, cb) addr
         | (addr >= 0x4020 && addr <= 0xFFFF) = cpuReadCart cart addr
         | otherwise = return 0 -- TODO: Log error ?
     cWriteByte addr byte
         | (addr >= 0x0000 && addr <= 0x1FFF) = cpuWriteRAM ram addr byte
         | (addr >= 0x2000 && addr <= 0x3FFF) = cpuWritePPU ppuref addr byte
         | (addr >= 0x4000 && addr <= 0x4015) = cpuWriteAPU addr byte
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl addr byte
+        | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl (ca, cb) addr byte
         | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart cart addr byte
         | otherwise = return () -- TODO: Log error ?
     cPeekByte addr
@@ -357,6 +370,7 @@ fullFrame bus = do
     tickCPU bus
     if done then return () else fullFrame bus
 
+
 load :: FilePath -> IO BUS
 load fp = do
     cart <- Cartridge.loadCartridge fp
@@ -366,9 +380,12 @@ load fp = do
     display <- Display.newDisplay
     cpuref <- newIORef undefined :: IO (IORef MOS6502.MOS6502)
     ppuref <- newIORef undefined :: IO (IORef R2C02.R2C02)
+    controllerA <- Controller.new
+    controllerB <- Controller.new
+
 
     let ppuinterface = ppuInterface cpuref cart display plram ntram
-    let cpuinterface = cpuInterface ppuref ram cart
+    let cpuinterface = cpuInterface ppuref ram cart (controllerA, controllerB)
 
     let cpu = MOS6502.new cpuinterface
     let ppu = R2C02.new ppuinterface
@@ -384,10 +401,17 @@ load fp = do
                   , bNTRAM = ntram
                   , bPLRAM = plram
                   , bDisplay = display
+                  , bControllerA = controllerA
+                  , bControllerB = controllerB
                   }
     reset bus
     return bus
 
+setControllerA :: BUS -> Word8 -> IO()
+setControllerA bus controller = Controller.writeLive (bControllerA bus) controller
+
+setControllerB :: BUS -> Word8 -> IO()
+setControllerB bus controller = Controller.writeLive (bControllerA bus) controller
 
 reset :: BUS -> IO ()
 reset bus = do

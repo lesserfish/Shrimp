@@ -17,6 +17,7 @@ common warnings
 ghc-options: -Wall
 
 executable Shrimp-exe
+  ghc-options: -O2
   import:           warnings
   main-is:          Main.hs
 
@@ -30,6 +31,7 @@ executable Shrimp-exe
                     Shrimp.Display, 
                     Shrimp.Cartridge, 
                     Shrimp.Cartridge.Loader, 
+                    Shrimp.Controller, 
                     Shrimp.Mapper.Type, 
                     Shrimp.Mapper, 
                     Shrimp.Mapper.Mapper0, 

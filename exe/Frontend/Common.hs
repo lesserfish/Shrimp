@@ -61,8 +61,33 @@ data RenderContext = RenderContext
     , rcLDisplayMode :: DisplayMode
     , rcRDisplayMode :: DisplayMode
     , rcSDLContext :: SDLContext
+    , rcController :: Controller
     }
 
+data CKEY = CUP | CDOWN | CLEFT | CRIGHT | CSELECT | CSTART | CA | CB
+
+data Controller = Controller 
+    { cRIGHT :: Bool
+    , cLEFT :: Bool
+    , cDOWN :: Bool
+    , cUP :: Bool
+    , cSTART :: Bool
+    , cSELECT :: Bool
+    , cA :: Bool
+    , cB :: Bool
+    } deriving Show
+
+controllerToByte :: Controller -> Word8
+controllerToByte c = byte where
+    bRIGHT  = if (cRIGHT c)  then 0x01 else 0x00
+    bLEFT   = if (cLEFT c)   then 0x02 else 0x00
+    bDOWN   = if (cDOWN c)   then 0x04 else 0x00
+    bUP     = if (cUP c)     then 0x08 else 0x00
+    bSTART  = if (cSTART c)  then 0x10 else 0x00
+    bSELECT = if (cSELECT c) then 0x20 else 0x00
+    bA      = if (cA c)      then 0x40 else 0x00
+    bB      = if (cB c)      then 0x80 else 0x00
+    byte = bRIGHT + bLEFT + bDOWN + bUP + bSTART + bSELECT + bA + bB
 
 -- Getters / Setters
 
@@ -74,6 +99,13 @@ getETR = etr . rcCommunicationPipe <$> get
 
 getTNES :: StateT RenderContext IO (TVar NES)
 getTNES = tNES . rcCommunicationPipe <$> get
+
+getTCONTROLLER :: StateT RenderContext IO (TVar Word8)
+getTCONTROLLER = tControllerA . rcCommunicationPipe <$> get
+
+getControllerData :: StateT RenderContext IO Word8
+getControllerData = controllerToByte . rcController <$> get
+
 
 setExit :: Bool -> StateT RenderContext IO ()
 setExit v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsExit = v}})
