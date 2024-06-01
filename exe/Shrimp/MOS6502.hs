@@ -12,7 +12,8 @@ module Shrimp.MOS6502 (
     disassembleM,
     disassembleL',
     disassembleM',
-    tick
+    tick,
+    tick'
 ) where
 
 import Shrimp.Utils
@@ -388,6 +389,19 @@ tick = do
             opcode <- fetch
             execute opcode
             setComplete True
+
+tick' :: StateT MOS6502 IO Bool
+tick' = do
+    incClock
+    c <- getCycles
+    if c > 0
+        then do
+            updateCycles (-1)
+            return False
+        else do
+            opcode <- fetch
+            execute opcode
+            return True
 
 
 fetch :: StateT MOS6502 IO Word8

@@ -36,17 +36,30 @@ initializeEmulator pipe = do
     return $ EmulatorContext pipe False False now
 
 
-tickNES :: StateT EmulatorContext IO ()
-tickNES = do
+tick :: StateT EmulatorContext IO ()
+tick = do
     tnes <- getTNES 
     nes <- liftIO . atomically $ readTVar tnes
     liftIO $ B.tick nes
+
+fullTick :: StateT EmulatorContext IO ()
+fullTick = do
+    tnes <- getTNES 
+    nes <- liftIO . atomically $ readTVar tnes
+    liftIO $ B.fullTick nes
+
+fullFrame :: StateT EmulatorContext IO ()
+fullFrame = do
+    tnes <- getTNES 
+    nes <- liftIO . atomically $ readTVar tnes
+    liftIO $ B.fullFrame nes
+
 
 runNES :: StateT EmulatorContext IO ()
 runNES = do
     ectx <- get
     let running = ecRunning ectx
-    when running (tickNES >> (sendFeedback CPUCOMPLETE))
+    when running (fullFrame >> (sendFeedback CPUCOMPLETE))
 
 sendFeedback :: Feedback -> StateT EmulatorContext IO ()
 sendFeedback feedback = do
@@ -57,8 +70,8 @@ handleCommand :: Command -> StateT EmulatorContext IO ()
 handleCommand EXIT =  modify (\ec -> ec{ecExit = True})
 handleCommand START = modify (\ex -> ex{ecRunning = True})
 handleCommand STOP =  modify (\ex -> ex{ecRunning = False})
-handleCommand TICK =  tickNES >> (sendFeedback CPUCOMPLETE)
-handleCommand FULLTICK = tickNES >> (sendFeedback CPUCOMPLETE)
+handleCommand TICK =  tick >> (sendFeedback CPUCOMPLETE)
+handleCommand FULLTICK = fullTick >> (sendFeedback CPUCOMPLETE)
 
 handleCommands :: StateT EmulatorContext IO ()
 handleCommands = do

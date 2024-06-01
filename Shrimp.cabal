@@ -22,6 +22,7 @@ executable Shrimp-exe
 
 
   other-modules:    Launcher,
+                    Debug,
                     Shrimp.MOS6502, 
                     Shrimp.Utils, 
                     Shrimp.R2C02, 

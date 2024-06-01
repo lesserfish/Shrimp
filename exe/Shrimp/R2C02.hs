@@ -6,6 +6,7 @@ module Shrimp.R2C02 (
     new, 
     reset,
     tick,
+    tick',
     cpuPeek,
     cpuWrite,
     cpuRead
@@ -927,3 +928,7 @@ tick :: StateT R2C02 IO ()
 tick = do
     tickBackground
 
+tick' :: StateT R2C02 IO Bool
+tick' = do
+    tick
+    getComplete

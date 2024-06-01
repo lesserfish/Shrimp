@@ -2,6 +2,8 @@
 module Shrimp.BUS (
     BUS(..),
     tick,
+    fullTick,
+    fullFrame,
     load,
     reset,
     ppuPeek,
@@ -293,6 +295,14 @@ tickCPU bus = do
     cpu' <- execStateT MOS6502.tick cpu
     writeIORef cpuref cpu'
 
+tickCPU' :: BUS -> IO Bool
+tickCPU' bus = do
+    let cpuref = bCPU bus
+    cpu <- readIORef cpuref
+    (done, cpu') <- runStateT MOS6502.tick' cpu
+    writeIORef cpuref cpu'
+    return $ done
+
 
 tickPPU :: BUS -> IO ()
 tickPPU bus = do
@@ -301,23 +311,51 @@ tickPPU bus = do
     ppu' <- execStateT R2C02.tick ppu
     writeIORef ppuref ppu'
 
+tickPPU' :: BUS -> IO ()
+tickPPU' bus = do
+    let ppuref = bPPU bus
+    ppu <- readIORef ppuref
+    (done, ppu') <- runStateT R2C02.tick ppu
+    writeIORef ppuref ppu'
+    return done
+
 
 tickNPPU :: Int -> BUS -> IO ()
 tickNPPU n bus = do
     let ppuref = bPPU bus
     ppu <- readIORef ppuref
-    let action = mapM_(\_ -> R2C02.tick) [1..n] :: StateT R2C02.R2C02 IO ()
+    let action = mapM_(\_ -> R2C02.tick) [1..n]
     ppu' <- execStateT action ppu
     writeIORef ppuref ppu'
+
+tickNPPU' :: Int -> BUS -> IO Bool
+tickNPPU' n bus = do
+    let ppuref = bPPU bus
+    ppu <- readIORef ppuref
+    let action = (mapM_(\_ -> R2C02.tick) [1..(n-1)]) >> R2C02.tick'
+    (done, ppu') <- runStateT action ppu
+    writeIORef ppuref ppu'
+    return done
 
 
 tick :: BUS -> IO ()
 tick bus = do
+    tickNPPU 3 bus
     tickCPU bus
-    tickPPU bus
-    tickPPU bus
-    tickPPU bus
 
+fullTick :: BUS -> IO ()
+fullTick bus = do
+    tickPPU bus
+    tickPPU bus
+    tickPPU bus
+    done <- tickCPU' bus
+    if done then return () else fullTick bus
+   
+fullFrame :: BUS -> IO ()
+fullFrame bus = do
+    done <- tickNPPU' 3 bus
+    tickCPU bus
+    if done then return () else fullFrame bus
 
 load :: FilePath -> IO BUS
 load fp = do
@@ -350,6 +388,7 @@ load fp = do
     reset bus
     return bus
 
+
 reset :: BUS -> IO ()
 reset bus = do
     Memory.reset (bRAM bus)
@@ -365,7 +404,6 @@ reset bus = do
     ppu' <- execStateT R2C02.reset ppu
     writeIORef cpuref cpu'
     writeIORef ppuref ppu'
-    
 
 
 ppuPeek :: BUS -> Word16 -> IO Word8
@@ -374,6 +412,7 @@ ppuPeek bus addr = do
    ppu <- readIORef ppuref
    let peeker = R2C02.iPeekByte . R2C02.interface $ ppu
    peeker addr
+
 
 cpuPeek :: BUS -> Word16 -> IO Word8
 cpuPeek bus addr = do
