@@ -32,7 +32,7 @@ testTicks = do
 
 testFrames :: IO () 
 testFrames = do
-    let iterations = 500000
+    let iterations = 1000
     before <- getCurrentTime
     nes <- BUS.load "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/Super_mario_brothers.nes"
     renderNFrames iterations nes
