@@ -42,6 +42,12 @@ sendFullTick = do
     comm <- getRTE
     liftIO . atomically $ writeTChan comm FULLTICK
 
+sendFrame :: StateT RenderContext IO ()
+sendFrame = do
+    comm <- getRTE
+    liftIO . atomically $ writeTChan comm FRAME
+
+
 handleFeedback :: Feedback -> StateT RenderContext IO ()
 handleFeedback CPUCOMPLETE = setUpdateTextures True
 
@@ -89,6 +95,7 @@ handleKeydown SDL.KeycodeQ = exitProgram
 handleKeydown SDL.KeycodeSpace = toggleEmulation
 handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
+handleKeydown SDL.KeycodeF = sendFrame
 handleKeydown SDL.KeycodeRight = modeRight >> (setUpdateTextures True)
 handleKeydown SDL.KeycodeLeft = modeLeft >> (setUpdateTextures True)
 handleKeydown SDL.KeycodeUp = modeUp >> (setUpdateTextures True)

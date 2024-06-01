@@ -878,7 +878,7 @@ iIRQ = do
             return ()
         else do
             pc <- getPC
-            let pushed_pc = pc + 1 -- Currently, PC points to the byte NEXT to the BRK instruction. But for some ill reason, the 6502 will push the byte after that one to the stack instead.
+            let pushed_pc = pc -- SEE WARNING ON iNMI BELOW. THIS MIGHT BE WRONG. TODO: VERIFY THIS.
             let (pchb, pclb) = splitBytes (pushed_pc) --
             ps <- getPS
             writeStack pchb -- Write the high byte of the PC to the stack
@@ -893,15 +893,17 @@ iIRQ = do
 iNMI :: StateT MOS6502 IO () -- Non-Maskable Interrupt
 iNMI = do
     pc <- getPC
-    let pushed_pc = pc + 1 -- Currently, PC points to the byte NEXT to the BRK instruction. But for some ill reason, the 6502 will push the byte after that one to the stack instead.
+    let pushed_pc = pc  -- WARNING: At some point, I thought that an interrupt would push PC + 1 instead of PC to the stack.
+                        -- However, when I do this, donkey donk breaks. I think it deosn't happen and I'm not entirely sure WHY I thought it would
+                        -- If something breaks down, please write pc + 1 instead of pc. TODO: VERIFY THIS
     let (pchb, pclb) = splitBytes (pushed_pc) --
     ps <- getPS
     writeStack pchb -- Write the high byte of the PC to the stack
     writeStack pclb -- Write the low byte of the PC to the stack
     writeStack (setBit ps 0) -- Write the PS to the stack with fourth bit (B flag) unset. (see: https://www.pagetable.com/?p=410)
-    irq_lb <- readByte 0xFFFA -- Get the NMI interrupt vector
-    irq_hb <- readByte 0xFFFB --
-    let jmp_addr = joinBytes irq_hb irq_lb
+    nmi_lb <- readByte 0xFFFA -- Get the NMI interrupt vector
+    nmi_hb <- readByte 0xFFFB --
+    let jmp_addr = joinBytes nmi_hb nmi_lb
     setPC jmp_addr -- Jump to the address
     setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 

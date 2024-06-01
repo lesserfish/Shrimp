@@ -185,9 +185,9 @@ ppuReadNT cart ntram addr = do
 
 
 ppuReadPL' :: Memory.RAM -> Word16 -> IO Word8
-ppuReadPL' plram 0x04 = ppuReadPL' plram 0x0
-ppuReadPL' plram 0x08 = ppuReadPL' plram 0x0
-ppuReadPL' plram 0x0C = ppuReadPL' plram 0x0
+--ppuReadPL' plram 0x04 = ppuReadPL' plram 0x0
+--ppuReadPL' plram 0x08 = ppuReadPL' plram 0x0
+--ppuReadPL' plram 0x0C = ppuReadPL' plram 0x0
 
 
 ppuReadPL' plram 0x10 = ppuReadPL' plram 0x0
@@ -233,9 +233,9 @@ ppuWriteNT cart ntram addr byte = do
 
 
 ppuWritePL' :: Memory.RAM -> Word16 -> Word8 ->IO ()
-ppuWritePL' plram 0x04 byte = ppuWritePL' plram 0x00 byte
-ppuWritePL' plram 0x08 byte = ppuWritePL' plram 0x00 byte
-ppuWritePL' plram 0x0C byte = ppuWritePL' plram 0x00 byte
+--ppuWritePL' plram 0x04 byte = ppuWritePL' plram 0x00 byte
+--ppuWritePL' plram 0x08 byte = ppuWritePL' plram 0x00 byte
+--ppuWritePL' plram 0x0C byte = ppuWritePL' plram 0x00 byte
 
 ppuWritePL' plram 0x10 byte = ppuWritePL' plram 0x00 byte
 ppuWritePL' plram 0x14 byte = ppuWritePL' plram 0x04 byte

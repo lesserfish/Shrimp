@@ -9,7 +9,7 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TChan
 import Shrimp.NES
 
-data Command = START | STOP | TICK | FULLTICK | EXIT
+data Command = START | STOP | TICK | FULLTICK | EXIT | FRAME
 data Feedback = CPUCOMPLETE
 
 data CommPipe = CommPipe

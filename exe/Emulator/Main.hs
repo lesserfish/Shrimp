@@ -70,6 +70,7 @@ handleCommand :: Command -> StateT EmulatorContext IO ()
 handleCommand EXIT =  modify (\ec -> ec{ecExit = True})
 handleCommand START = modify (\ex -> ex{ecRunning = True})
 handleCommand STOP =  modify (\ex -> ex{ecRunning = False})
+handleCommand FRAME = fullFrame >> (sendFeedback CPUCOMPLETE)
 handleCommand TICK =  tick >> (sendFeedback CPUCOMPLETE)
 handleCommand FULLTICK = fullTick >> (sendFeedback CPUCOMPLETE)
 

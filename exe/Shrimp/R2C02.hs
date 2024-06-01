@@ -931,4 +931,6 @@ tick = do
 tick' :: StateT R2C02 IO Bool
 tick' = do
     tick
-    getComplete
+    done <- getComplete
+    setComplete False
+    return done
