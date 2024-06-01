@@ -10,5 +10,6 @@ jobs:
         with:
           ghc-version: '9.6.1' # Resolves to the latest point release of GHC 8.8
           cabal-version: '3.10.3.0' # Exact version of Cabal
+      - run: sudo apt-get install libsdl2-ttf-dev
       - run: cabal build shrimp-test
       - run: cabal run shrimp-test
