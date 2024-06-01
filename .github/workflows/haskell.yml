@@ -9,6 +9,6 @@ jobs:
       - uses: haskell-actions/setup@v2
         with:
           ghc-version: '8.8' # Resolves to the latest point release of GHC 8.8
-          cabal-version: '4.18.0.0' # Exact version of Cabal
+          cabal-version: '3.6.2.0' # Exact version of Cabal
       - run: cabal build shrimp-test
       - run: cabal run shrimp-test
