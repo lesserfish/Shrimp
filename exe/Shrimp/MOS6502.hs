@@ -192,13 +192,13 @@ getPS = (ps . registers) <$> get
 
 
 getFlag :: FLAG -> StateT MOS6502 IO Bool
-getFlag CARRY             = b0 <$> getPS
-getFlag ZERO              = b1 <$> getPS
-getFlag INTERRUPT_DISABLE = b2 <$> getPS
-getFlag DECIMAL_MODE      = b3 <$> getPS
-getFlag BREAK_CMD         = b4 <$> getPS
-getFlag OVERFLOW          = b6 <$> getPS
-getFlag NEGATIVE          = b7 <$> getPS
+getFlag CARRY             = b0' <$> getPS
+getFlag ZERO              = b1' <$> getPS
+getFlag INTERRUPT_DISABLE = b2' <$> getPS
+getFlag DECIMAL_MODE      = b3' <$> getPS
+getFlag BREAK_CMD         = b4' <$> getPS
+getFlag OVERFLOW          = b6' <$> getPS
+getFlag NEGATIVE          = b7' <$> getPS
 
 
 setFlag :: FLAG -> Bool -> StateT MOS6502 IO ()
@@ -967,15 +967,15 @@ opADC addr_mode = do
             let ln' = if (ln >= 0xA) then ((ln + 0x6) .&. 0xF) + 0x10 else ln
             let r = (fromIntegral acc .&. 0xF0) + (fromIntegral byte .&. 0xF0) + ln' :: Word16
             setFlag NEGATIVE (b7 r)
-            -- setFlag OVERFLOW (not (b7 (iacc `xor` ibyte)) && (b7 (iacc `xor` result)))
+            -- setFlag OVERFLOW (not (b7' (iacc `xor` ibyte)) && (b7' (iacc `xor` result)))
             setFlag OVERFLOW (((((r `xor` fromIntegral acc) .&. (r `xor` fromIntegral byte)) .&. 0x80) .>>. 1) /= 0)
             let r' = if r >= 0xA0 then r + 0x60 else r
             setFlag CARRY (r' .>>. 8 /= 0)
             let acc' = fromIntegral r' :: Word8
             setACC acc'
         else do
-            setFlag NEGATIVE (b7 result)
-            setFlag OVERFLOW (not (b7 (iacc `xor` ibyte)) && (b7 (iacc `xor` result)))
+            setFlag NEGATIVE (bi7 result)
+            setFlag OVERFLOW (not (bi7 (iacc `xor` ibyte)) && (bi7 (iacc `xor` result)))
             setFlag CARRY (result > 0xFF)
             let acc' = fromIntegral (result .&. 0xFF) :: Word8
             setACC acc'
@@ -993,7 +993,7 @@ opAND addr_mode = do
     mapACC (.&. byte) -- AND the corresponding byte to Accumulator
     acc <- getACC 
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
 opASL ::ADDR_MODE -> StateT MOS6502 IO ()
 opASL IMPLICIT = error "Operation ASL does not support IMPLICIT addressing mode"
@@ -1006,21 +1006,21 @@ opASL INDIRECT_X = error "Operation ASL does not support INDIRECT_X addressing m
 opASL INDIRECT_Y = error "Operation ASL does not support INDIRECT_Y addressing mode"
 opASL ACCUMULATOR = do
     old_acc <- getACC 
-    let carry_flag = b7 old_acc -- Carry flag is set to contents of old bit 7
+    let carry_flag = b7' old_acc -- Carry flag is set to contents of old bit 7
     mapACC ((\x -> x .<<. 1) :: Word8 -> Word8) -- Shifts byte one bit to the left
     acc <- getACC 
     setFlag CARRY carry_flag -- Sets the Carry flag
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 opASL addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     byte <- readByte addr -- Read byte from the Bus
-    let carry_flag = b7 byte -- Carry flag is set to contents of old bit 7
+    let carry_flag = b7' byte -- Carry flag is set to contents of old bit 7
     let new_byte = byte .<<. 1 :: Word8 -- Perform the L Shift
     writeByte addr new_byte -- Write new byte to same address
     setFlag CARRY carry_flag -- Sets the Carry flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 new_byte) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' new_byte) -- Sets the Negative flag is the result is negative
 
 opBCC ::ADDR_MODE -> StateT MOS6502 IO ()
 opBCC IMPLICIT = error "Operation BCC does not support IMPLICIT addressing mode"
@@ -1094,8 +1094,8 @@ opBIT addr_mode = do
     acc <- getACC 
     let and_result = (byte .&. acc) -- Perform AND operation
     setFlag ZERO (and_result == 0) -- Sets the ZERO flag if the result of the AND operation is 0
-    setFlag NEGATIVE (b7 byte) -- Sets the Negative flag to the seventh bit of the address value
-    setFlag OVERFLOW (b6 byte) -- Sets the Overflow flag to the sixth bit of the address value
+    setFlag NEGATIVE (b7' byte) -- Sets the Negative flag to the seventh bit of the address value
+    setFlag OVERFLOW (b6' byte) -- Sets the Overflow flag to the sixth bit of the address value
 
 opBMI ::ADDR_MODE -> StateT MOS6502 IO ()
 opBMI IMPLICIT = error "Operation BMI does not support IMPLICIT addressing mode"
@@ -1291,7 +1291,7 @@ opCMP addr_mode = do
     let result = acc - byte -- Compares the accumulator with a memory value
     setFlag ZERO (acc == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (acc >= byte) -- Set the Carry flag if Acc >= mem_value
-    setFlag NEGATIVE (b7 result) -- Set the Negative flag if
+    setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
 opCPX ::ADDR_MODE -> StateT MOS6502 IO ()
 opCPX IMPLICIT = error "Operation CPX does not support IMPLICIT addressing mode"
@@ -1311,7 +1311,7 @@ opCPX addr_mode = do
     let result = xreg - byte -- Compares the accumulator with a memory value
     setFlag ZERO (xreg == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (xreg >= byte) -- Set the Carry flag if Acc >= mem_value
-    setFlag NEGATIVE (b7 result) -- Set the Negative flag if
+    setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
 opCPY ::ADDR_MODE -> StateT MOS6502 IO ()
 opCPY IMPLICIT = error "Operation CPY does not support IMPLICIT addressing mode"
@@ -1331,7 +1331,7 @@ opCPY addr_mode = do
     let result = yreg - byte -- Compares the accumulator with a memory value
     setFlag ZERO (yreg == byte) -- Set the Zero flag if they are equal
     setFlag CARRY (yreg >= byte) -- Set the Carry flag if Acc >= mem_value
-    setFlag NEGATIVE (b7 result) -- Set the Negative flag if
+    setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
 opDEC ::ADDR_MODE -> StateT MOS6502 IO ()
 opDEC IMPLICIT = error "Operation DEC does not support IMPLICIT addressing mode"
@@ -1349,7 +1349,7 @@ opDEC addr_mode = do
     let result = byte - 1
     writeByte addr result
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' result) -- Sets the Negative flag is the result is negative
 
 opDEX ::ADDR_MODE -> StateT MOS6502 IO ()
 opDEX ACCUMULATOR = error "Operation DEX does not support ACCUMULATOR addressing mode"
@@ -1368,7 +1368,7 @@ opDEX IMPLICIT = do
     mapIDX (\x -> x - (1 :: Word8)) -- Increases the X Register by one
     idx <- getIDX 
     setFlag ZERO (idx == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 idx) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' idx) -- Sets the Negative flag is the result is negative
 
 opDEY ::ADDR_MODE -> StateT MOS6502 IO ()
 opDEY ACCUMULATOR = error "Operation DEY does not support ACCUMULATOR addressing mode"
@@ -1387,7 +1387,7 @@ opDEY IMPLICIT = do
     mapIDY (\x -> x - (1 :: Word8)) -- Increases the X Register by one
     idy <- getIDY 
     setFlag ZERO (idy == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 idy) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' idy) -- Sets the Negative flag is the result is negative
 
 opEOR ::ADDR_MODE -> StateT MOS6502 IO ()
 opEOR IMPLICIT = error "Operation EOR does not support IMPLICIT addressing mode"
@@ -1402,7 +1402,7 @@ opEOR addr_mode = do
     mapACC (`xor` byte) -- XOR the corresponding byte to Accumulator
     acc <- getACC 
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
 opINC ::ADDR_MODE -> StateT MOS6502 IO ()
 opINC IMPLICIT = error "Operation INC does not support IMPLICIT addressing mode"
@@ -1420,7 +1420,7 @@ opINC addr_mode = do
     let result = byte + 1
     writeByte addr result
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 result) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' result) -- Sets the Negative flag is the result is negative
 
 opINX ::ADDR_MODE -> StateT MOS6502 IO ()
 opINX ACCUMULATOR = error "Operation INX does not support ACCUMULATOR addressing mode"
@@ -1439,7 +1439,7 @@ opINX IMPLICIT = do
     mapIDX (+ (1 :: Word8)) -- Increases the X Register by one
     idx <- getIDX 
     setFlag ZERO (idx == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 idx) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' idx) -- Sets the Negative flag is the result is negative
 
 opINY ::ADDR_MODE -> StateT MOS6502 IO ()
 opINY ACCUMULATOR = error "Operation INY does not support ACCUMULATOR addressing mode"
@@ -1458,7 +1458,7 @@ opINY IMPLICIT = do
     mapIDY (+ (1 :: Word8)) -- Increases the X Register by one
     idy <- getIDY 
     setFlag ZERO (idy == 0) -- Sets the Zero flag is the result is equal to 0
-    setFlag NEGATIVE (b7 idy) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' idy) -- Sets the Negative flag is the result is negative
 
 opJMP ::ADDR_MODE -> StateT MOS6502 IO ()
 opJMP IMPLICIT = error "Operation JMP does not support IMPLICIT addressing mode"
@@ -1511,7 +1511,7 @@ opLDA addr_mode = do
     byte <- readByte addr
     setACC byte
     setFlag ZERO (byte == 0)
-    setFlag NEGATIVE (b7 byte)
+    setFlag NEGATIVE (b7' byte)
 
 opLDX ::ADDR_MODE -> StateT MOS6502 IO ()
 opLDX IMPLICIT = error "Operation LDX does not support IMPLICIT addressing mode"
@@ -1527,7 +1527,7 @@ opLDX addr_mode = do
     byte <- readByte addr
     setIDX byte
     setFlag ZERO (byte == 0)
-    setFlag NEGATIVE (b7 byte)
+    setFlag NEGATIVE (b7' byte)
 
 opLDY ::ADDR_MODE -> StateT MOS6502 IO ()
 opLDY IMPLICIT = error "Operation LDY does not support IMPLICIT addressing mode"
@@ -1543,7 +1543,7 @@ opLDY addr_mode = do
     byte <- readByte addr
     setIDY byte
     setFlag ZERO (byte == 0)
-    setFlag NEGATIVE (b7 byte)
+    setFlag NEGATIVE (b7' byte)
 
 opLSR ::ADDR_MODE -> StateT MOS6502 IO ()
 opLSR IMPLICIT = error "Operation LSR does not support IMPLICIT addressing mode"
@@ -1556,21 +1556,21 @@ opLSR INDIRECT_X = error "Operation LSR does not support INDIRECT_X addressing m
 opLSR INDIRECT_Y = error "Operation LSR does not support INDIRECT_Y addressing mode"
 opLSR ACCUMULATOR = do
     old_acc <- getACC 
-    let carry_flag = b0 old_acc -- Carry flag is set to contents of old bit 0
+    let carry_flag = b0' old_acc -- Carry flag is set to contents of old bit 0
     mapACC ((\x -> x .>>. 1) :: Word8 -> Word8)
     acc <- getACC 
     setFlag CARRY carry_flag
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 opLSR addr_mode = do
     addr <- getAddr addr_mode
     byte <- readByte addr
-    let carry_flag = b0 byte -- Carry flag is set to contents of old bit 0
+    let carry_flag = b0' byte -- Carry flag is set to contents of old bit 0
     let new_byte = byte .>>. 1 :: Word8
     writeByte addr new_byte
     setFlag CARRY carry_flag
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 new_byte) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' new_byte) -- Sets the Negative flag is the result is negative
 
 opNOP ::ADDR_MODE -> StateT MOS6502 IO ()
 opNOP ACCUMULATOR = error "Operation NOP does not support ACCUMULATOR addressing mode"
@@ -1600,7 +1600,7 @@ opORA addr_mode = do
     mapACC (.|. byte) -- OR the corresponding byte to Accumulator
     acc <- getACC 
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
-    setFlag NEGATIVE (b7 acc) -- Sets the Negative flag is the result is negative
+    setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
 opPHA ::ADDR_MODE -> StateT MOS6502 IO ()
 opPHA ACCUMULATOR = error "Operation PHA does not support ACCUMULATOR addressing mode"
@@ -1653,7 +1653,7 @@ opPLA IMPLICIT = do
     acc <- readStack
     setACC acc
     setFlag ZERO (acc == 0)
-    setFlag NEGATIVE (b7 acc)
+    setFlag NEGATIVE (b7' acc)
 
 opPLP ::ADDR_MODE -> StateT MOS6502 IO ()
 opPLP ACCUMULATOR = error "Operation PLP does not support ACCUMULATOR addressing mode"
@@ -1686,23 +1686,23 @@ opROL INDIRECT_Y = error "Operation ROL does not support INDIRECT_Y addressing m
 opROL ACCUMULATOR = do
     acc <- getACC 
     carry_flag <- getFlag CARRY
-    let new_carry = b7 acc
+    let new_carry = b7' acc
     let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
     let acc' = (acc .<<. 1) .|. bit0
     setACC acc'
     setFlag ZERO (acc' == 0)
-    setFlag NEGATIVE (b7 acc')
+    setFlag NEGATIVE (b7' acc')
     setFlag CARRY new_carry
 opROL addr_mode = do
     addr <- getAddr addr_mode
     byte <- readByte addr
     carry_flag <- getFlag CARRY
-    let new_carry = b7 byte
+    let new_carry = b7' byte
     let bit0 = if carry_flag then (0x01 :: Word8) else (0x00 :: Word8)
     let byte' = (byte .<<. 1) .|. bit0
     writeByte addr byte'
     setFlag ZERO (byte' == 0)
-    setFlag NEGATIVE (b7 byte')
+    setFlag NEGATIVE (b7' byte')
     setFlag CARRY new_carry
 
 opROR ::ADDR_MODE -> StateT MOS6502 IO ()
@@ -1717,23 +1717,23 @@ opROR INDIRECT_Y = error "Operation ROR does not support INDIRECT_Y addressing m
 opROR ACCUMULATOR = do
     acc <- getACC 
     carry_flag <- getFlag CARRY
-    let new_carry = b0 acc
+    let new_carry = b0' acc
     let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
     let acc' = (acc .>>. 1) .|. bit0
     setACC acc'
     setFlag ZERO (acc' == 0)
-    setFlag NEGATIVE (b7 acc')
+    setFlag NEGATIVE (b7' acc')
     setFlag CARRY new_carry
 opROR addr_mode = do
     addr <- getAddr addr_mode
     byte <- readByte addr
     carry_flag <- getFlag CARRY
-    let new_carry = b0 byte
+    let new_carry = b0' byte
     let bit0 = if carry_flag then (0x80 :: Word8) else (0x00 :: Word8)
     let byte' = (byte .>>. 1) .|. bit0
     writeByte addr byte'
     setFlag ZERO (byte' == 0)
-    setFlag NEGATIVE (b7 byte')
+    setFlag NEGATIVE (b7' byte')
     setFlag CARRY new_carry
 
 opRTI ::ADDR_MODE -> StateT MOS6502 IO ()
@@ -1822,9 +1822,9 @@ opSBC addr_mode = do
         else do
             let operand = ibyte `xor` 0x00FF
             let temp = iacc + operand + icarry
-            setFlag NEGATIVE (b7 temp)
+            setFlag NEGATIVE (bi7 temp)
             setFlag CARRY (temp .&. 0xFF00 /= 0)
-            setFlag OVERFLOW (b7 ((temp `xor` iacc) .&. (temp `xor` operand)))
+            setFlag OVERFLOW (bi7 ((temp `xor` iacc) .&. (temp `xor` operand)))
             let acc' = fromIntegral (temp .&. 0xFF) :: Word8
             setACC acc'
             return ()
@@ -1938,7 +1938,7 @@ opTAX IMPLICIT = do
     acc <- getACC 
     setIDX acc
     setFlag ZERO (acc == 0)
-    setFlag NEGATIVE (b7 acc)
+    setFlag NEGATIVE (b7' acc)
 
 opTAY ::ADDR_MODE -> StateT MOS6502 IO ()
 opTAY ACCUMULATOR = error "Operation TAY does not support ACCUMULATOR addressing mode"
@@ -1957,7 +1957,7 @@ opTAY IMPLICIT = do
     acc <- getACC 
     setIDY acc
     setFlag ZERO (acc == 0)
-    setFlag NEGATIVE (b7 acc)
+    setFlag NEGATIVE (b7' acc)
 
 opTSX ::ADDR_MODE -> StateT MOS6502 IO ()
 opTSX ACCUMULATOR = error "Operation TSX does not support ACCUMULATOR addressing mode"
@@ -1976,7 +1976,7 @@ opTSX IMPLICIT = do
     sp <- getSP 
     setIDX sp
     setFlag ZERO (sp == 0)
-    setFlag NEGATIVE (b7 sp)
+    setFlag NEGATIVE (b7' sp)
 
 opTXA ::ADDR_MODE -> StateT MOS6502 IO ()
 opTXA ACCUMULATOR = error "Operation TXA does not support ACCUMULATOR addressing mode"
@@ -1995,7 +1995,7 @@ opTXA IMPLICIT = do
     xreg <- getIDX 
     setACC xreg
     setFlag ZERO (xreg == 0)
-    setFlag NEGATIVE (b7 xreg)
+    setFlag NEGATIVE (b7' xreg)
 
 opTXS ACCUMULATOR = error "Operation TXS does not support ACCUMULATOR addressing mode"
 opTXS IMMEDIATE = error "Operation TXS does not support IMMEDIATE addressing mode"
@@ -2030,7 +2030,7 @@ opTYA IMPLICIT = do
     yreg <- getIDY 
     setACC yreg
     setFlag ZERO (yreg == 0)
-    setFlag NEGATIVE (b7 yreg)
+    setFlag NEGATIVE (b7' yreg)
 
 
 -- Info

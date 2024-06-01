@@ -6,24 +6,88 @@ import Data.Bits
 
 
 -- TODO: Check if this is affecting performance. Perhaps specifying a data type would be best. I.e. Just support Word16 and cast everything to word16?
+b0' :: Word8 -> Bool
+b0' x = testBit x 0
+b1' :: Word8 -> Bool
+b1' x = testBit x 1
+b2' :: Word8 -> Bool
+b2' x = testBit x 2
+b3' :: Word8 -> Bool
+b3' x = testBit x 3
+b4' :: Word8 -> Bool
+b4' x = testBit x 4
+b5' :: Word8 -> Bool
+b5' x = testBit x 5
+b6' :: Word8 -> Bool
+b6' x = testBit x 6
+b7' :: Word8 -> Bool
+b7' x = testBit x 7
+
+b0 :: Word16 -> Bool
 b0 x = testBit x 0
+b1 :: Word16 -> Bool
 b1 x = testBit x 1
+b2 :: Word16 -> Bool
 b2 x = testBit x 2
+b3 :: Word16 -> Bool
 b3 x = testBit x 3
+b4 :: Word16 -> Bool
 b4 x = testBit x 4
+b5 :: Word16 -> Bool
 b5 x = testBit x 5
+b6 :: Word16 -> Bool
 b6 x = testBit x 6
+b7 :: Word16 -> Bool
 b7 x = testBit x 7
+b8 :: Word16 -> Bool
 b8 x = testBit x 8
+b9 :: Word16 -> Bool
 b9 x = testBit x 9
+b10 :: Word16 -> Bool
 b10 x = testBit x 10
+b11 :: Word16 -> Bool
 b11 x = testBit x 11
+b12 :: Word16 -> Bool
 b12 x = testBit x 12
+b13 :: Word16 -> Bool
 b13 x = testBit x 13
+b14 :: Word16 -> Bool
 b14 x = testBit x 14
+b15 :: Word16 -> Bool
 b15 x = testBit x 15
 
-
+bi0 :: Int -> Bool
+bi0 x = testBit x 0
+bi1 :: Int -> Bool
+bi1 x = testBit x 1
+bi2 :: Int -> Bool
+bi2 x = testBit x 2
+bi3 :: Int -> Bool
+bi3 x = testBit x 3
+bi4 :: Int -> Bool
+bi4 x = testBit x 4
+bi5 :: Int -> Bool
+bi5 x = testBit x 5
+bi6 :: Int -> Bool
+bi6 x = testBit x 6
+bi7 :: Int -> Bool
+bi7 x = testBit x 7
+bi8 :: Int -> Bool
+bi8 x = testBit x 8
+bi9 :: Int -> Bool
+bi9 x = testBit x 9
+bi10 :: Int -> Bool
+bi10 x = testBit x 10
+bi11 :: Int -> Bool
+bi11 x = testBit x 11
+bi12 :: Int -> Bool
+bi12 x = testBit x 12
+bi13 :: Int -> Bool
+bi13 x = testBit x 13
+bi14 :: Int -> Bool
+bi14 x = testBit x 14
+bi15 :: Int -> Bool
+bi15 x = testBit x 15
 
 joinBytes :: Word8 -> Word8 -> Word16
 joinBytes hb lb = (fromIntegral hb .<<. 8) .|. fromIntegral lb

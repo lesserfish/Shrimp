@@ -215,14 +215,14 @@ getWriteToggle = (writeToggle . registers) <$> get
 
 
 getCTRLFlag :: CTRLFLAG -> StateT R2C02 IO Bool
-getCTRLFlag C_NAMETABLE_X           = b0 <$> getControl
-getCTRLFlag C_NAMETABLE_Y           = b1 <$> getControl
-getCTRLFlag C_INCREMENT_MODE        = b2 <$> getControl
-getCTRLFlag C_PATTERN_SPRITE        = b3 <$> getControl
-getCTRLFlag C_PATTERN_BACKGROUND    = b4 <$> getControl
-getCTRLFlag C_SPRITE_SIZE           = b5 <$> getControl
-getCTRLFlag C_SLAVE_MDOE            = b6 <$> getControl
-getCTRLFlag C_ENABLE_NMI            = b7 <$> getControl
+getCTRLFlag C_NAMETABLE_X           = b0' <$> getControl
+getCTRLFlag C_NAMETABLE_Y           = b1' <$> getControl
+getCTRLFlag C_INCREMENT_MODE        = b2' <$> getControl
+getCTRLFlag C_PATTERN_SPRITE        = b3' <$> getControl
+getCTRLFlag C_PATTERN_BACKGROUND    = b4' <$> getControl
+getCTRLFlag C_SPRITE_SIZE           = b5' <$> getControl
+getCTRLFlag C_SLAVE_MDOE            = b6' <$> getControl
+getCTRLFlag C_ENABLE_NMI            = b7' <$> getControl
 
 
 setCTRLFlag :: CTRLFLAG -> Bool -> StateT R2C02 IO ()
@@ -237,14 +237,14 @@ setCTRLFlag C_ENABLE_NMI v          = mapControl (\ctrl -> if v then setBit ctrl
 
 
 getMASKFlag :: MASKFLAG -> StateT R2C02 IO Bool
-getMASKFlag M_GRAYSCALE                 = b0 <$> getMask
-getMASKFlag M_RENDER_BACKGROUND_LEFT    = b1 <$> getMask
-getMASKFlag M_RENDER_SPRITES_LEFT       = b2 <$> getMask
-getMASKFlag M_RENDER_BACKGROUND         = b3 <$> getMask
-getMASKFlag M_RENDER_SPRITES            = b4 <$> getMask
-getMASKFlag M_ENHANCE_RED               = b5 <$> getMask
-getMASKFlag M_ENHANCE_GREEN             = b6 <$> getMask
-getMASKFlag M_ENHANCE_BLUE              = b7 <$> getMask
+getMASKFlag M_GRAYSCALE                 = b0' <$> getMask
+getMASKFlag M_RENDER_BACKGROUND_LEFT    = b1' <$> getMask
+getMASKFlag M_RENDER_SPRITES_LEFT       = b2' <$> getMask
+getMASKFlag M_RENDER_BACKGROUND         = b3' <$> getMask
+getMASKFlag M_RENDER_SPRITES            = b4' <$> getMask
+getMASKFlag M_ENHANCE_RED               = b5' <$> getMask
+getMASKFlag M_ENHANCE_GREEN             = b6' <$> getMask
+getMASKFlag M_ENHANCE_BLUE              = b7' <$> getMask
 
 
 setMASKFlag :: MASKFLAG -> Bool -> StateT R2C02 IO ()
@@ -259,9 +259,9 @@ setMASKFlag M_ENHANCE_BLUE v            = mapMask (\ctrl -> if v then setBit ctr
 
 
 getSTATUSFlag :: STATUSFLAG -> StateT R2C02 IO Bool
-getSTATUSFlag S_SPRITE_OVERFLOW     = b5 <$> getStatus
-getSTATUSFlag S_SPRITE_ZERO_HIT     = b6 <$> getStatus
-getSTATUSFlag S_VERTICAL_BLANK      = b7 <$> getStatus
+getSTATUSFlag S_SPRITE_OVERFLOW     = b5' <$> getStatus
+getSTATUSFlag S_SPRITE_ZERO_HIT     = b6' <$> getStatus
+getSTATUSFlag S_VERTICAL_BLANK      = b7' <$> getStatus
 
 
 setSTATUSFlag :: STATUSFLAG -> Bool -> StateT R2C02 IO ()
@@ -599,8 +599,8 @@ cpuWrite addr byte
 writeControl :: Word8 -> StateT R2C02 IO ()
 writeControl byte = do
     setControl byte
-    let nx = b0 byte
-    let ny = b1 byte
+    let nx = b0' byte
+    let ny = b1' byte
     setTRAMBit L_NAMETABLE_X nx
     setTRAMBit L_NAMETABLE_Y ny
 
