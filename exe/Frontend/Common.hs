@@ -41,6 +41,7 @@ data RenderStatus = RenderStatus
     , rsLastRender :: UTCTime
     , rsUpdateTextures :: Bool
     , rsRunning :: Bool
+    , rsShowFPS :: Bool
     }
 
 data RenderTextures = RenderTextures
@@ -50,6 +51,7 @@ data RenderTextures = RenderTextures
     , rtPalette :: SDL.Texture
     , rtDisplay :: SDL.Texture
     , rtNametable :: SDL.Texture
+    , rtFPS :: SDL.Texture
     }
 
 data RenderContext = RenderContext
@@ -90,6 +92,12 @@ setRunning v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsRunning = v}}
 
 getRunning :: StateT RenderContext IO Bool
 getRunning = rsRunning . rcStatus <$> get
+
+setShowFPS :: Bool -> StateT RenderContext IO ()
+setShowFPS v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsShowFPS = v}})
+
+getShowFPS :: StateT RenderContext IO Bool
+getShowFPS = rsShowFPS . rcStatus <$> get
 
 
 setUpdateTextures :: Bool -> StateT RenderContext IO ()
@@ -137,7 +145,7 @@ black = SDL.V4 0 0 0 255
 gray :: Color
 gray = SDL.V4 180 180 180 255
 white :: Color
-white = SDL.V4 255 255 255 255
+white = SDL.V4 255 255 255 0
 red :: Color
 red = SDL.V4 255 0 0 255
 green :: Color

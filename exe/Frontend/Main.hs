@@ -21,6 +21,7 @@ import qualified Frontend.Renderer.Palette as FRPalette
 import qualified Frontend.Renderer.Pattern as FRPattern
 import qualified Frontend.Renderer.Status as FRStatus
 import qualified Frontend.Renderer.Nametable as FRNametable
+import qualified Frontend.Renderer.FPS as FRFPS
 import Frontend.Control
 import Frontend.Render
 
@@ -49,6 +50,7 @@ initializeTextures ctx = do
    paletteTexture <- FRPalette.new ctx
    patternTexture <- FRPattern.new ctx
    nametableTexture <- FRNametable.new ctx
+   fpsTexture <- FRFPS.new ctx
 
    return $ RenderTextures 
                 { rtCPUStatus = statusTexture
@@ -57,6 +59,7 @@ initializeTextures ctx = do
                 , rtPalette = paletteTexture
                 , rtDisplay = displayTexture
                 , rtNametable = nametableTexture
+                , rtFPS = fpsTexture
                 }
 
 
@@ -71,6 +74,7 @@ initializeFrontend pipe = do
                 , rsLastRender = now
                 , rsUpdateTextures = True
                 , rsRunning = False
+                , rsShowFPS = False
                 }
 
     return $ RenderContext

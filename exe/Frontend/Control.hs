@@ -31,6 +31,9 @@ toggleEmulation = do
     liftIO . atomically $ writeTChan comm cmd
     (not <$> getRunning) >>= setRunning
 
+toggleShowFPS :: StateT RenderContext IO ()
+toggleShowFPS = (not <$> getShowFPS) >>= setShowFPS
+
 sendTick :: StateT RenderContext IO ()
 sendTick = do
     rctx <- get
@@ -93,6 +96,7 @@ modeDown = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rc
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()
 handleKeydown SDL.KeycodeQ = exitProgram
 handleKeydown SDL.KeycodeSpace = toggleEmulation
+handleKeydown SDL.KeycodeP = toggleShowFPS
 handleKeydown SDL.KeycodeN = sendTick
 handleKeydown SDL.KeycodeC = sendFullTick 
 handleKeydown SDL.KeycodeF = sendFrame

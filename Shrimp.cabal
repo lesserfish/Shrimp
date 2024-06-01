@@ -46,6 +46,7 @@ executable Shrimp-exe
                     Frontend.Renderer.Pattern,
                     Frontend.Renderer.Palette,
                     Frontend.Renderer.Display,
+                    Frontend.Renderer.FPS,
                     Emulator.Main
                    -- Add other necessary modules here
   -- other-extensions:
@@ -70,7 +71,8 @@ test-suite Shrimp-Test
     hs-source-dirs:   exe
     main-is:          Test/Main.hs
     other-modules:    Shrimp.MOS6502, Shrimp.Memory, Test.CPU, Shrimp.Utils
-    build-depends:    base >=4.16.4.0,
+
+    build-depends:    base >= 4.18.0.0,
                       hspec >= 2.11.1,
                       aeson >= 2.2.1.0,
                       mtl >= 2.3.1,

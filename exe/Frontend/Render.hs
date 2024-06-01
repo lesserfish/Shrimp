@@ -5,6 +5,7 @@ import Control.Monad
 import Shrimp.NES
 import qualified SDL as SDL
 import qualified SDL.Font as Font
+import Data.Time
 import Control.Monad.State
 import Frontend.Common
 import qualified Frontend.Renderer.Display as FRDisplay
@@ -13,6 +14,18 @@ import qualified Frontend.Renderer.Palette as FRPalette
 import qualified Frontend.Renderer.Pattern as FRPattern
 import qualified Frontend.Renderer.Status as FRStatus
 import qualified Frontend.Renderer.Nametable as FRNametable
+import qualified Frontend.Renderer.FPS as FRFPS
+
+
+getFPS :: StateT RenderContext IO Int
+getFPS = do
+    rctx <- get
+    let before = rsLastRender . rcStatus $ rctx
+    now <- liftIO $ getCurrentTime
+    let diff = diffUTCTime now before
+    let fps = floor $ 1.0 / (realToFrac diff) :: Int
+    put rctx{rcStatus = (rcStatus rctx){rsLastRender = now}}
+    return fps
 
 update :: StateT RenderContext IO ()
 update = do
@@ -20,10 +33,14 @@ update = do
     rctx <- get
     ctx <- getSDLContext 
 
+    showFPS <- getShowFPS
+    fps <- getFPS
+
     let lDisplayMode = rcLDisplayMode rctx
     let rDisplayMode = rcRDisplayMode rctx
 
 
+    let fpsTexture     = rtFPS       . rcTextures $ rctx
     let statusTexture  = rtCPUStatus . rcTextures $ rctx
     let paletteTexture = rtPalette   . rcTextures $ rctx
     let patternTexture = rtPattern   . rcTextures $ rctx
@@ -40,6 +57,7 @@ update = do
     when (lDisplayMode == DM_NAMETABLE_1) (liftIO $ FRNametable.update ctx nes nametableTexture)
     when (lDisplayMode == DM_NAMETABLE_2) (liftIO $ FRNametable.update ctx nes nametableTexture)
     when (lDisplayMode == DM_DISPLAY) (liftIO $ FRDisplay.update ctx nes displayTexture)
+    when (showFPS) (liftIO $ FRFPS.update ctx fps fpsTexture)
     setUpdateTextures False
 
 render :: StateT RenderContext IO ()
@@ -51,6 +69,9 @@ render = do
 
     SDL.clear renderer
 
+    showFPS <- getShowFPS
+
+    let fpsTexture     = rtFPS       . rcTextures $ rctx
     let statusTexture  = rtCPUStatus . rcTextures $ rctx
     let paletteTexture = rtPalette   . rcTextures $ rctx
     let patternTexture = rtPattern   . rcTextures $ rctx
@@ -69,4 +90,5 @@ render = do
     when (lDisplayMode == DM_DISPLAY) (SDL.copy renderer displayTexture Nothing (windowSegment (0, 0) (600, 600)))
     when (lDisplayMode == DM_NAMETABLE_1) (SDL.copy renderer nametableTexture (windowSegment (0, 0) (600, 600)) (windowSegment (0, 0) (600, 600)))
     when (lDisplayMode == DM_NAMETABLE_2) (SDL.copy renderer nametableTexture (windowSegment (600, 0) (600, 600)) (windowSegment (0, 0) (600, 600)))
+    when showFPS (SDL.copy renderer fpsTexture Nothing (windowSegment (0, 0) (20, 20)))
     SDL.present renderer
