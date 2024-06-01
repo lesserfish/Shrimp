@@ -72,14 +72,16 @@ modeRight = modify (\rctx -> rctx{rcRDisplayMode = prevMode . rcRDisplayMode $ r
 
 modeUp :: StateT RenderContext IO ()
 modeUp = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx}) where
-    prevMode DM_DISPLAY = DM_NAMETABLE
-    prevMode DM_NAMETABLE = DM_DISPLAY
+    prevMode DM_DISPLAY = DM_NAMETABLE_1
+    prevMode DM_NAMETABLE_1 = DM_NAMETABLE_2
+    prevMode DM_NAMETABLE_2 = DM_DISPLAY
     prevMode _ = DM_DISPLAY
 
 modeDown :: StateT RenderContext IO ()
 modeDown = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx}) where
-    prevMode DM_DISPLAY = DM_NAMETABLE
-    prevMode DM_NAMETABLE = DM_DISPLAY
+    prevMode DM_DISPLAY = DM_NAMETABLE_2
+    prevMode DM_NAMETABLE_2 = DM_NAMETABLE_1
+    prevMode DM_NAMETABLE_1 = DM_DISPLAY
     prevMode _ = DM_DISPLAY
 
 handleKeydown :: SDL.Keycode -> StateT RenderContext IO ()

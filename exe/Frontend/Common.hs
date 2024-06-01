@@ -29,7 +29,8 @@ data RenderData = RenderData
     }
 
 data DisplayMode = DM_DISPLAY
-                 | DM_NAMETABLE 
+                 | DM_NAMETABLE_1
+                 | DM_NAMETABLE_2
                  | DM_INSTRUCTION 
                  | DM_PATTERN_1 
                  | DM_PATTERN_2 

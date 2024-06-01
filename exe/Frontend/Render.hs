@@ -37,7 +37,8 @@ update = do
     when (rDisplayMode == DM_INSTRUCTION) (liftIO $ FRInstructions.update ctx nes instructionTexture)
     when (rDisplayMode == DM_PATTERN_1) (liftIO $ FRPattern.update ctx nes patternTexture)
     when (rDisplayMode == DM_PATTERN_2) (liftIO $ FRPattern.update ctx nes patternTexture)
-    when (lDisplayMode == DM_NAMETABLE) (liftIO $ FRNametable.update ctx nes nametableTexture)
+    when (lDisplayMode == DM_NAMETABLE_1) (liftIO $ FRNametable.update ctx nes nametableTexture)
+    when (lDisplayMode == DM_NAMETABLE_2) (liftIO $ FRNametable.update ctx nes nametableTexture)
     when (lDisplayMode == DM_DISPLAY) (liftIO $ FRDisplay.update ctx nes displayTexture)
     setUpdateTextures False
 
@@ -66,5 +67,6 @@ render = do
     when (rDisplayMode == DM_PATTERN_1)   (SDL.copy renderer patternTexture (windowSegment (0, 0) (128, 128)) (windowSegment (600, 300) (300, 300)))
     when (rDisplayMode == DM_PATTERN_2)   (SDL.copy renderer patternTexture (windowSegment (0, 128)   (128, 128)) (windowSegment (600, 300) (300, 300)))
     when (lDisplayMode == DM_DISPLAY) (SDL.copy renderer displayTexture Nothing (windowSegment (0, 0) (600, 600)))
-    when (lDisplayMode == DM_NAMETABLE) (SDL.copy renderer nametableTexture Nothing (windowSegment (0, 0) (600, 600)))
+    when (lDisplayMode == DM_NAMETABLE_1) (SDL.copy renderer nametableTexture (windowSegment (0, 0) (600, 600)) (windowSegment (0, 0) (600, 600)))
+    when (lDisplayMode == DM_NAMETABLE_2) (SDL.copy renderer nametableTexture (windowSegment (600, 0) (600, 600)) (windowSegment (0, 0) (600, 600)))
     SDL.present renderer
