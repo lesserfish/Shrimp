@@ -61,7 +61,7 @@ loadMemory (y : ys) = do
     return m
 
 loadCPU :: Interface -> CPUState -> MOS6502
-loadCPU interface (CPUState rpc rs ra rx ry rp _) = mos{registers = reg} where
+loadCPU interface (CPUState rpc rs ra rx ry rp _) = mos{registers = reg, context = (context mos){decMode = True}} where
     mos = new interface
     reg = Registers{
                   Shrimp.MOS6502.pc = rpc,

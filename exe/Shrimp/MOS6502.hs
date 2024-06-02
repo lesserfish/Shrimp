@@ -43,6 +43,7 @@ data Registers = Registers
 
 data Context = Context
     { complete :: Bool 
+    , decMode :: Bool
     }
     deriving (Show)
 
@@ -87,7 +88,7 @@ data MOS6502 = MOS6502
 new :: Interface -> MOS6502
 new interface = MOS6502 reg 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
-    ctx = Context False
+    ctx = Context False False
 
 -- Setters / Getters
 
@@ -368,6 +369,12 @@ updateCycles offset = modify (\mos -> mos{cycles = offset + cycles mos})
 
 setComplete :: Bool -> StateT MOS6502 IO ()
 setComplete b = modify (\mos -> mos{context = (context mos){complete = b}})
+
+setDecMode:: Bool -> StateT MOS6502 IO ()
+setDecMode b = modify (\mos -> mos{context = (context mos){decMode = b}})
+
+getDecMode  :: StateT MOS6502 IO Bool
+getDecMode = decMode . context <$> get
 
 
 fetchComplete :: StateT MOS6502 IO Bool
@@ -954,6 +961,7 @@ opADC addr_mode = do
     carry_flag <- getFlag $ CARRY -- Get the Accumulator registers prior to changes
     let carry = if carry_flag then 1 else 0 :: Word8
     decimal_flag <- getFlag $ DECIMAL_MODE
+    decMode <- getDecMode
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     byte <- readByte addr -- Read byte from the Bus
     let iacc = fromIntegral acc :: Int
@@ -961,7 +969,7 @@ opADC addr_mode = do
     let icarry = fromIntegral carry :: Int
     let result = iacc + ibyte + icarry
     setFlag ZERO ((result .&. 0xFF) == 0) -- Sets the Zero flag if the result is equal to 0
-    if decimal_flag
+    if decimal_flag && decMode
         then do
             let ln = (fromIntegral acc .&. 0xF) + (fromIntegral byte .&. 0xF) + fromIntegral carry :: Word16
             let ln' = if (ln >= 0xA) then ((ln + 0x6) .&. 0xF) + 0x10 else ln
@@ -1789,6 +1797,7 @@ opSBC addr_mode = do
     acc <- getACC 
     carry_flag <- getFlag $ CARRY -- Get the Accumulator registers prior to changes
     decimal_flag <- getFlag $ DECIMAL_MODE
+    decMode <- getDecMode
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     byte <- readByte addr -- Read byte from the Bus
     let carry = if carry_flag then 1 else 0 :: Word8
@@ -1797,7 +1806,7 @@ opSBC addr_mode = do
     let icarry = fromIntegral carry :: Int
     let iresult = iacc - ibyte - (1 - icarry)
     setFlag ZERO (iresult == 0)
-    if decimal_flag
+    if decimal_flag && decMode
         then do
             let not_carry = carry `xor` 0x1
             let acc16 = fromIntegral acc :: Word16
