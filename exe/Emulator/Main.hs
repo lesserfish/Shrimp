@@ -55,7 +55,7 @@ fullTick = do
 fullFrame :: StateT EmulatorContext IO ()
 fullFrame = do
     nes <- getNES 
-    --liftIO $ timeIt "Full Frame" (B.fullFrame nes)
+    --liftIO $ timeIt (B.fullFrame nes)
     liftIO $ B.fullFrame nes
 
 
