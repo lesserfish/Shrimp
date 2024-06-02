@@ -3,4 +3,4 @@ import qualified Launcher
 import qualified Debug
 
 main :: IO()
-main = Launcher.main
+main = Debug.main

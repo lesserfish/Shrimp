@@ -59,12 +59,8 @@ data Context = Context
     , complete :: Bool
     , ppuScanline :: Int
     , ppuCycle :: Int
-    , shifterPatternLo :: Word16
-    , shifterPatternHi :: Word16
-    , shifterAttribLo :: Word16
-    , shifterAttribHi :: Word16
-    , nextTileLsb :: Word16
-    , nextTileMsb :: Word16
+    , shifterData :: Word64
+    , nextTile :: Word64
     , nextTileID :: Word16
     , nextTileAttrib :: Word16
     , bgPixel :: Word8
@@ -102,7 +98,7 @@ data R2C02 = R2C02
 new :: Interface -> R2C02
 new interface = R2C02 reg ctx interface where
     reg = Registers 0 0 0 0 0 0 0 False
-    ctx = Context False False 0 0 0 0 0 0 0 0 0 0 0 0
+    ctx = Context False False 0 0 0 0 0 0 0 0
 
 reset :: StateT R2C02 IO ()
 reset = do
@@ -276,15 +272,15 @@ setSTATUSFlag S_VERTICAL_BLANK v        = mapStatus (\ctrl -> if v then setBit c
 getTRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getTRAMData L_COARSE_X = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake' 0 5) $ loopy :: Word8
+    let bits = fromIntegral . (shiftTake2 0 5) $ loopy :: Word8
     return bits
 getTRAMData L_COARSE_Y = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake' 5 5) $ loopy :: Word8
+    let bits = fromIntegral . (shiftTake2 5 5) $ loopy :: Word8
     return bits
 getTRAMData L_FINE_Y = do
     loopy <- getTRAM
-    let bits = fromIntegral . (shiftTake' 12 3)$ loopy :: Word8
+    let bits = fromIntegral . (shiftTake2 12 3)$ loopy :: Word8
     return bits
 getTRAMData _ = error "Incorrect Flag"
 
@@ -300,7 +296,7 @@ setTRAMData L_COARSE_Y val = do
     setTRAM loopy'
 setTRAMData L_FINE_Y val = do
     loopy <- getTRAM
-    let loopy' = (loopy .&. 0x8fff) + ((shiftTake' 0 3 (fromIntegral val) ) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake2 0 3 (fromIntegral val) ) .<<. 12)
     setTRAM loopy'
 setTRAMData _ _ = error "Incorrect Flag"
 
@@ -323,15 +319,15 @@ setTRAMBit _ _ = error "Incorrect Flag"
 getVRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getVRAMData L_COARSE_X = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake' 0 5 loopy :: Word8
+    let bits = fromIntegral $ shiftTake2 0 5 loopy :: Word8
     return bits
 getVRAMData L_COARSE_Y = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake' 5 5 loopy :: Word8
+    let bits = fromIntegral $ shiftTake2 5 5 loopy :: Word8
     return bits
 getVRAMData L_FINE_Y = do
     loopy <- getVRAM
-    let bits = fromIntegral $ shiftTake' 12 3 loopy :: Word8
+    let bits = fromIntegral $ shiftTake2 12 3 loopy :: Word8
     return bits
 getVRAMData _ = error "Incorrect Flag"
 
@@ -339,15 +335,15 @@ getVRAMData _ = error "Incorrect Flag"
 setVRAMData :: LOOPYFLAG -> Word8 -> StateT R2C02 IO ()
 setVRAMData L_COARSE_X val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0xffe0) + (shiftTake' 0 5 (fromIntegral val))
+    let loopy' = (loopy .&. 0xffe0) + (shiftTake2 0 5 (fromIntegral val))
     setVRAM loopy'
 setVRAMData L_COARSE_Y val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0xfc1f) + ((shiftTake' 0 5 (fromIntegral val)) .<<. 5)
+    let loopy' = (loopy .&. 0xfc1f) + ((shiftTake2 0 5 (fromIntegral val)) .<<. 5)
     setVRAM loopy'
 setVRAMData L_FINE_Y val = do
     loopy <- getVRAM
-    let loopy' = (loopy .&. 0x8fff) + ((shiftTake' 0 3 (fromIntegral val) ) .<<. 12)
+    let loopy' = (loopy .&. 0x8fff) + ((shiftTake2 0 3 (fromIntegral val) ) .<<. 12)
     setVRAM loopy'
 setVRAMData _ _ = error "Incorrect Flag"
 
@@ -380,29 +376,12 @@ getComplete :: StateT R2C02 IO Bool
 getComplete = complete . context <$> get
 
 
-getShifterPatternLo :: StateT R2C02 IO Word16
-getShifterPatternLo = shifterPatternLo . context <$> get
+getShifterData :: StateT R2C02 IO Word64
+getShifterData = shifterData . context <$> get
 
 
-getShifterPatternHi :: StateT R2C02 IO Word16
-getShifterPatternHi = shifterPatternHi . context <$> get
-
-
-getShifterAttribLo :: StateT R2C02 IO Word16
-getShifterAttribLo = shifterAttribLo . context <$> get
-
-
-getShifterAttribHi :: StateT R2C02 IO Word16
-getShifterAttribHi = shifterAttribHi . context <$> get
-
-
-getNextTileLsb :: StateT R2C02 IO Word16
-getNextTileLsb = nextTileLsb . context <$> get
-
-
-getNextTileMsb :: StateT R2C02 IO Word16
-getNextTileMsb = nextTileMsb . context <$> get
-
+getNextTile :: StateT R2C02 IO Word64
+getNextTile = nextTile . context <$> get
 
 getNextTileID :: StateT R2C02 IO Word16
 getNextTileID = nextTileID . context <$> get
@@ -437,28 +416,22 @@ setComplete :: Bool -> StateT R2C02 IO ()
 setComplete v = modify(\ppu -> ppu{context = (context ppu){complete = v}})
 
 
-setShifterPatternLo :: Word16 -> StateT R2C02 IO ()
-setShifterPatternLo v = modify(\ppu -> ppu{context = (context ppu){shifterPatternLo = v}})
-
-
-setShifterPatternHi :: Word16 -> StateT R2C02 IO ()
-setShifterPatternHi v = modify(\ppu -> ppu{context = (context ppu){shifterPatternHi = v}})
-
-
-setShifterAttribLo :: Word16 -> StateT R2C02 IO ()
-setShifterAttribLo v = modify(\ppu -> ppu{context = (context ppu){shifterAttribLo = v}})
-
-
-setShifterAttribHi :: Word16 -> StateT R2C02 IO ()
-setShifterAttribHi v = modify(\ppu -> ppu{context = (context ppu){shifterAttribHi = v}})
+setShifterData :: Word64 -> StateT R2C02 IO ()
+setShifterData v = modify(\ppu -> ppu{context = (context ppu){shifterData = v}})
 
 
 setNextTileLsb :: Word16 -> StateT R2C02 IO ()
-setNextTileLsb v = modify(\ppu -> ppu{context = (context ppu){nextTileLsb = v}})
+setNextTileLsb v = do
+    ntile <- nextTile . context <$> get
+    let ntile' = (ntile .&. 0xFFFFFFFFFFFFFF00) .|. (fromIntegral v)
+    modify(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
 
 
 setNextTileMsb :: Word16 -> StateT R2C02 IO ()
-setNextTileMsb v = modify(\ppu -> ppu{context = (context ppu){nextTileMsb = v}})
+setNextTileMsb v = do
+    ntile <- nextTile . context <$> get
+    let ntile' = (ntile .&. 0xFFFFFFFFFF00FFFF) .|. (takeShift8 8 16 (fromIntegral v))
+    modify(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
 
 
 setNextTileID :: Word16 -> StateT R2C02 IO ()
@@ -615,12 +588,12 @@ writeScroll byte = do
     if firstWrite
         then do
             setWriteToggle True
-            setTRAMData L_COARSE_X (shiftTake 3 5 byte)
-            setFineX (shiftTake 0 3 byte)
+            setTRAMData L_COARSE_X (shiftTake1 3 5 byte)
+            setFineX (shiftTake1 0 3 byte)
         else do
             setWriteToggle False
-            setTRAMData L_COARSE_Y (shiftTake 3 5 byte)
-            setTRAMData L_FINE_Y (shiftTake 0 3 byte)
+            setTRAMData L_COARSE_Y (shiftTake1 3 5 byte)
+            setTRAMData L_FINE_Y (shiftTake1 0 3 byte)
 
 
 writeAddress :: Word8 -> StateT R2C02 IO ()
@@ -631,7 +604,7 @@ writeAddress byte = do
             setWriteToggle True
             let fullbyte = fromIntegral byte :: Word16
             t <- getTRAM
-            let t' = ((shiftTake' 0 6 fullbyte) .<<. 8) .|. (t .&. 0x00FF)
+            let t' = ((shiftTake2 0 6 fullbyte) .<<. 8) .|. (t .&. 0x00FF)
             setTRAM t'
         else do
             setWriteToggle False
@@ -728,10 +701,7 @@ incCycle = do
 
 updateShifters :: StateT R2C02 IO ()
 updateShifters = do
-    (( .<<. 1) <$> getShifterAttribHi)  >>= setShifterAttribHi
-    (( .<<. 1) <$> getShifterAttribLo)  >>= setShifterAttribLo
-    (( .<<. 1) <$> getShifterPatternHi) >>= setShifterPatternHi
-    (( .<<. 1) <$> getShifterPatternLo) >>= setShifterPatternLo
+    (( .<<. 1) <$> getShifterData ) >>= setShifterData
 
 
 fetchNextTileID :: StateT R2C02 IO ()
@@ -796,22 +766,15 @@ fetchNextInfo _ = return ()
 
 loadBackgroundShifters :: StateT R2C02 IO ()
 loadBackgroundShifters = do
-    cShifterPatternLo  <- getShifterPatternLo
-    cShifterPatternHi  <- getShifterPatternHi
-    cNextTileLsb <- getNextTileLsb
-    cNextTileMsb <- getNextTileMsb
-    setShifterPatternLo (cNextTileLsb .|. (cShifterPatternLo .&. 0xFF00))
-    setShifterPatternHi (cNextTileMsb .|. (cShifterPatternHi .&. 0xFF00))
+    nTile <- getNextTile 
+    nAttrib <- getNextTileAttrib 
+    let attribLo = if testBit nAttrib 0 then 0x000000FF00000000 else 0
+    let attribHi = if testBit nAttrib 1 then 0x00FF000000000000 else 0
+    let mask = 0xFF00FF00FF00FF00
 
-    cShifterAttribLo  <- getShifterAttribLo
-    cShifterAttribHi  <- getShifterAttribHi
-    cNextTileAttrib <- getNextTileAttrib
-
-    let eLo = if testBit cNextTileAttrib 0 then 0xFF else 0x00
-    let eHi = if testBit cNextTileAttrib 1 then 0xFF else 0x00
-
-    setShifterAttribLo (eLo .|. (cShifterAttribLo .&. 0xFF00))
-    setShifterAttribHi (eHi .|. (cShifterAttribHi .&. 0xFF00))
+    shifter <- getShifterData
+    let shifter' = (shifter .&. mask) .|. attribLo .|. attribHi .|. nTile
+    setShifterData shifter'
 
 
 transferX :: StateT R2C02 IO ()
@@ -862,20 +825,14 @@ handleEndOfFrame = do
 handleComposition :: StateT R2C02 IO ()
 handleComposition = do
     fineX <- fromIntegral <$> getFineX
-    bgPatternLo <- getShifterPatternLo
-    bgPatternHi <- getShifterPatternHi
-    bgAttribLo <- getShifterAttribLo
-    bgAttribHi <- getShifterAttribHi
+    shifter <- getShifterData
 
-    let mux = 0x8000 .>>. fineX
-
-    let px0 = if (bgPatternLo .&. mux) > 0 then 0x1 else 0x0
-    let px1 = if (bgPatternHi .&. mux) > 0 then 0x2 else 0x0
+    let px0 = if (testBit shifter (15 - fineX)) then 0x1 else 0x0
+    let px1 = if (testBit shifter (31 - fineX)) then 0x2 else 0x0
     let px = px0 + px1
 
-
-    let pl0 = if (bgAttribLo .&. mux) > 0 then 0x1 else 0x0
-    let pl1 = if (bgAttribHi .&. mux) > 0 then 0x2 else 0x0
+    let pl0 = if (testBit shifter (47 - fineX)) then 0x1 else 0x0
+    let pl1 = if (testBit shifter (63 - fineX)) then 0x2 else 0x0
     let pl = pl0 + pl1
 
     setBGPixel px

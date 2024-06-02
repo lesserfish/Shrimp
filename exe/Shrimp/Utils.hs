@@ -114,15 +114,42 @@ decodeBCD word = result
     hb = (hd .<<. 4) .&. 0xF0
     result = lb + hb
 
-toHex2 :: Word8 -> String
-toHex2 w = printf "%02X" w
+toHex1 :: Word8 -> String
+toHex1 w = printf "%02X" w
 
-toHex4 :: Word16 -> String
-toHex4 w = printf "%04X" w
+toHex2 :: Word16 -> String
+toHex2 w = printf "%04X" w
 
-shiftTake :: Int -> Integer -> Word8 -> Word8
-shiftTake s t x = (x .>>. s) .&. (2 ^ t - 1)
+toHex4 :: Word32 -> String
+toHex4 w = printf "%08X" w
 
-shiftTake' :: Int -> Integer -> Word16 -> Word16
-shiftTake' s t x = (x .>>. s) .&. (2 ^ t - 1)
+toHex8 :: Word64 -> String
+toHex8 w = printf "%016X" w
+
+
+
+shiftTake1 :: Int -> Integer -> Word8 -> Word8
+shiftTake1 s t x = (x .>>. s) .&. (2 ^ t - 1)
+
+shiftTake2 :: Int -> Integer -> Word16 -> Word16
+shiftTake2 s t x = (x .>>. s) .&. (2 ^ t - 1)
+
+shiftTake4 :: Int -> Integer -> Word32 -> Word32
+shiftTake4 s t x = (x .>>. s) .&. (2 ^ t - 1)
+
+shiftTake8 :: Int -> Integer -> Word64 -> Word64
+shiftTake8 s t x = (x .>>. s) .&. (2 ^ t - 1)
+
+
+takeShift1 :: Integer -> Int -> Word8 -> Word8
+takeShift1 t s x = (x .&. (2 ^ t - 1)) .<<. s
+
+takeShift2 :: Integer -> Int -> Word16 -> Word16
+takeShift2 t s x = (x .&. (2 ^ t - 1)) .<<. s
+
+takeShift4 :: Integer -> Int -> Word32 -> Word32
+takeShift4 t s x = (x .&. (2 ^ t - 1)) .<<. s
+
+takeShift8 :: Integer -> Int -> Word64 -> Word64
+takeShift8 t s x = (x .&. (2 ^ t - 1)) .<<. s
 

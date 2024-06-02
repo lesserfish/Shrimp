@@ -10,7 +10,7 @@ import Control.Concurrent
 
 main :: IO()
 main = do
-    nes <- BUS.load "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/nestest.nes"
+    nes <- BUS.load "/home/lesserfish/Documents/Code/Shrimp/Tools/Roms/Super_mario_brothers.nes"
     pipe <- createPipe nes
     rctx <- F.initializeFrontend pipe
     ectx <- E.initializeEmulator pipe

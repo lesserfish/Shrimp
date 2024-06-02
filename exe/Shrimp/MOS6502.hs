@@ -2204,42 +2204,42 @@ disassembleArg _ IMPLICIT _ = return $ ("", 0)
 disassembleArg _ ACCUMULATOR _ = return $ ("A", 0)
 disassembleArg interface IMMEDIATE addr = do
     argval <- (iPeekByte interface) addr
-    return ("#$" ++ toHex2 argval, 1)
+    return ("#$" ++ toHex1 argval, 1)
 disassembleArg interface ZEROPAGE addr = do
     argval <- (iPeekByte interface) addr
-    return ("$" ++ toHex2 argval, 1)
+    return ("$" ++ toHex1 argval, 1)
 disassembleArg interface ZEROPAGE_X addr = do
     argval <- (iPeekByte interface) addr
-    return ("$" ++ toHex2 argval ++ ",X", 1)
+    return ("$" ++ toHex1 argval ++ ",X", 1)
 disassembleArg interface ZEROPAGE_Y addr = do
     argval <- (iPeekByte interface) addr
-    return ("$" ++ toHex2 argval ++ ",Y", 1)
+    return ("$" ++ toHex1 argval ++ ",Y", 1)
 disassembleArg interface RELATIVE addr = do
     argval <- (iPeekByte interface) addr
     let offset = (fromIntegral argval :: Int8)
-    return ("*" ++ toHex2 argval ++ " [" ++ (show offset) ++ "]", 1)
+    return ("*" ++ toHex1 argval ++ " [" ++ (show offset) ++ "]", 1)
 disassembleArg interface ABSOLUTE addr = do
     a1 <- (iPeekByte interface) addr
     a2 <- (iPeekByte interface) (addr + 1)
-    return ("$" ++ toHex2 a2 ++ toHex2 a1 ++ "", 2)
+    return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ "", 2)
 disassembleArg interface ABSOLUTE_X addr = do
     a1 <- (iPeekByte interface) addr
     a2 <- (iPeekByte interface) (addr + 1)
-    return ("$" ++ toHex2 a2 ++ toHex2 a1 ++ ",X", 2)
+    return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ ",X", 2)
 disassembleArg interface ABSOLUTE_Y addr = do
     a1 <- (iPeekByte interface) addr
     a2 <- (iPeekByte interface) (addr + 1)
-    return ("$" ++ toHex2 a2 ++ toHex2 a1 ++ ",Y", 2)
+    return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ ",Y", 2)
 disassembleArg interface INDIRECT addr = do
     a1 <- (iPeekByte interface) addr
     a2 <- (iPeekByte interface) (addr + 1)
-    return ("($" ++ toHex2 a2 ++ toHex2 a1 ++ ")", 2)
+    return ("($" ++ toHex1 a2 ++ toHex1 a1 ++ ")", 2)
 disassembleArg interface INDIRECT_X addr = do
     a <- (iPeekByte interface) addr
-    return ("($" ++ toHex2 a ++ ", X)", 1)
+    return ("($" ++ toHex1 a ++ ", X)", 1)
 disassembleArg interface INDIRECT_Y addr = do
     a <- (iPeekByte interface) addr
-    return ("($" ++ toHex2 a ++ "), Y", 1)
+    return ("($" ++ toHex1 a ++ "), Y", 1)
 
 disassemble :: Interface -> Word16 -> IO (String, Word16)
 disassemble interface addr = do
