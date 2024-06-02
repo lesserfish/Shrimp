@@ -364,9 +364,10 @@ fullTick bus = do
     done <- tickCPU' bus
     if done then return () else fullTick bus
    
+
 fullFrame :: BUS -> IO ()
 fullFrame bus = do
-    done <- tickNPPU' 3 bus
+    done <-tickNPPU' 3 bus
     tickCPU bus
     if done then return () else fullFrame bus
 

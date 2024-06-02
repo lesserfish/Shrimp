@@ -63,8 +63,8 @@ initializeTextures ctx = do
                 }
 
 
-initializeFrontend :: CommPipe -> IO RenderContext
-initializeFrontend pipe = do
+initializeFrontend :: NES -> CommPipe -> IO RenderContext
+initializeFrontend nes pipe = do
     ctx <- initializeSDL
     textures <- initializeTextures ctx
     now <- getCurrentTime
@@ -87,6 +87,7 @@ initializeFrontend pipe = do
                 , rcRDisplayMode = DM_INSTRUCTION
                 , rcSDLContext = ctx
                 , rcController = controller
+                , rcNES = nes
                 }
 
 loop :: StateT RenderContext IO ()

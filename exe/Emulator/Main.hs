@@ -4,6 +4,7 @@ module Emulator.Main (
    initializeEmulator
 ) where
 
+import Shrimp.Utils
 import Data.Word
 import Data.Time.Clock
 import Control.Exception
@@ -18,6 +19,7 @@ data EmulatorContext = EmulatorContext
     { ecPipe :: CommPipe
     , ecExit :: Bool
     , ecRunning :: Bool
+    , ecNES :: NES
     , rLastTime :: UTCTime
     }
 
@@ -27,35 +29,33 @@ getRTE = rte . ecPipe <$> get
 getETR :: StateT EmulatorContext IO (TChan Feedback)
 getETR = etr . ecPipe <$> get
 
-getTNES :: StateT EmulatorContext IO (TVar NES)
-getTNES = tNES . ecPipe <$> get
+getNES :: StateT EmulatorContext IO NES
+getNES = ecNES <$> get
 
 getTCONTROLLER :: StateT EmulatorContext IO (TVar Word8)
 getTCONTROLLER = tControllerA . ecPipe <$> get
 
 
-initializeEmulator :: CommPipe -> IO EmulatorContext
-initializeEmulator pipe = do
+initializeEmulator :: NES -> CommPipe -> IO EmulatorContext
+initializeEmulator nes pipe = do
     now <- getCurrentTime
-    return $ EmulatorContext pipe False False now
+    return $ EmulatorContext pipe False False nes now
 
 
 tick :: StateT EmulatorContext IO ()
 tick = do
-    tnes <- getTNES 
-    nes <- liftIO . atomically $ readTVar tnes
+    nes <- getNES
     liftIO $ B.tick nes
 
 fullTick :: StateT EmulatorContext IO ()
 fullTick = do
-    tnes <- getTNES 
-    nes <- liftIO . atomically $ readTVar tnes
+    nes <- getNES 
     liftIO $ B.fullTick nes
 
 fullFrame :: StateT EmulatorContext IO ()
 fullFrame = do
-    tnes <- getTNES 
-    nes <- liftIO . atomically $ readTVar tnes
+    nes <- getNES 
+    --liftIO $ timeIt "Full Frame" (B.fullFrame nes)
     liftIO $ B.fullFrame nes
 
 
@@ -91,9 +91,8 @@ getExit = ecExit <$> get
 
 updateController :: StateT EmulatorContext IO ()
 updateController = do
-    tnes <- getTNES
+    nes <- getNES
     tcontroller <- getTCONTROLLER
-    nes <- liftIO . atomically $ readTVar tnes
     controllerData <- liftIO . atomically $ readTVar tcontroller
     liftIO $ B.setControllerA nes controllerData
 

@@ -62,6 +62,7 @@ data RenderContext = RenderContext
     , rcRDisplayMode :: DisplayMode
     , rcSDLContext :: SDLContext
     , rcController :: Controller
+    , rcNES :: NES
     }
 
 data CKEY = CUP | CDOWN | CLEFT | CRIGHT | CSELECT | CSTART | CA | CB
@@ -97,8 +98,8 @@ getRTE = rte . rcCommunicationPipe <$> get
 getETR :: StateT RenderContext IO (TChan Feedback)
 getETR = etr . rcCommunicationPipe <$> get
 
-getTNES :: StateT RenderContext IO (TVar NES)
-getTNES = tNES . rcCommunicationPipe <$> get
+getNES :: StateT RenderContext IO NES
+getNES = rcNES <$> get
 
 getTCONTROLLER :: StateT RenderContext IO (TVar Word8)
 getTCONTROLLER = tControllerA . rcCommunicationPipe <$> get
@@ -112,12 +113,6 @@ setExit v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsExit = v}})
 
 getExit :: StateT RenderContext IO Bool
 getExit = rsExit . rcStatus <$> get
-
-getNES :: StateT RenderContext IO NES
-getNES = do
-    tnes <- getTNES
-    nes <- liftIO $ atomically . readTVar $ tnes
-    return nes
 
 setRunning :: Bool -> StateT RenderContext IO ()
 setRunning v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsRunning = v}})

@@ -16,14 +16,12 @@ data Feedback = CPUCOMPLETE
 data CommPipe = CommPipe
     { rte :: TChan Command
     , etr :: TChan Feedback
-    , tNES :: TVar NES
     , tControllerA :: TVar Word8
     }
 
-createPipe :: NES -> IO CommPipe
-createPipe nes = do
+createPipe :: IO CommPipe
+createPipe = do
     cchan <- atomically newTChan
     ichan <- atomically newTChan
-    tnes <- newTVarIO nes
     tcontrollerA <- newTVarIO 0
-    return $ CommPipe cchan ichan tnes tcontrollerA
+    return $ CommPipe cchan ichan tcontrollerA

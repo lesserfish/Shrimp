@@ -71,7 +71,7 @@ data Registers = Registers
     { ppuctrl       :: Word8
     , ppumask       :: Word8
     , ppustatus     :: Word8
-    , fineX         :: Word8
+    , fineX         :: Int
     , ppuDataBuffer :: Word8
     , vram          :: Word16
     , tram          :: Word16
@@ -120,7 +120,7 @@ mapStatus :: (Word8 -> Word8) -> StateT R2C02 IO ()
 mapStatus f = modify (\ppu -> ppu {registers = (registers ppu){ppustatus = f . ppustatus . registers $ ppu}})
 
 
-mapFineX :: (Word8 -> Word8) -> StateT R2C02 IO ()
+mapFineX :: (Int -> Int) -> StateT R2C02 IO ()
 mapFineX f = modify (\ppu -> ppu {registers = (registers ppu){fineX = f . fineX . registers $ ppu}})
 
 
@@ -153,7 +153,7 @@ setStatus :: Word8 -> StateT R2C02 IO ()
 setStatus value = mapStatus (\_ -> value)
 
 
-setFineX :: Word8 -> StateT R2C02 IO ()
+setFineX :: Int -> StateT R2C02 IO ()
 setFineX value = mapFineX (\_ -> value)
 
 
@@ -186,7 +186,7 @@ getStatus :: StateT R2C02 IO Word8
 getStatus = (ppustatus . registers) <$> get
 
 
-getFineX :: StateT R2C02 IO Word8
+getFineX :: StateT R2C02 IO Int
 getFineX = (fineX . registers) <$> get
 
 
@@ -589,7 +589,7 @@ writeScroll byte = do
         then do
             setWriteToggle True
             setTRAMData L_COARSE_X (shiftTake1 3 5 byte)
-            setFineX (shiftTake1 0 3 byte)
+            setFineX (fromIntegral $ shiftTake1 0 3 byte)
         else do
             setWriteToggle False
             setTRAMData L_COARSE_Y (shiftTake1 3 5 byte)
@@ -824,7 +824,7 @@ handleEndOfFrame = do
 
 handleComposition :: StateT R2C02 IO ()
 handleComposition = do
-    fineX <- fromIntegral <$> getFineX
+    fineX <- getFineX
     shifter <- getShifterData
 
     let px0 = if (testBit shifter (15 - fineX)) then 0x1 else 0x0

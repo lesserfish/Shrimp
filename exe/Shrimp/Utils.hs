@@ -1,5 +1,6 @@
 module Shrimp.Utils where
 
+import Data.Time.Clock
 import Text.Printf
 import Data.Word
 import Data.Bits
@@ -152,4 +153,13 @@ takeShift4 t s x = (x .&. (2 ^ t - 1)) .<<. s
 
 takeShift8 :: Integer -> Int -> Word64 -> Word64
 takeShift8 t s x = (x .&. (2 ^ t - 1)) .<<. s
+
+timeIt :: String -> IO a -> IO a
+timeIt str action = do
+    before <- getCurrentTime
+    output <- action
+    after <- getCurrentTime
+    let timeDiff = diffUTCTime after before
+    putStrLn $ str ++ ": " ++ printf "%08f" (realToFrac timeDiff :: Double) ++ "\t" ++ show (fromIntegral 1 / timeDiff) ++ " iterations per second"
+    return output
 
