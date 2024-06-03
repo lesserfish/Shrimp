@@ -27,8 +27,8 @@ import Data.IORef
 
 
 data BUS = BUS
-    { bCPU :: !(IORef MOS6502.MOS6502)
-    , bPPU :: !(IORef R2C02.R2C02)
+    { bCPU :: !(MOS6502.MOS6502 BUS)
+    , bPPU :: !(R2C02.R2C02 BUS)
     , bCart :: !Cartridge.Cartridge
     , bRAM :: !Memory.RAM
     , bNTRAM :: !Memory.RAM
@@ -43,124 +43,140 @@ data BUS = BUS
 
 
 -- READ
-cpuReadRAM :: Memory.RAM -> Word16 -> IO Word8
-cpuReadRAM ram addr = do
+cpuReadRAM :: BUS -> Word16 -> IO (BUS, Word8)
+cpuReadRAM bus addr = do
+    let ram = bRAM bus
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
-    Memory.readByte ram real_addr
+    byte <- Memory.readByte ram real_addr
+    return $ (bus, byte)
 
 
-cpuReadPPU :: (IORef R2C02.R2C02) -> Word16 -> IO Word8
-cpuReadPPU ppuref addr = do
-    ppu <- readIORef ppuref
+cpuReadPPU :: BUS -> Word16 -> IO (BUS, Word8)
+cpuReadPPU bus addr = do
+    let ppu = bPPU bus 
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    (byte, ppu') <- runStateT (R2C02.cpuRead real_addr) ppu
-    writeIORef ppuref ppu'
-    return byte
+    (byte, (ppu', bus')) <- runStateT (R2C02.cpuRead real_addr) (ppu, bus)
+    let bus'' = bus'{bPPU = ppu'}
+    return (bus', byte)
 
 
-cpuReadAPU :: Word16 -> IO Word8
-cpuReadAPU addr = return 0 -- TODO: Implement APU Support
+cpuReadAPU :: BUS -> Word16 -> IO (BUS, Word8)
+cpuReadAPU bus addr = return $ (bus, 0) -- TODO: Implement APU Support
 
 
-cpuReadControl :: (Controller.Controller, Controller.Controller) -> Word16 -> IO Word8
-cpuReadControl (controllerA, controllerB) addr = do
+cpuReadControl :: BUS -> Word16 -> IO (BUS, Word8)
+cpuReadControl bus addr = do
     let addr' = addr .&. 0x01
-    let controller = if addr' == 0 then controllerA else controllerB
-    Controller.readController controller
+    let controller = if addr' == 0 then (bControllerA bus) else (bControllerB bus)
+    byte <- Controller.readController controller
+    return (bus, byte)
     
 
-cpuReadCart :: Cartridge.Cartridge -> Word16 -> IO Word8
-cpuReadCart cart addr = Cartridge.cpuRead cart addr
+cpuReadCart :: BUS -> Word16 -> IO (BUS, Word8)
+cpuReadCart bus addr = do
+    let cart = bCart bus
+    byte <- Cartridge.cpuRead cart addr
+    return $ (bus, byte)
 
 
 
 -- PEEK
 
-cpuPeekRAM :: Memory.RAM -> Word16 -> IO Word8
-cpuPeekRAM = cpuReadRAM
+cpuPeekRAM :: BUS -> Word16 -> IO Word8
+cpuPeekRAM bus addr = snd <$> cpuReadRAM bus addr
 
 
-cpuPeekPPU :: (IORef R2C02.R2C02) -> Word16 -> IO Word8
-cpuPeekPPU ppuref addr = do
-    ppu <- readIORef ppuref
+cpuPeekPPU :: BUS -> Word16 -> IO Word8
+cpuPeekPPU bus addr = do
+    let ppu = bPPU bus
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    byte <- R2C02.cpuPeek real_addr ppu
+    byte <- R2C02.cpuPeek real_addr (ppu, bus)
     return byte
 
 
-cpuPeekAPU :: Word16 -> IO Word8
-cpuPeekAPU addr = return 0 -- TODO: Implement APU Support
+cpuPeekAPU :: BUS -> Word16 -> IO Word8
+cpuPeekAPU bus addr = return 0 -- TODO: Implement APU Support
 
 
-cpuPeekControl :: Word16 -> IO Word8
-cpuPeekControl addr = return 0 -- TODO: Implement Control Support
+cpuPeekControl :: BUS -> Word16 -> IO Word8
+cpuPeekControl bus addr = return 0 -- TODO: Implement Control Support
 
 
-cpuPeekCart :: Cartridge.Cartridge -> Word16 -> IO Word8
-cpuPeekCart cart addr = Cartridge.cpuPeek cart addr
+cpuPeekCart :: BUS -> Word16 -> IO Word8
+cpuPeekCart bus addr = do
+    let cart = bCart bus
+    Cartridge.cpuPeek cart addr
 
 
 
 -- WRITE
 
-cpuWriteRAM :: Memory.RAM -> Word16 -> Word8 -> IO ()
-cpuWriteRAM ram addr byte = do
+cpuWriteRAM :: BUS -> Word16 -> Word8 -> IO BUS
+cpuWriteRAM bus addr byte = do
+    let ram = bRAM bus
     let real_addr = addr .&. 0x07FF -- Addresses 0x000 to 0x07FF is mirrored through $1FFFF
     Memory.writeByte ram real_addr byte
+    return bus
 
 
-cpuWritePPU :: (IORef R2C02.R2C02) -> Word16 -> Word8 -> IO ()
-cpuWritePPU ppuref addr byte = do
-    ppu <- readIORef ppuref
+cpuWritePPU :: BUS -> Word16 -> Word8 -> IO BUS
+cpuWritePPU bus addr byte = do
+    let ppu = bPPU bus
     let real_addr = addr .&. 0x0007 -- Addresses 0x2000 to 0x2007 is mirrored through $3FFF
-    ppu' <- execStateT (R2C02.cpuWrite real_addr byte) ppu
-    writeIORef ppuref ppu'
+    (ppu', bus') <- execStateT (R2C02.cpuWrite real_addr byte) (ppu, bus)
+    let bus'' = bus'{bPPU = ppu'}
+    return bus''
 
 
-cpuWriteAPU :: Word16 -> Word8 -> IO ()
-cpuWriteAPU addr byte = return () -- TODO: Implement APU Support
+cpuWriteAPU :: BUS -> Word16 -> Word8 -> IO BUS
+cpuWriteAPU bus addr byte = return bus -- TODO: Implement APU Support
 
 
-cpuWriteControl :: (Controller.Controller, Controller.Controller) -> Word16 -> Word8 -> IO ()
-cpuWriteControl (controllerA, controllerB) addr byte = do
+cpuWriteControl :: BUS -> Word16 -> Word8 -> IO BUS
+cpuWriteControl bus addr byte = do
     let addr' = addr .&. 0x01
-    let controller = if addr' == 0 then controllerA else controllerB
+    let controller = if addr' == 0 then (bControllerA bus) else (bControllerB bus)
     Controller.writeController controller
+    return bus
 
 
 
-cpuWriteCart :: Cartridge.Cartridge -> Word16 -> Word8 -> IO ()
-cpuWriteCart cart addr byte = Cartridge.cpuWrite cart addr byte
-
+cpuWriteCart :: BUS -> Word16 -> Word8 -> IO BUS
+cpuWriteCart bus addr byte = do
+    let cart = bCart bus
+    Cartridge.cpuWrite cart addr byte
+    return bus
 
 
 -- CPU INTERFACE
 
-cpuInterface :: (IORef R2C02.R2C02) -> Memory.RAM -> Cartridge.Cartridge -> (Controller.Controller, Controller.Controller) -> MOS6502.Interface
-cpuInterface ppuref ram cart (ca, cb) = MOS6502.Interface cReadByte cWriteByte cPeekByte where
-    cReadByte addr
-        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuReadRAM ram addr
-        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuReadPPU ppuref addr
-        | (addr >= 0x4000 && addr <= 0x4015) = cpuReadAPU addr
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuReadControl (ca, cb) addr
-        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuReadCart cart addr
-        | otherwise = return 0 -- TODO: Log error ?
-    cWriteByte addr byte
-        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuWriteRAM ram addr byte
-        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuWritePPU ppuref addr byte
-        | (addr >= 0x4000 && addr <= 0x4015) = cpuWriteAPU addr byte
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl (ca, cb) addr byte
-        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart cart addr byte
-        | otherwise = return () -- TODO: Log error ?
-    cPeekByte addr
-        | (addr >= 0x0000 && addr <= 0x1FFF) = cpuPeekRAM ram addr
-        | (addr >= 0x2000 && addr <= 0x3FFF) = cpuPeekPPU ppuref addr
-        | (addr >= 0x4000 && addr <= 0x4015) = cpuPeekAPU addr
-        | (addr >= 0x4016 && addr <= 0x4017) = cpuPeekControl addr
-        | (addr >= 0x4020 && addr <= 0xFFFF) = cpuPeekCart cart addr
-        | otherwise = return 0 -- TODO: Log error ?
+cReadByte :: BUS -> Word16 -> IO (BUS, Word8)
+cReadByte bus addr
+    | (addr >= 0x0000 && addr <= 0x1FFF) = cpuReadRAM bus addr
+    | (addr >= 0x2000 && addr <= 0x3FFF) = cpuReadPPU bus addr
+    | (addr >= 0x4000 && addr <= 0x4015) = cpuReadAPU bus addr
+    | (addr >= 0x4016 && addr <= 0x4017) = cpuReadControl bus addr
+    | (addr >= 0x4020 && addr <= 0xFFFF) = cpuReadCart bus addr
+    | otherwise = return (bus, 0) -- TODO: Log error ?
+cWriteByte :: BUS -> Word16 -> Word8 -> IO BUS
+cWriteByte bus addr byte
+    | (addr >= 0x0000 && addr <= 0x1FFF) = cpuWriteRAM bus addr byte
+    | (addr >= 0x2000 && addr <= 0x3FFF) = cpuWritePPU bus addr byte
+    | (addr >= 0x4000 && addr <= 0x4015) = cpuWriteAPU bus addr byte 
+    | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl bus addr byte
+    | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart bus addr byte
+    | otherwise = return bus -- TODO: Log error ?
+cPeekByte :: BUS -> Word16 -> IO Word8
+cPeekByte bus addr
+    | (addr >= 0x0000 && addr <= 0x1FFF) = cpuPeekRAM bus addr
+    | (addr >= 0x2000 && addr <= 0x3FFF) = cpuPeekPPU bus addr
+    | (addr >= 0x4000 && addr <= 0x4015) = cpuPeekAPU bus addr
+    | (addr >= 0x4016 && addr <= 0x4017) = cpuPeekControl bus addr
+    | (addr >= 0x4020 && addr <= 0xFFFF) = cpuPeekCart bus addr
+    | otherwise = return 0 -- TODO: Log error ?
 
-
+cpuInterface :: MOS6502.Interface BUS
+cpuInterface = MOS6502.Interface cReadByte cWriteByte cPeekByte
 
 
 
@@ -185,16 +201,22 @@ mirrorNametable Cartridge.Vertical addr
 -- READ
 
 
-ppuReadPT :: Cartridge.Cartridge -> Word16 -> IO Word8
-ppuReadPT cart addr = Cartridge.ppuRead cart addr
+ppuReadPT :: BUS -> Word16 -> IO (BUS, Word8)
+ppuReadPT bus addr = do
+    let cart = bCart bus
+    byte <- Cartridge.ppuRead cart addr
+    return (bus, byte)
 
 
-ppuReadNT :: Cartridge.Cartridge -> Memory.RAM -> Word16 -> IO Word8
-ppuReadNT cart ntram addr = do
+ppuReadNT :: BUS -> Word16 -> IO (BUS, Word8)
+ppuReadNT bus addr = do
+    let cart = bCart bus
+    let ntram = bNTRAM bus
     let mirroring = Cartridge.hMirroring . Cartridge.cHeader . Cartridge.cartData $ cart
     let baseaddr = mirrorNametable mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
-    Memory.readByte ntram addr'
+    byte <- Memory.readByte ntram addr'
+    return (bus, byte)
 
 
 ppuReadPL' :: Memory.RAM -> Word16 -> IO Word8
@@ -210,39 +232,50 @@ ppuReadPL' plram 0x1C = ppuReadPL' plram 0xC
 ppuReadPL' plram addr = Memory.readByte plram addr
 
 
-ppuReadPL :: Memory.RAM -> Word16 -> IO Word8
-ppuReadPL plram addr = ppuReadPL' plram (addr .&. 0x1F)
+ppuReadPL :: BUS -> Word16 -> IO (BUS, Word8)
+ppuReadPL bus addr = do
+    let plram = bPLRAM bus
+    byte <- ppuReadPL' plram (addr .&. 0x1F)
+    return (bus, byte)
 
 
 
 -- PEEK
 
-ppuPeekPT :: Cartridge.Cartridge -> Word16 -> IO Word8
-ppuPeekPT cart addr = Cartridge.ppuPeek cart addr
+ppuPeekPT :: BUS -> Word16 -> IO Word8
+ppuPeekPT bus addr = do
+    let cart = bCart bus
+    Cartridge.ppuPeek cart addr
 
 
-ppuPeekNT :: Cartridge.Cartridge -> Memory.RAM -> Word16 -> IO Word8
-ppuPeekNT = ppuReadNT
+ppuPeekNT :: BUS -> Word16 -> IO Word8
+ppuPeekNT bus addr = snd <$> ppuReadNT bus addr
 
 
-ppuPeekPL :: Memory.RAM -> Word16 -> IO Word8
-ppuPeekPL = ppuReadPL
+ppuPeekPL :: BUS -> Word16 -> IO Word8
+ppuPeekPL bus addr = snd <$> ppuReadPL bus addr
 
 
 
 -- WRITE
 
 
-ppuWritePT :: Cartridge.Cartridge -> Word16 -> Word8 -> IO ()
-ppuWritePT cart addr byte = Cartridge.ppuWrite cart addr byte
+ppuWritePT :: BUS -> Word16 -> Word8 -> IO BUS
+ppuWritePT bus addr byte = do
+    let cart = bCart bus
+    Cartridge.ppuWrite cart addr byte
+    return bus
 
 
-ppuWriteNT :: Cartridge.Cartridge -> Memory.RAM -> Word16 -> Word8 -> IO ()
-ppuWriteNT cart ntram addr byte = do
+ppuWriteNT :: BUS -> Word16 -> Word8 -> IO BUS
+ppuWriteNT bus addr byte = do
+    let cart = bCart bus
+    let ntram = bNTRAM bus
     let mirroring = Cartridge.hMirroring . Cartridge.cHeader . Cartridge.cartData $ cart
     let baseaddr = mirrorNametable mirroring addr
     let addr' = baseaddr + (addr .&. 0x03FF)
     Memory.writeByte ntram addr' byte
+    return bus
 
 
 ppuWritePL' :: Memory.RAM -> Word16 -> Word8 ->IO ()
@@ -256,120 +289,107 @@ ppuWritePL' plram 0x18 byte = ppuWritePL' plram 0x08 byte
 ppuWritePL' plram 0x1C byte = ppuWritePL' plram 0x0C byte
 ppuWritePL' plram addr byte = Memory.writeByte plram addr byte
 
-ppuWritePL :: Memory.RAM -> Word16 -> Word8 -> IO ()
-ppuWritePL plram addr byte = ppuWritePL' plram (addr .&. 0x1F) byte
+ppuWritePL :: BUS -> Word16 -> Word8 -> IO BUS
+ppuWritePL bus addr byte = do
+    let plram = bPLRAM bus
+    ppuWritePL' plram (addr .&. 0x1F) byte
+    return bus
 
 
 
 -- AUXILIARY
 
 
-ppuSetPixel :: Display.Display -> (Word16, Word16) -> Word8 -> IO ()
-ppuSetPixel display addr col = Display.setPixel display addr col
+ppuSetPixel :: BUS -> (Word16, Word16) -> Word8 -> IO BUS
+ppuSetPixel bus addr col = do
+    let display = bDisplay bus
+    Display.setPixel display addr col
+    return bus
 
-ppuTriggerNMI :: (IORef MOS6502.MOS6502) -> IO ()
-ppuTriggerNMI cpuref = do
-    cpu <- readIORef cpuref
-    cpu' <- execStateT MOS6502.iNMI cpu
-    writeIORef cpuref cpu'
+ppuTriggerNMI :: BUS -> IO BUS
+ppuTriggerNMI bus = do
+    let cpu = bCPU bus
+    (cpu', bus') <- execStateT MOS6502.iNMI (cpu, bus)
+    return $ bus'{bCPU = cpu'}
     
 
 
 -- PPU INTERFACE
 
-ppuInterface :: (IORef MOS6502.MOS6502) -> Cartridge.Cartridge -> Display.Display -> Memory.RAM -> Memory.RAM -> R2C02.Interface
-ppuInterface cpuref cart display plram ntram = R2C02.Interface pReadByte pWriteByte pSetPixel pTriggerNMI pPeekByte where
-    pReadByte addr
-        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuReadPT cart addr
-        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuReadNT cart ntram addr
-        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuReadPL plram addr
-        | otherwise = return 0 -- TODO: Log error
-    pWriteByte addr byte
-        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuWritePT cart addr byte
-        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuWriteNT cart ntram addr byte
-        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuWritePL plram addr byte
-        | otherwise = return ()
-    pPeekByte addr
-        | (addr >= 0x0000 && addr <= 0x1FFF) = ppuPeekPT cart addr
-        | (addr >= 0x2000 && addr <= 0x3EFF) = ppuPeekNT cart ntram addr
-        | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuPeekPL plram addr
-        | otherwise = return 0
-    pSetPixel addr col = ppuSetPixel display addr col
-    pTriggerNMI = ppuTriggerNMI cpuref
+pReadByte :: BUS -> Word16 -> IO (BUS, Word8)
+pReadByte bus addr
+    | (addr >= 0x0000 && addr <= 0x1FFF) = ppuReadPT bus addr
+    | (addr >= 0x2000 && addr <= 0x3EFF) = ppuReadNT bus addr
+    | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuReadPL bus addr
+    | otherwise = return (bus, 0) -- TODO: Log error
+pWriteByte :: BUS -> Word16 -> Word8 -> IO BUS
+pWriteByte bus addr byte
+    | (addr >= 0x0000 && addr <= 0x1FFF) = ppuWritePT bus addr byte
+    | (addr >= 0x2000 && addr <= 0x3EFF) = ppuWriteNT bus addr byte
+    | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuWritePL bus addr byte
+    | otherwise = return bus
+pPeekByte :: BUS -> Word16 -> IO Word8
+pPeekByte bus addr
+    | (addr >= 0x0000 && addr <= 0x1FFF) = ppuPeekPT bus addr
+    | (addr >= 0x2000 && addr <= 0x3EFF) = ppuPeekNT bus addr
+    | (addr >= 0x3F00 && addr <= 0x3FFF) = ppuPeekPL bus addr
+    | otherwise = return 0
+pSetPixel :: BUS -> (Word16, Word16) -> Word8 -> IO BUS
+pSetPixel = ppuSetPixel
+pTriggerNMI :: BUS -> IO BUS
+pTriggerNMI = ppuTriggerNMI
+
+ppuInterface :: R2C02.Interface BUS
+ppuInterface = R2C02.Interface pReadByte pWriteByte pSetPixel pTriggerNMI pPeekByte 
 
 
 
 -- BUS Interface
 
-tickCPU :: BUS -> IO ()
-tickCPU bus = do
-    let cpuref = bCPU bus
-    cpu <- readIORef cpuref
-    cpu' <- execStateT MOS6502.tick cpu
-    writeIORef cpuref cpu'
-
-tickCPU' :: BUS -> IO Bool
-tickCPU' bus = do
-    let cpuref = bCPU bus
-    cpu <- readIORef cpuref
-    (done, cpu') <- runStateT MOS6502.tick' cpu
-    writeIORef cpuref cpu'
-    return $ done
-
-
-tickPPU :: BUS -> IO ()
-tickPPU bus = do
-    let ppuref = bPPU bus
-    ppu <- readIORef ppuref
-    ppu' <- execStateT R2C02.tick ppu
-    writeIORef ppuref ppu'
-
-tickPPU' :: BUS -> IO ()
-tickPPU' bus = do
-    let ppuref = bPPU bus
-    ppu <- readIORef ppuref
-    (done, ppu') <- runStateT R2C02.tick ppu
-    writeIORef ppuref ppu'
+tickCPU :: StateT BUS IO Bool
+tickCPU = do
+    bus <- get
+    let cpu = bCPU bus
+    (done, (cpu', bus')) <- liftIO $ runStateT MOS6502.tick' (cpu, bus)
+    put bus'{bCPU = cpu'}
     return done
 
 
-tickNPPU :: Int -> BUS -> IO ()
-tickNPPU n bus = do
-    let ppuref = bPPU bus
-    ppu <- readIORef ppuref
-    let action = mapM_(\_ -> R2C02.tick) [1..n]
-    ppu' <- execStateT action ppu
-    writeIORef ppuref ppu'
-
-tickNPPU' :: Int -> BUS -> IO Bool
-tickNPPU' n bus = do
-    let ppuref = bPPU bus
-    ppu <- readIORef ppuref
-    let action = (mapM_(\_ -> R2C02.tick) [1..(n-1)]) >> R2C02.tick'
-    (done, ppu') <- runStateT action ppu
-    writeIORef ppuref ppu'
+tick3PPU :: StateT BUS IO Bool
+tick3PPU = do
+    bus <- get
+    let ppu = bPPU bus
+    let action = R2C02.tick >> R2C02.tick >> R2C02.tick'
+    (done, (ppu', bus')) <- liftIO $ runStateT action (ppu, bus)
+    put bus'{bPPU = ppu'}
     return done
 
 
-tick :: BUS -> IO ()
-tick bus = do
-    tickNPPU 3 bus
-    tickCPU bus
+tick' :: StateT BUS IO (Bool, Bool)
+tick' = do
+    ppuDone <- tick3PPU
+    cpuDone <- tickCPU
+    return (ppuDone, cpuDone)
 
-fullTick :: BUS -> IO ()
-fullTick bus = do
-    tickPPU bus
-    tickPPU bus
-    tickPPU bus
-    done <- tickCPU' bus
-    if done then return () else fullTick bus
-   
 
-fullFrame :: BUS -> IO ()
-fullFrame bus = do
-    done <-tickNPPU' 3 bus
-    tickCPU bus
-    if done then return () else fullFrame bus
+tick :: BUS -> IO ((Bool, Bool), BUS)
+tick bus = runStateT tick' bus
+
+fullTick' :: StateT BUS IO Bool
+fullTick' = do
+    (ppuDone, cpuDone) <- tick'
+    if cpuDone then return ppuDone else fullTick'
+
+fullTick :: BUS -> IO (Bool, BUS)
+fullTick bus = runStateT fullTick' bus
+
+fullFrame' :: StateT BUS IO ()
+fullFrame' = do
+    (ppuDone, _) <- tick'
+    if ppuDone then return () else fullFrame'
+
+fullFrame :: BUS -> IO BUS
+fullFrame bus = execStateT fullFrame' bus
 
 
 load :: FilePath -> IO BUS
@@ -379,24 +399,14 @@ load fp = do
     ntram <- Memory.new 0x800 0
     plram <- Memory.new 0x20 0
     display <- Display.newDisplay
-    cpuref <- newIORef undefined :: IO (IORef MOS6502.MOS6502)
-    ppuref <- newIORef undefined :: IO (IORef R2C02.R2C02)
     controllerA <- Controller.new
     controllerB <- Controller.new
 
+    let cpu = MOS6502.new cpuInterface
+    let ppu = R2C02.new ppuInterface
 
-    let ppuinterface = ppuInterface cpuref cart display plram ntram
-    let cpuinterface = cpuInterface ppuref ram cart (controllerA, controllerB)
-
-    let cpu = MOS6502.new cpuinterface
-    let ppu = R2C02.new ppuinterface
-
-    writeIORef cpuref cpu
-    writeIORef ppuref ppu
-
-
-    let bus = BUS { bCPU = cpuref
-                  , bPPU = ppuref
+    let bus = BUS { bCPU = cpu
+                  , bPPU = ppu
                   , bCart = cart
                   , bRAM = ram
                   , bNTRAM = ntram
@@ -405,8 +415,8 @@ load fp = do
                   , bControllerA = controllerA
                   , bControllerB = controllerB
                   }
-    reset bus
-    return bus
+    bus' <- reset bus
+    return bus'
 
 setControllerA :: BUS -> Word8 -> IO()
 setControllerA bus controller = Controller.writeLive (bControllerA bus) controller
@@ -414,34 +424,51 @@ setControllerA bus controller = Controller.writeLive (bControllerA bus) controll
 setControllerB :: BUS -> Word8 -> IO()
 setControllerB bus controller = Controller.writeLive (bControllerA bus) controller
 
-reset :: BUS -> IO ()
-reset bus = do
-    Memory.reset (bRAM bus)
-    Memory.reset (bNTRAM bus)
-    Memory.reset (bPLRAM bus)
-    Display.reset (bDisplay bus)
-    Cartridge.reset (bCart bus) -- TODO
-    let cpuref = bCPU bus
-    let ppuref = bPPU bus
-    cpu <- readIORef cpuref
-    ppu <- readIORef ppuref
-    cpu' <- execStateT MOS6502.reset cpu
-    ppu' <- execStateT R2C02.reset ppu
-    writeIORef cpuref cpu'
-    writeIORef ppuref ppu'
+resetMemories :: StateT BUS IO ()
+resetMemories = do
+    bus <- get
+    liftIO $ Memory.reset (bRAM bus)
+    liftIO $ Memory.reset (bNTRAM bus)
+    liftIO $ Memory.reset (bPLRAM bus)
+    liftIO $ Display.reset (bDisplay bus)
+    liftIO $ Cartridge.reset (bCart bus) -- TODO
+    liftIO $ Controller.reset (bControllerA bus) -- TODO
+    liftIO $ Controller.reset (bControllerB bus) -- TODO
+
+
+resetCPU :: StateT BUS IO ()
+resetCPU = do
+    bus <- get
+    let cpu = bCPU bus
+    (cpu', bus') <- liftIO $ execStateT MOS6502.reset (cpu, bus)
+    put bus'{bCPU = cpu'}
+
+resetPPU :: StateT BUS IO ()
+resetPPU = do
+    bus <- get
+    let ppu = bPPU bus
+    (ppu', bus') <- liftIO $ execStateT R2C02.reset (ppu, bus)
+    put bus'{bPPU = ppu'}
+
+reset' :: StateT BUS IO ()
+reset' = do
+    resetMemories
+    resetCPU
+    resetPPU
+
+reset :: BUS -> IO BUS
+reset bus = execStateT reset' bus
 
 
 ppuPeek :: BUS -> Word16 -> IO Word8
 ppuPeek bus addr = do
-   let ppuref = bPPU bus 
-   ppu <- readIORef ppuref
+   let ppu = bPPU bus 
    let peeker = R2C02.iPeekByte . R2C02.interface $ ppu
-   peeker addr
+   peeker bus addr
 
 
 cpuPeek :: BUS -> Word16 -> IO Word8
 cpuPeek bus addr = do
-   let cpuref = bCPU bus 
-   cpu <- readIORef cpuref
+   let cpu = bCPU bus
    let peeker = MOS6502.iPeekByte . MOS6502.interface $ cpu
-   peeker addr
+   peeker bus addr

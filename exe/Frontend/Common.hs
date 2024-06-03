@@ -62,7 +62,6 @@ data RenderContext = RenderContext
     , rcRDisplayMode :: DisplayMode
     , rcSDLContext :: SDLContext
     , rcController :: Controller
-    , rcNES :: NES
     }
 
 data CKEY = CUP | CDOWN | CLEFT | CRIGHT | CSELECT | CSTART | CA | CB
@@ -99,7 +98,14 @@ getETR :: StateT RenderContext IO (TChan Feedback)
 getETR = etr . rcCommunicationPipe <$> get
 
 getNES :: StateT RenderContext IO NES
-getNES = rcNES <$> get
+getNES = do
+    tnes <- getTNES
+    nes <- liftIO . atomically $ readTVar tnes
+    return nes
+
+getTNES :: StateT RenderContext IO (TVar NES)
+getTNES = tNES . rcCommunicationPipe <$> get
+
 
 getTCONTROLLER :: StateT RenderContext IO (TVar Word8)
 getTCONTROLLER = tControllerA . rcCommunicationPipe <$> get

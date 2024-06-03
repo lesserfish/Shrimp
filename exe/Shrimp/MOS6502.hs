@@ -1,20 +1,4 @@
-module Shrimp.MOS6502 (
-    Interface (..),
-    Registers (..),
-    Context (..),
-    MOS6502 (..),
-    new,
-    reset,
-    iIRQ,
-    iNMI,
-    disassemble,
-    disassembleL,
-    disassembleM,
-    disassembleL',
-    disassembleM',
-    tick,
-    tick'
-) where
+module Shrimp.MOS6502 where
 
 import Shrimp.Utils
 import Control.Monad
@@ -26,10 +10,10 @@ import Data.Word
 import Numeric (showHex)
 import Text.Printf
 
-data Interface = Interface
-    { iReadByte :: Word16 -> IO Word8
-    , iWriteByte :: Word16 -> Word8 -> IO ()
-    , iPeekByte :: Word16 -> IO Word8
+data Interface a = Interface
+    { iReadByte :: a -> Word16 -> IO (a, Word8)
+    , iWriteByte :: a -> Word16 -> Word8 -> IO a
+    , iPeekByte :: a -> Word16 -> IO Word8
     }
 
 data Registers = Registers
@@ -73,19 +57,19 @@ data ADDR_MODE
     | INDIRECT_Y
     deriving (Show)
 
-data MOS6502 = MOS6502
+data MOS6502 a = MOS6502
     { registers :: !Registers
     , clock :: !Int
     , cycles :: !Int
     , context :: !Context
-    , interface :: !Interface
+    , interface :: !(Interface a)
     }
 
 
 -- Creation
 
 
-new :: Interface -> MOS6502
+new :: Interface a -> (MOS6502 a)
 new interface = MOS6502 reg 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
     ctx = Context False False
@@ -93,106 +77,107 @@ new interface = MOS6502 reg 0 0 ctx interface where
 -- Setters / Getters
 
 
-mapPC :: (Word16 -> Word16) -> StateT MOS6502 IO ()
-mapPC f = modify (\mos -> mos{registers = (registers mos){pc = f . pc . registers $ mos}})
+
+mapPC :: (Word16 -> Word16) -> StateT (MOS6502 a, a) IO ()
+mapPC f = modifyFst (\mos -> mos{registers = (registers mos){pc = f . pc . registers $ mos}})
 
 
-mapSP :: (Word8 -> Word8) -> StateT MOS6502 IO ()
-mapSP f = modify (\mos -> mos{registers = (registers mos){sp = f . sp . registers $ mos}})
+mapSP :: (Word8 -> Word8) -> StateT (MOS6502 a, a) IO ()
+mapSP f = modifyFst (\mos -> mos{registers = (registers mos){sp = f . sp . registers $ mos}})
 
 
-mapACC :: (Word8 -> Word8) -> StateT MOS6502 IO ()
-mapACC f = modify (\mos -> mos{registers = (registers mos){acc = f . acc . registers $ mos}})
+mapACC :: (Word8 -> Word8) -> StateT (MOS6502 a, a) IO ()
+mapACC f = modifyFst (\mos -> mos{registers = (registers mos){acc = f . acc . registers $ mos}})
 
 
-mapIDX :: (Word8 -> Word8) -> StateT MOS6502 IO ()
-mapIDX f = modify (\mos -> mos{registers = (registers mos){idx = f . idx . registers $ mos}})
+mapIDX :: (Word8 -> Word8) -> StateT (MOS6502 a, a) IO ()
+mapIDX f = modifyFst (\mos -> mos{registers = (registers mos){idx = f . idx . registers $ mos}})
 
 
-mapIDY :: (Word8 -> Word8) -> StateT MOS6502 IO ()
-mapIDY f = modify (\mos -> mos{registers = (registers mos){idy = f . idy . registers $ mos}})
+mapIDY :: (Word8 -> Word8) -> StateT (MOS6502 a, a) IO ()
+mapIDY f = modifyFst (\mos -> mos{registers = (registers mos){idy = f . idy . registers $ mos}})
 
 
-mapPS :: (Word8 -> Word8) -> StateT MOS6502 IO ()
-mapPS f = modify (\mos -> mos{registers = (registers mos){ps = f . ps . registers $ mos}})
+mapPS :: (Word8 -> Word8) -> StateT (MOS6502 a, a) IO ()
+mapPS f = modifyFst (\mos -> mos{registers = (registers mos){ps = f . ps . registers $ mos}})
 
 
 
-setPC :: Word16 -> StateT MOS6502 IO ()
+setPC :: Word16 -> StateT (MOS6502 a, a) IO ()
 setPC v = mapPC (\_ -> v)
 
 
-setSP :: Word8 -> StateT MOS6502 IO ()
+setSP :: Word8 -> StateT (MOS6502 a, a) IO ()
 setSP v = mapSP (\_ -> v)
 
 
-setACC :: Word8 -> StateT MOS6502 IO ()
+setACC :: Word8 -> StateT (MOS6502 a, a) IO ()
 setACC v = mapACC (\_ -> v)
 
 
-setIDX :: Word8 -> StateT MOS6502 IO ()
+setIDX :: Word8 -> StateT (MOS6502 a, a) IO ()
 setIDX v = mapIDX (\_ -> v)
 
 
-setIDY :: Word8 -> StateT MOS6502 IO ()
+setIDY :: Word8 -> StateT (MOS6502 a, a) IO ()
 setIDY v = mapIDY (\_ -> v)
 
 
-setPS :: Word8 -> StateT MOS6502 IO ()
+setPS :: Word8 -> StateT (MOS6502 a, a) IO ()
 setPS v = mapPS (\_ -> v)
 
 
 
-setPCIf :: Bool -> Word16 -> StateT MOS6502 IO ()
+setPCIf :: Bool -> Word16 -> StateT (MOS6502 a, a) IO ()
 setPCIf condition v = if condition then setPC v else return ()
 
 
-setSPIf :: Bool -> Word8 -> StateT MOS6502 IO ()
+setSPIf :: Bool -> Word8 -> StateT (MOS6502 a, a) IO ()
 setSPIf condition v = if condition then setSP v else return ()
 
 
-setACCIf :: Bool -> Word8 -> StateT MOS6502 IO ()
+setACCIf :: Bool -> Word8 -> StateT (MOS6502 a, a) IO ()
 setACCIf condition v = if condition then setACC v else return ()
 
 
-setIDXIf :: Bool -> Word8 -> StateT MOS6502 IO ()
+setIDXIf :: Bool -> Word8 -> StateT (MOS6502 a, a) IO ()
 setIDXIf condition v = if condition then setIDX v else return ()
 
 
-setIDYIf :: Bool -> Word8 -> StateT MOS6502 IO ()
+setIDYIf :: Bool -> Word8 -> StateT (MOS6502 a, a) IO ()
 setIDYIf condition v = if condition then setIDY v else return ()
 
 
-setPSIf :: Bool -> Word8 -> StateT MOS6502 IO ()
+setPSIf :: Bool -> Word8 -> StateT (MOS6502 a, a) IO ()
 setPSIf condition v = if condition then setPS v else return ()
 
 
 
-getPC :: StateT MOS6502 IO Word16 
-getPC = (pc . registers) <$> get
+getPC :: StateT (MOS6502 a, a) IO Word16 
+getPC = (pc . registers . fst) <$> get
 
 
-getSP :: StateT MOS6502 IO Word8 
-getSP = (sp . registers) <$> get
+getSP :: StateT (MOS6502 a, a) IO Word8 
+getSP = (sp . registers . fst) <$> get
 
 
-getACC :: StateT MOS6502 IO Word8 
-getACC = (acc . registers) <$> get
+getACC :: StateT (MOS6502 a, a) IO Word8 
+getACC = (acc . registers . fst) <$> get
 
 
-getIDX :: StateT MOS6502 IO Word8 
-getIDX = (idx . registers) <$> get
+getIDX :: StateT (MOS6502 a, a) IO Word8 
+getIDX = (idx . registers . fst) <$> get
 
 
-getIDY :: StateT MOS6502 IO Word8 
-getIDY = (idy . registers) <$> get
+getIDY :: StateT (MOS6502 a, a) IO Word8 
+getIDY = (idy . registers . fst) <$> get
 
 
-getPS :: StateT MOS6502 IO Word8 
-getPS = (ps . registers) <$> get
+getPS :: StateT (MOS6502 a, a) IO Word8 
+getPS = (ps . registers . fst) <$> get
 
 
-getFlag :: FLAG -> StateT MOS6502 IO Bool
+getFlag :: FLAG -> StateT (MOS6502 a, a) IO Bool
 getFlag CARRY             = b0' <$> getPS
 getFlag ZERO              = b1' <$> getPS
 getFlag INTERRUPT_DISABLE = b2' <$> getPS
@@ -202,7 +187,7 @@ getFlag OVERFLOW          = b6' <$> getPS
 getFlag NEGATIVE          = b7' <$> getPS
 
 
-setFlag :: FLAG -> Bool -> StateT MOS6502 IO ()
+setFlag :: FLAG -> Bool -> StateT (MOS6502 a, a) IO ()
 setFlag CARRY flag             = mapPS (\reg -> if flag then setBit reg 0 else clearBit reg 0)
 setFlag ZERO flag              = mapPS (\reg -> if flag then setBit reg 1 else clearBit reg 1)
 setFlag INTERRUPT_DISABLE flag = mapPS (\reg -> if flag then setBit reg 2 else clearBit reg 2)
@@ -212,30 +197,32 @@ setFlag OVERFLOW flag          = mapPS (\reg -> if flag then setBit reg 6 else c
 setFlag NEGATIVE flag          = mapPS (\reg -> if flag then setBit reg 7 else clearBit reg 7)
 
 
-setFlagIf :: Bool -> FLAG -> Bool -> StateT MOS6502 IO ()
+setFlagIf :: Bool -> FLAG -> Bool -> StateT (MOS6502 a, a) IO ()
 setFlagIf condition flag value = when condition (setFlag flag value)
 
 
-readByte :: Word16 -> StateT MOS6502 IO Word8
+readByte :: Word16 -> StateT (MOS6502 a, a) IO Word8
 readByte addr = do
-    mos6502 <- get
+    (mos6502, bus) <- get
     let read = iReadByte . interface $ mos6502
-    byte <- lift $ read addr
+    (bus', byte) <- lift $ read bus addr
+    put (mos6502, bus')
     return byte
 
 
-writeByte :: Word16 -> Word8 -> StateT MOS6502 IO ()
+writeByte :: Word16 -> Word8 -> StateT (MOS6502 a, a) IO ()
 writeByte addr byte = do
-    mos6502 <- get
+    (mos6502, bus) <- get
     let write = iWriteByte . interface $ mos6502
-    liftIO $ write addr byte
+    bus' <- lift $ write bus addr byte
+    put (mos6502, bus')
 
 
 
 -- Addresing Modes
 
 
-getAddr :: ADDR_MODE -> StateT MOS6502 IO Word16
+getAddr :: ADDR_MODE -> StateT (MOS6502 a, a) IO Word16
 getAddr IMPLICIT = return 0 -- Implicit does not require getAddr
 getAddr ACCUMULATOR = return 0 -- Accumulator does not require getAddr
 getAddr IMMEDIATE = do
@@ -331,7 +318,7 @@ getAddr INDIRECT_Y = do
     return faddr
 
 
-writeStack :: Word8 -> StateT MOS6502 IO ()
+writeStack :: Word8 -> StateT (MOS6502 a, a) IO ()
 writeStack byte = do
     sp <- getSP
     let addr = 0x0100 + (joinBytes 0x00 sp) -- Stack is between 0x0100 and 0x01FF
@@ -339,7 +326,7 @@ writeStack byte = do
     mapSP (\x -> x - 1) -- Decrement stack pointer
 
 
-readStack :: StateT MOS6502 IO Word8
+readStack :: StateT (MOS6502 a, a) IO Word8
 readStack = do
     mapSP (+ 1) -- Increment stack pointer
     sp <- getSP -- Get the Stack Pointer
@@ -347,45 +334,48 @@ readStack = do
     readByte addr -- Read byte
 
 
-getCycles :: StateT MOS6502 IO Int
-getCycles = cycles <$> get
+getCycles :: StateT (MOS6502 a, a) IO Int
+getCycles = cycles . fst <$> get
 
 
-incClock :: StateT MOS6502 IO ()
-incClock = modify (\mos -> mos{clock = 1 + (clock mos)})
+getComplete :: StateT (MOS6502 a, a) IO Bool
+getComplete = complete . context . fst <$> get
 
 
-resetCycles :: StateT MOS6502 IO ()
-resetCycles = modify (\mos -> mos{cycles = 0})
+incClock :: StateT (MOS6502 a, a) IO ()
+incClock = modifyFst (\mos -> mos{clock = 1 + (clock mos)})
 
 
-resetClock :: StateT MOS6502 IO ()
-resetClock = modify (\mos -> mos{clock = 0})
+resetCycles :: StateT (MOS6502 a, a) IO ()
+resetCycles = modifyFst (\mos -> mos{cycles = 0})
 
 
-updateCycles :: Int -> StateT MOS6502 IO ()
-updateCycles offset = modify (\mos -> mos{cycles = offset + cycles mos})
+resetClock :: StateT (MOS6502 a, a) IO ()
+resetClock = modifyFst (\mos -> mos{clock = 0})
 
 
-setComplete :: Bool -> StateT MOS6502 IO ()
-setComplete b = modify (\mos -> mos{context = (context mos){complete = b}})
-
-setDecMode:: Bool -> StateT MOS6502 IO ()
-setDecMode b = modify (\mos -> mos{context = (context mos){decMode = b}})
-
-getDecMode  :: StateT MOS6502 IO Bool
-getDecMode = decMode . context <$> get
+updateCycles :: Int -> StateT (MOS6502 a, a) IO ()
+updateCycles offset = modifyFst (\mos -> mos{cycles = offset + cycles mos})
 
 
-fetchComplete :: StateT MOS6502 IO Bool
+setComplete :: Bool -> StateT (MOS6502 a, a) IO ()
+setComplete b = modifyFst (\mos -> mos{context = (context mos){complete = b}})
+
+setDecMode:: Bool -> StateT (MOS6502 a, a) IO ()
+setDecMode b = modifyFst (\mos -> mos{context = (context mos){decMode = b}})
+
+getDecMode  :: StateT (MOS6502 a, a) IO Bool
+getDecMode = decMode . context . fst <$> get
+
+
+fetchComplete :: StateT (MOS6502 a, a) IO Bool
 fetchComplete = do
-    mos <- get
-    let c = complete . context $ mos
+    c <- getComplete
     setComplete False
     return c
 
 
-tick :: StateT MOS6502 IO ()
+tick :: StateT (MOS6502 a, a) IO ()
 tick = do
     incClock
     c <- getCycles
@@ -397,7 +387,7 @@ tick = do
             execute opcode
             setComplete True
 
-tick' :: StateT MOS6502 IO Bool
+tick' :: StateT (MOS6502 a, a) IO Bool
 tick' = do
     incClock
     c <- getCycles
@@ -411,7 +401,7 @@ tick' = do
             return True
 
 
-fetch :: StateT MOS6502 IO Word8
+fetch :: StateT (MOS6502 a, a) IO Word8
 fetch = do
     pc <- getPC
     opcode <- readByte pc
@@ -420,7 +410,7 @@ fetch = do
 
 
 
-execute :: Word8 -> StateT MOS6502 IO ()
+execute :: Word8 -> StateT (MOS6502 a, a) IO ()
 execute 0x69 = do
     updateCycles 2
     opADC IMMEDIATE
@@ -877,7 +867,7 @@ execute 0x98 = do
 execute opcode = return ()
 --error (show opcode ++ ": Unknown opcode") -- TODO: Add error log to Context perhaps?
 
-iIRQ :: StateT MOS6502 IO ()
+iIRQ :: StateT (MOS6502 a, a) IO ()
 iIRQ = do
     interrupt_disable <- getFlag INTERRUPT_DISABLE
     if interrupt_disable
@@ -897,7 +887,7 @@ iIRQ = do
             setPC jmp_addr -- Jump to the address
             setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 
-iNMI :: StateT MOS6502 IO () -- Non-Maskable Interrupt
+iNMI :: StateT (MOS6502 a, a) IO () -- Non-Maskable Interrupt
 iNMI = do
     pc <- getPC
     let pushed_pc = pc  -- WARNING: At some point, I thought that an interrupt would push PC + 1 instead of PC to the stack.
@@ -914,7 +904,7 @@ iNMI = do
     setPC jmp_addr -- Jump to the address
     setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 
-reset ::StateT MOS6502 IO () -- Non-Maskable Interrupt
+reset ::StateT (MOS6502 a, a) IO () -- Non-Maskable Interrupt
 reset = do
     irq_lb <- readByte 0xFFFC -- Get the NMI interrupt vector
     irq_hb <- readByte 0xFFFD --
@@ -950,7 +940,7 @@ reset = do
 -- Note: Instructions do not have to update the PC unless they use additional operands through the means of addressing modes.
 -- The PC should be updated before the call to the instruction.
 
-opADC ::ADDR_MODE -> StateT MOS6502 IO ()
+opADC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opADC IMPLICIT = error "Operation ADC does not support IMPLICIT addressing mode"
 opADC ACCUMULATOR = error "Operation ADC does not support ACCUMULATOR addressing mode"
 opADC ZEROPAGE_Y = error "Operation ADC does not support ZEROPAGE_Y addressing mode"
@@ -988,7 +978,7 @@ opADC addr_mode = do
             let acc' = fromIntegral (result .&. 0xFF) :: Word8
             setACC acc'
 
-opAND ::ADDR_MODE -> StateT MOS6502 IO ()
+opAND ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opAND IMPLICIT = error "Operation AND does not support IMPLICIT addressing mode"
 opAND ACCUMULATOR = error "Operation AND does not support ACCUMULATOR addressing mode"
 opAND ZEROPAGE_Y = error "Operation AND does not support ZEROPAGE_Y addressing mode"
@@ -1003,7 +993,7 @@ opAND addr_mode = do
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
-opASL ::ADDR_MODE -> StateT MOS6502 IO ()
+opASL ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opASL IMPLICIT = error "Operation ASL does not support IMPLICIT addressing mode"
 opASL IMMEDIATE = error "Operation ASL does not support IMMEDIATE addressing mode"
 opASL ZEROPAGE_Y = error "Operation ASL does not support ZEROPAGE_Y addressing mode"
@@ -1030,7 +1020,7 @@ opASL addr_mode = do
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7' new_byte) -- Sets the Negative flag is the result is negative
 
-opBCC ::ADDR_MODE -> StateT MOS6502 IO ()
+opBCC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBCC IMPLICIT = error "Operation BCC does not support IMPLICIT addressing mode"
 opBCC ACCUMULATOR = error "Operation BCC does not support ACCUMULATOR addressing mode"
 opBCC IMMEDIATE = error "Operation BCC does not support IMMEDIATE addressing mode"
@@ -1048,7 +1038,7 @@ opBCC RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf (not carry_flag) addr -- Jump if Carry flag is clear
 
-opBCS ::ADDR_MODE -> StateT MOS6502 IO ()
+opBCS ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBCS IMPLICIT = error "Operation BCS does not support IMPLICIT addressing mode"
 opBCS ACCUMULATOR = error "Operation BCS does not support ACCUMULATOR addressing mode"
 opBCS IMMEDIATE = error "Operation BCS does not support IMMEDIATE addressing mode"
@@ -1066,7 +1056,7 @@ opBCS RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf carry_flag addr -- Jump if Carry flag is set
 
-opBEQ ::ADDR_MODE -> StateT MOS6502 IO ()
+opBEQ ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBEQ IMPLICIT = error "Operation BEQ does not support IMPLICIT addressing mode"
 opBEQ ACCUMULATOR = error "Operation BEQ does not support ACCUMULATOR addressing mode"
 opBEQ IMMEDIATE = error "Operation BEQ does not support IMMEDIATE addressing mode"
@@ -1084,7 +1074,7 @@ opBEQ RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf zero_flag addr -- Jump if Zero flag is set
 
-opBIT ::ADDR_MODE -> StateT MOS6502 IO ()
+opBIT ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBIT IMPLICIT = error "Operation BIT does not support IMPLICIT addressing mode"
 opBIT ACCUMULATOR = error "Operation BIT does not support ACCUMULATOR addressing mode"
 opBIT IMMEDIATE = error "Operation BIT does not support IMMEDIATE addressing mode"
@@ -1105,7 +1095,7 @@ opBIT addr_mode = do
     setFlag NEGATIVE (b7' byte) -- Sets the Negative flag to the seventh bit of the address value
     setFlag OVERFLOW (b6' byte) -- Sets the Overflow flag to the sixth bit of the address value
 
-opBMI ::ADDR_MODE -> StateT MOS6502 IO ()
+opBMI ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBMI IMPLICIT = error "Operation BMI does not support IMPLICIT addressing mode"
 opBMI ACCUMULATOR = error "Operation BMI does not support ACCUMULATOR addressing mode"
 opBMI IMMEDIATE = error "Operation BMI does not support IMMEDIATE addressing mode"
@@ -1123,7 +1113,7 @@ opBMI RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf negative_flag addr -- Jump if Negative flag is set
 
-opBNE ::ADDR_MODE -> StateT MOS6502 IO ()
+opBNE ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBNE IMPLICIT = error "Operation BNE does not support IMPLICIT addressing mode"
 opBNE ACCUMULATOR = error "Operation BNE does not support ACCUMULATOR addressing mode"
 opBNE IMMEDIATE = error "Operation BNE does not support IMMEDIATE addressing mode"
@@ -1141,7 +1131,7 @@ opBNE RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf (not zero_flag) addr -- Jump if Zero flag is set
 
-opBPL ::ADDR_MODE -> StateT MOS6502 IO ()
+opBPL ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBPL IMPLICIT = error "Operation BPL does not support IMPLICIT addressing mode"
 opBPL ACCUMULATOR = error "Operation BPL does not support ACCUMULATOR addressing mode"
 opBPL IMMEDIATE = error "Operation BPL does not support IMMEDIATE addressing mode"
@@ -1159,7 +1149,7 @@ opBPL RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf (not negative_flag) addr -- Jump if Zero flag is set
 
-opBRK ::ADDR_MODE -> StateT MOS6502 IO ()
+opBRK ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBRK ACCUMULATOR = error "Operation BRK does not support ACCUMULATOR addressing mode"
 opBRK IMMEDIATE = error "Operation BRK does not support IMMEDIATE addressing mode"
 opBRK ZEROPAGE = error "Operation BRK does not support ZEROPAGE addressing mode"
@@ -1186,7 +1176,7 @@ opBRK IMPLICIT = do
     setPC jmp_addr -- Jump to the address
     setFlag INTERRUPT_DISABLE True -- I'm not confident this happens. TODO: Verify this.
 
-opBVC ::ADDR_MODE -> StateT MOS6502 IO ()
+opBVC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBVC IMPLICIT = error "Operation BVC does not support IMPLICIT addressing mode"
 opBVC ACCUMULATOR = error "Operation BVC does not support ACCUMULATOR addressing mode"
 opBVC IMMEDIATE = error "Operation BVC does not support IMMEDIATE addressing mode"
@@ -1204,7 +1194,7 @@ opBVC RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf (not overflow_flag) addr -- Jump if Zero flag is set
 
-opBVS ::ADDR_MODE -> StateT MOS6502 IO ()
+opBVS ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBVS IMPLICIT = error "Operation BVS does not support IMPLICIT addressing mode"
 opBVS ACCUMULATOR = error "Operation BVS does not support ACCUMULATOR addressing mode"
 opBVS IMMEDIATE = error "Operation BVS does not support IMMEDIATE addressing mode"
@@ -1222,7 +1212,7 @@ opBVS RELATIVE = do
     addr <- getAddr RELATIVE -- Get jump address
     setPCIf overflow_flag addr -- Jump if Zero flag is set
 
-opCLC ::ADDR_MODE -> StateT MOS6502 IO ()
+opCLC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCLC ACCUMULATOR = error "Operation CLC does not support ACCUMULATOR addressing mode"
 opCLC IMMEDIATE = error "Operation CLC does not support IMMEDIATE addressing mode"
 opCLC ZEROPAGE = error "Operation CLC does not support ZEROPAGE addressing mode"
@@ -1238,7 +1228,7 @@ opCLC INDIRECT_Y = error "Operation CLC does not support INDIRECT_Y addressing m
 opCLC IMPLICIT = do
     setFlag CARRY False
 
-opCLD ::ADDR_MODE -> StateT MOS6502 IO ()
+opCLD ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCLD ACCUMULATOR = error "Operation CLD does not support ACCUMULATOR addressing mode"
 opCLD IMMEDIATE = error "Operation CLD does not support IMMEDIATE addressing mode"
 opCLD ZEROPAGE = error "Operation CLD does not support ZEROPAGE addressing mode"
@@ -1254,7 +1244,7 @@ opCLD INDIRECT_Y = error "Operation CLD does not support INDIRECT_Y addressing m
 opCLD IMPLICIT = do
     setFlag DECIMAL_MODE False
 
-opCLI ::ADDR_MODE -> StateT MOS6502 IO ()
+opCLI ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCLI ACCUMULATOR = error "Operation CLI does not support ACCUMULATOR addressing mode"
 opCLI IMMEDIATE = error "Operation CLI does not support IMMEDIATE addressing mode"
 opCLI ZEROPAGE = error "Operation CLI does not support ZEROPAGE addressing mode"
@@ -1270,7 +1260,7 @@ opCLI INDIRECT_Y = error "Operation CLI does not support INDIRECT_Y addressing m
 opCLI IMPLICIT = do
     setFlag INTERRUPT_DISABLE False
 
-opCLV ::ADDR_MODE -> StateT MOS6502 IO ()
+opCLV ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCLV ACCUMULATOR = error "Operation CLV does not support ACCUMULATOR addressing mode"
 opCLV IMMEDIATE = error "Operation CLV does not support IMMEDIATE addressing mode"
 opCLV ZEROPAGE = error "Operation CLV does not support ZEROPAGE addressing mode"
@@ -1286,7 +1276,7 @@ opCLV INDIRECT_Y = error "Operation CLV does not support INDIRECT_Y addressing m
 opCLV IMPLICIT = do
     setFlag OVERFLOW False
 
-opCMP ::ADDR_MODE -> StateT MOS6502 IO ()
+opCMP ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCMP IMPLICIT = error "Operation CMP does not support IMPLICIT addressing mode"
 opCMP ACCUMULATOR = error "Operation CMP does not support ACCUMULATOR addressing mode"
 opCMP ZEROPAGE_Y = error "Operation CMP does not support ZEROPAGE_Y addressing mode"
@@ -1301,7 +1291,7 @@ opCMP addr_mode = do
     setFlag CARRY (acc >= byte) -- Set the Carry flag if Acc >= mem_value
     setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
-opCPX ::ADDR_MODE -> StateT MOS6502 IO ()
+opCPX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCPX IMPLICIT = error "Operation CPX does not support IMPLICIT addressing mode"
 opCPX ACCUMULATOR = error "Operation CPX does not support ACCUMULATOR addressing mode"
 opCPX ZEROPAGE_X = error "Operation CPX does not support ZEROPAGE_X addressing mode"
@@ -1321,7 +1311,7 @@ opCPX addr_mode = do
     setFlag CARRY (xreg >= byte) -- Set the Carry flag if Acc >= mem_value
     setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
-opCPY ::ADDR_MODE -> StateT MOS6502 IO ()
+opCPY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCPY IMPLICIT = error "Operation CPY does not support IMPLICIT addressing mode"
 opCPY ACCUMULATOR = error "Operation CPY does not support ACCUMULATOR addressing mode"
 opCPY ZEROPAGE_X = error "Operation CPY does not support ZEROPAGE_X addressing mode"
@@ -1341,7 +1331,7 @@ opCPY addr_mode = do
     setFlag CARRY (yreg >= byte) -- Set the Carry flag if Acc >= mem_value
     setFlag NEGATIVE (b7' result) -- Set the Negative flag if
 
-opDEC ::ADDR_MODE -> StateT MOS6502 IO ()
+opDEC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opDEC IMPLICIT = error "Operation DEC does not support IMPLICIT addressing mode"
 opDEC ACCUMULATOR = error "Operation DEC does not support ACCUMULATOR addressing mode"
 opDEC IMMEDIATE = error "Operation DEC does not support IMMEDIATE addressing mode"
@@ -1359,7 +1349,7 @@ opDEC addr_mode = do
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' result) -- Sets the Negative flag is the result is negative
 
-opDEX ::ADDR_MODE -> StateT MOS6502 IO ()
+opDEX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opDEX ACCUMULATOR = error "Operation DEX does not support ACCUMULATOR addressing mode"
 opDEX IMMEDIATE = error "Operation DEX does not support IMMEDIATE addressing mode"
 opDEX ZEROPAGE = error "Operation DEX does not support ZEROPAGE addressing mode"
@@ -1378,7 +1368,7 @@ opDEX IMPLICIT = do
     setFlag ZERO (idx == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' idx) -- Sets the Negative flag is the result is negative
 
-opDEY ::ADDR_MODE -> StateT MOS6502 IO ()
+opDEY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opDEY ACCUMULATOR = error "Operation DEY does not support ACCUMULATOR addressing mode"
 opDEY IMMEDIATE = error "Operation DEY does not support IMMEDIATE addressing mode"
 opDEY ZEROPAGE = error "Operation DEY does not support ZEROPAGE addressing mode"
@@ -1397,7 +1387,7 @@ opDEY IMPLICIT = do
     setFlag ZERO (idy == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' idy) -- Sets the Negative flag is the result is negative
 
-opEOR ::ADDR_MODE -> StateT MOS6502 IO ()
+opEOR ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opEOR IMPLICIT = error "Operation EOR does not support IMPLICIT addressing mode"
 opEOR ACCUMULATOR = error "Operation EOR does not support ACCUMULATOR addressing mode"
 opEOR ZEROPAGE_Y = error "Operation EOR does not support ZEROPAGE_Y addressing mode"
@@ -1412,7 +1402,7 @@ opEOR addr_mode = do
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
-opINC ::ADDR_MODE -> StateT MOS6502 IO ()
+opINC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opINC IMPLICIT = error "Operation INC does not support IMPLICIT addressing mode"
 opINC ACCUMULATOR = error "Operation INC does not support ACCUMULATOR addressing mode"
 opINC IMMEDIATE = error "Operation INC does not support IMMEDIATE addressing mode"
@@ -1430,7 +1420,7 @@ opINC addr_mode = do
     setFlag ZERO (result == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' result) -- Sets the Negative flag is the result is negative
 
-opINX ::ADDR_MODE -> StateT MOS6502 IO ()
+opINX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opINX ACCUMULATOR = error "Operation INX does not support ACCUMULATOR addressing mode"
 opINX IMMEDIATE = error "Operation INX does not support IMMEDIATE addressing mode"
 opINX ZEROPAGE = error "Operation INX does not support ZEROPAGE addressing mode"
@@ -1449,7 +1439,7 @@ opINX IMPLICIT = do
     setFlag ZERO (idx == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' idx) -- Sets the Negative flag is the result is negative
 
-opINY ::ADDR_MODE -> StateT MOS6502 IO ()
+opINY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opINY ACCUMULATOR = error "Operation INY does not support ACCUMULATOR addressing mode"
 opINY IMMEDIATE = error "Operation INY does not support IMMEDIATE addressing mode"
 opINY ZEROPAGE = error "Operation INY does not support ZEROPAGE addressing mode"
@@ -1468,7 +1458,7 @@ opINY IMPLICIT = do
     setFlag ZERO (idy == 0) -- Sets the Zero flag is the result is equal to 0
     setFlag NEGATIVE (b7' idy) -- Sets the Negative flag is the result is negative
 
-opJMP ::ADDR_MODE -> StateT MOS6502 IO ()
+opJMP ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opJMP IMPLICIT = error "Operation JMP does not support IMPLICIT addressing mode"
 opJMP ACCUMULATOR = error "Operation JMP does not support ACCUMULATOR addressing mode"
 opJMP IMMEDIATE = error "Operation JMP does not support IMMEDIATE addressing mode"
@@ -1484,7 +1474,7 @@ opJMP addr_mode = do
     addr <- getAddr addr_mode -- Get the address given the addressing mode
     setPC addr
 
-opJSR ::ADDR_MODE -> StateT MOS6502 IO ()
+opJSR ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opJSR IMPLICIT = error "Operation JSR does not support IMPLICIT addressing mode"
 opJSR ACCUMULATOR = error "Operation JSR does not support ACCUMULATOR addressing mode"
 opJSR IMMEDIATE = error "Operation JSR does not support IMMEDIATE addressing mode"
@@ -1508,7 +1498,7 @@ opJSR addr_mode = do
     writeStack lb
     setPC addr
 
-opLDA ::ADDR_MODE -> StateT MOS6502 IO ()
+opLDA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opLDA IMPLICIT = error "Operation LDA does not support IMPLICIT addressing mode"
 opLDA ACCUMULATOR = error "Operation LDA does not support ACCUMULATOR addressing mode"
 opLDA ZEROPAGE_Y = error "Operation LDA does not support ZEROPAGE_Y addressing mode"
@@ -1521,7 +1511,7 @@ opLDA addr_mode = do
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7' byte)
 
-opLDX ::ADDR_MODE -> StateT MOS6502 IO ()
+opLDX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opLDX IMPLICIT = error "Operation LDX does not support IMPLICIT addressing mode"
 opLDX ACCUMULATOR = error "Operation LDX does not support ACCUMULATOR addressing mode"
 opLDX ZEROPAGE_X = error "Operation LDX does not support ZEROPAGE_X addressing mode"
@@ -1537,7 +1527,7 @@ opLDX addr_mode = do
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7' byte)
 
-opLDY ::ADDR_MODE -> StateT MOS6502 IO ()
+opLDY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opLDY IMPLICIT = error "Operation LDY does not support IMPLICIT addressing mode"
 opLDY ACCUMULATOR = error "Operation LDY does not support ACCUMULATOR addressing mode"
 opLDY ZEROPAGE_Y = error "Operation LDY does not support ZEROPAGE_X addressing mode"
@@ -1553,7 +1543,7 @@ opLDY addr_mode = do
     setFlag ZERO (byte == 0)
     setFlag NEGATIVE (b7' byte)
 
-opLSR ::ADDR_MODE -> StateT MOS6502 IO ()
+opLSR ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opLSR IMPLICIT = error "Operation LSR does not support IMPLICIT addressing mode"
 opLSR IMMEDIATE = error "Operation LSR does not support IMMEDIATE addressing mode"
 opLSR ZEROPAGE_Y = error "Operation LSR does not support ZEROPAGE_Y addressing mode"
@@ -1580,7 +1570,7 @@ opLSR addr_mode = do
     setFlag ZERO (new_byte == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7' new_byte) -- Sets the Negative flag is the result is negative
 
-opNOP ::ADDR_MODE -> StateT MOS6502 IO ()
+opNOP ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opNOP ACCUMULATOR = error "Operation NOP does not support ACCUMULATOR addressing mode"
 opNOP IMMEDIATE = error "Operation NOP does not support IMMEDIATE addressing mode"
 opNOP ZEROPAGE = error "Operation NOP does not support ZEROPAGE addressing mode"
@@ -1595,7 +1585,7 @@ opNOP INDIRECT_X = error "Operation NOP does not support INDIRECT_X addressing m
 opNOP INDIRECT_Y = error "Operation NOP does not support INDIRECT_Y addressing mode"
 opNOP IMPLICIT = return ()
 
-opORA ::ADDR_MODE -> StateT MOS6502 IO ()
+opORA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opORA IMPLICIT = error "Operation ORA does not support IMPLICIT addressing mode"
 opORA ACCUMULATOR = error "Operation ORA does not support ACCUMULATOR addressing mode"
 opORA ZEROPAGE_Y = error "Operation ORA does not support ZEROPAGE_Y addressing mode"
@@ -1610,7 +1600,7 @@ opORA addr_mode = do
     setFlag ZERO (acc == 0) -- Sets the Zero flag if the result is equal to 0
     setFlag NEGATIVE (b7' acc) -- Sets the Negative flag is the result is negative
 
-opPHA ::ADDR_MODE -> StateT MOS6502 IO ()
+opPHA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opPHA ACCUMULATOR = error "Operation PHA does not support ACCUMULATOR addressing mode"
 opPHA IMMEDIATE = error "Operation PHA does not support IMMEDIATE addressing mode"
 opPHA ZEROPAGE = error "Operation PHA does not support ZEROPAGE addressing mode"
@@ -1627,7 +1617,7 @@ opPHA IMPLICIT = do
     acc <- getACC 
     writeStack acc
 
-opPHP ::ADDR_MODE -> StateT MOS6502 IO ()
+opPHP ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opPHP ACCUMULATOR = error "Operation PHP does not support ACCUMULATOR addressing mode"
 opPHP IMMEDIATE = error "Operation PHP does not support IMMEDIATE addressing mode"
 opPHP ZEROPAGE = error "Operation PHP does not support ZEROPAGE addressing mode"
@@ -1644,7 +1634,7 @@ opPHP IMPLICIT = do
     ps <- getPS 
     writeStack (setBit ps 4)
 
-opPLA ::ADDR_MODE -> StateT MOS6502 IO ()
+opPLA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opPLA ACCUMULATOR = error "Operation PLA does not support ACCUMULATOR addressing mode"
 opPLA IMMEDIATE = error "Operation PLA does not support IMMEDIATE addressing mode"
 opPLA ZEROPAGE = error "Operation PLA does not support ZEROPAGE addressing mode"
@@ -1663,7 +1653,7 @@ opPLA IMPLICIT = do
     setFlag ZERO (acc == 0)
     setFlag NEGATIVE (b7' acc)
 
-opPLP ::ADDR_MODE -> StateT MOS6502 IO ()
+opPLP ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opPLP ACCUMULATOR = error "Operation PLP does not support ACCUMULATOR addressing mode"
 opPLP IMMEDIATE = error "Operation PLP does not support IMMEDIATE addressing mode"
 opPLP ZEROPAGE = error "Operation PLP does not support ZEROPAGE addressing mode"
@@ -1682,7 +1672,7 @@ opPLP IMPLICIT = do
     let ps'' = clearBit ps' 4
     setPS ps''
 
-opROL ::ADDR_MODE -> StateT MOS6502 IO ()
+opROL ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opROL IMPLICIT = error "Operation ROL does not support IMPLICIT addressing mode"
 opROL IMMEDIATE = error "Operation ROL does not support IMMEDIATE addressing mode"
 opROL ZEROPAGE_Y = error "Operation ROL does not support ZEROPAGE_Y addressing mode"
@@ -1713,7 +1703,7 @@ opROL addr_mode = do
     setFlag NEGATIVE (b7' byte')
     setFlag CARRY new_carry
 
-opROR ::ADDR_MODE -> StateT MOS6502 IO ()
+opROR ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opROR IMPLICIT = error "Operation ROR does not support IMPLICIT addressing mode"
 opROR IMMEDIATE = error "Operation ROR does not support IMMEDIATE addressing mode"
 opROR ZEROPAGE_Y = error "Operation ROR does not support ZEROPAGE_Y addressing mode"
@@ -1744,7 +1734,7 @@ opROR addr_mode = do
     setFlag NEGATIVE (b7' byte')
     setFlag CARRY new_carry
 
-opRTI ::ADDR_MODE -> StateT MOS6502 IO ()
+opRTI ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opRTI ACCUMULATOR = error "Operation RTI does not support ACCUMULATOR addressing mode"
 opRTI IMMEDIATE = error "Operation RTI does not support IMMEDIATE addressing mode"
 opRTI ZEROPAGE = error "Operation RTI does not support ZEROPAGE addressing mode"
@@ -1768,7 +1758,7 @@ opRTI IMPLICIT = do
     setPS ps''
     setPC pc
 
-opRTS ::ADDR_MODE -> StateT MOS6502 IO ()
+opRTS ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opRTS ACCUMULATOR = error "Operation RTS does not support ACCUMULATOR addressing mode"
 opRTS IMMEDIATE = error "Operation RTS does not support IMMEDIATE addressing mode"
 opRTS ZEROPAGE = error "Operation RTS does not support ZEROPAGE addressing mode"
@@ -1787,7 +1777,7 @@ opRTS IMPLICIT = do
     let pc = (joinBytes pchb pclb) + 1 -- Read JSR to understand this addition
     setPC pc
 
-opSBC ::ADDR_MODE -> StateT MOS6502 IO ()
+opSBC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSBC IMPLICIT = error "Operation SBC does not support IMPLICIT addressing mode"
 opSBC ACCUMULATOR = error "Operation SBC does not support ACCUMULATOR addressing mode"
 opSBC ZEROPAGE_Y = error "Operation SBC does not support ZEROPAGE_Y addressing mode"
@@ -1838,7 +1828,7 @@ opSBC addr_mode = do
             setACC acc'
             return ()
 
-opSEC ::ADDR_MODE -> StateT MOS6502 IO ()
+opSEC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSEC ACCUMULATOR = error "Operation SEC does not support ACCUMULATOR addressing mode"
 opSEC IMMEDIATE = error "Operation SEC does not support IMMEDIATE addressing mode"
 opSEC ZEROPAGE = error "Operation SEC does not support ZEROPAGE addressing mode"
@@ -1854,7 +1844,7 @@ opSEC INDIRECT_Y = error "Operation SEC does not support INDIRECT_Y addressing m
 opSEC IMPLICIT = do
     setFlag CARRY True
 
-opSED ::ADDR_MODE -> StateT MOS6502 IO ()
+opSED ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSED ACCUMULATOR = error "Operation SED does not support ACCUMULATOR addressing mode"
 opSED IMMEDIATE = error "Operation SED does not support IMMEDIATE addressing mode"
 opSED ZEROPAGE = error "Operation SED does not support ZEROPAGE addressing mode"
@@ -1870,7 +1860,7 @@ opSED INDIRECT_Y = error "Operation SED does not support INDIRECT_Y addressing m
 opSED IMPLICIT = do
     setFlag DECIMAL_MODE True
 
-opSEI ::ADDR_MODE -> StateT MOS6502 IO ()
+opSEI ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSEI ACCUMULATOR = error "Operation SEI does not support ACCUMULATOR addressing mode"
 opSEI IMMEDIATE = error "Operation SEI does not support IMMEDIATE addressing mode"
 opSEI ZEROPAGE = error "Operation SEI does not support ZEROPAGE addressing mode"
@@ -1886,7 +1876,7 @@ opSEI INDIRECT_Y = error "Operation SEI does not support INDIRECT_Y addressing m
 opSEI IMPLICIT = do
     setFlag INTERRUPT_DISABLE True
 
-opSTA ::ADDR_MODE -> StateT MOS6502 IO ()
+opSTA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSTA IMPLICIT = error "Operation STA does not support IMPLICIT addressing mode"
 opSTA ACCUMULATOR = error "Operation STA does not support ACCUMULATOR addressing mode"
 opSTA IMMEDIATE = error "Operation STA does not support IMMEDIATE addressing mode"
@@ -1898,7 +1888,7 @@ opSTA addr_mode = do
     acc <- getACC 
     writeByte addr acc
 
-opSTX ::ADDR_MODE -> StateT MOS6502 IO ()
+opSTX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSTX IMPLICIT = error "Operation STX does not support IMPLICIT addressing mode"
 opSTX ACCUMULATOR = error "Operation STX does not support ACCUMULATOR addressing mode"
 opSTX IMMEDIATE = error "Operation STX does not support IMMEDIATE addressing mode"
@@ -1914,7 +1904,7 @@ opSTX addr_mode = do
     regx <- getIDX 
     writeByte addr regx
 
-opSTY ::ADDR_MODE -> StateT MOS6502 IO ()
+opSTY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opSTY IMPLICIT = error "Operation STY does not support IMPLICIT addressing mode"
 opSTY ACCUMULATOR = error "Operation STY does not support ACCUMULATOR addressing mode"
 opSTY IMMEDIATE = error "Operation STY does not support IMMEDIATE addressing mode"
@@ -1930,7 +1920,7 @@ opSTY addr_mode = do
     regy <- getIDY 
     writeByte addr regy
 
-opTAX ::ADDR_MODE -> StateT MOS6502 IO ()
+opTAX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opTAX ACCUMULATOR = error "Operation TAX does not support ACCUMULATOR addressing mode"
 opTAX IMMEDIATE = error "Operation TAX does not support IMMEDIATE addressing mode"
 opTAX ZEROPAGE = error "Operation TAX does not support ZEROPAGE addressing mode"
@@ -1949,7 +1939,7 @@ opTAX IMPLICIT = do
     setFlag ZERO (acc == 0)
     setFlag NEGATIVE (b7' acc)
 
-opTAY ::ADDR_MODE -> StateT MOS6502 IO ()
+opTAY ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opTAY ACCUMULATOR = error "Operation TAY does not support ACCUMULATOR addressing mode"
 opTAY IMMEDIATE = error "Operation TAY does not support IMMEDIATE addressing mode"
 opTAY ZEROPAGE = error "Operation TAY does not support ZEROPAGE addressing mode"
@@ -1968,7 +1958,7 @@ opTAY IMPLICIT = do
     setFlag ZERO (acc == 0)
     setFlag NEGATIVE (b7' acc)
 
-opTSX ::ADDR_MODE -> StateT MOS6502 IO ()
+opTSX ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opTSX ACCUMULATOR = error "Operation TSX does not support ACCUMULATOR addressing mode"
 opTSX IMMEDIATE = error "Operation TSX does not support IMMEDIATE addressing mode"
 opTSX ZEROPAGE = error "Operation TSX does not support ZEROPAGE addressing mode"
@@ -1987,7 +1977,7 @@ opTSX IMPLICIT = do
     setFlag ZERO (sp == 0)
     setFlag NEGATIVE (b7' sp)
 
-opTXA ::ADDR_MODE -> StateT MOS6502 IO ()
+opTXA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opTXA ACCUMULATOR = error "Operation TXA does not support ACCUMULATOR addressing mode"
 opTXA IMMEDIATE = error "Operation TXA does not support IMMEDIATE addressing mode"
 opTXA ZEROPAGE = error "Operation TXA does not support ZEROPAGE addressing mode"
@@ -2022,7 +2012,7 @@ opTXS IMPLICIT = do
     xreg <- getIDX 
     setSP xreg
 
-opTYA ::ADDR_MODE -> StateT MOS6502 IO ()
+opTYA ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opTYA ACCUMULATOR = error "Operation TYA does not support ACCUMULATOR addressing mode"
 opTYA IMMEDIATE = error "Operation TYA does not support IMMEDIATE addressing mode"
 opTYA ZEROPAGE = error "Operation TYA does not support ZEROPAGE addressing mode"
@@ -2199,55 +2189,55 @@ opInfo 0x98 = Just ("TYA", IMPLICIT)
 opInfo opcode = Nothing
 
 
-disassembleArg :: Interface -> ADDR_MODE -> Word16 -> IO (String, Word16)
-disassembleArg _ IMPLICIT _ = return $ ("", 0)
-disassembleArg _ ACCUMULATOR _ = return $ ("A", 0)
-disassembleArg interface IMMEDIATE addr = do
-    argval <- (iPeekByte interface) addr
+disassembleArg :: a -> (Interface a) -> ADDR_MODE -> Word16 -> IO (String, Word16)
+disassembleArg _ _ IMPLICIT _ = return $ ("", 0)
+disassembleArg _ _ ACCUMULATOR _ = return $ ("A", 0)
+disassembleArg bus interface IMMEDIATE addr = do
+    argval <- (iPeekByte interface) bus addr
     return ("#$" ++ toHex1 argval, 1)
-disassembleArg interface ZEROPAGE addr = do
-    argval <- (iPeekByte interface) addr
+disassembleArg bus interface ZEROPAGE addr = do
+    argval <- (iPeekByte interface) bus addr
     return ("$" ++ toHex1 argval, 1)
-disassembleArg interface ZEROPAGE_X addr = do
-    argval <- (iPeekByte interface) addr
+disassembleArg bus interface ZEROPAGE_X addr = do
+    argval <- (iPeekByte interface) bus addr
     return ("$" ++ toHex1 argval ++ ",X", 1)
-disassembleArg interface ZEROPAGE_Y addr = do
-    argval <- (iPeekByte interface) addr
+disassembleArg bus interface ZEROPAGE_Y addr = do
+    argval <- (iPeekByte interface) bus addr
     return ("$" ++ toHex1 argval ++ ",Y", 1)
-disassembleArg interface RELATIVE addr = do
-    argval <- (iPeekByte interface) addr
+disassembleArg bus interface RELATIVE addr = do
+    argval <- (iPeekByte interface) bus addr
     let offset = (fromIntegral argval :: Int8)
     return ("*" ++ toHex1 argval ++ " [" ++ (show offset) ++ "]", 1)
-disassembleArg interface ABSOLUTE addr = do
-    a1 <- (iPeekByte interface) addr
-    a2 <- (iPeekByte interface) (addr + 1)
+disassembleArg bus interface ABSOLUTE addr = do
+    a1 <-(iPeekByte interface) bus addr
+    a2 <-(iPeekByte interface) bus (addr + 1)
     return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ "", 2)
-disassembleArg interface ABSOLUTE_X addr = do
-    a1 <- (iPeekByte interface) addr
-    a2 <- (iPeekByte interface) (addr + 1)
+disassembleArg bus interface ABSOLUTE_X addr = do
+    a1 <-(iPeekByte interface) bus addr
+    a2 <-(iPeekByte interface) bus (addr + 1)
     return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ ",X", 2)
-disassembleArg interface ABSOLUTE_Y addr = do
-    a1 <- (iPeekByte interface) addr
-    a2 <- (iPeekByte interface) (addr + 1)
+disassembleArg bus interface ABSOLUTE_Y addr = do
+    a1 <-(iPeekByte interface) bus addr
+    a2 <-(iPeekByte interface) bus (addr + 1)
     return ("$" ++ toHex1 a2 ++ toHex1 a1 ++ ",Y", 2)
-disassembleArg interface INDIRECT addr = do
-    a1 <- (iPeekByte interface) addr
-    a2 <- (iPeekByte interface) (addr + 1)
+disassembleArg bus interface INDIRECT addr = do
+    a1 <-(iPeekByte interface) bus addr
+    a2 <-(iPeekByte interface) bus (addr + 1)
     return ("($" ++ toHex1 a2 ++ toHex1 a1 ++ ")", 2)
-disassembleArg interface INDIRECT_X addr = do
-    a <- (iPeekByte interface) addr
+disassembleArg bus interface INDIRECT_X addr = do
+    a <- (iPeekByte interface) bus addr
     return ("($" ++ toHex1 a ++ ", X)", 1)
-disassembleArg interface INDIRECT_Y addr = do
-    a <- (iPeekByte interface) addr
+disassembleArg bus interface INDIRECT_Y addr = do
+    a <- (iPeekByte interface) bus addr
     return ("($" ++ toHex1 a ++ "), Y", 1)
 
-disassemble :: Interface -> Word16 -> IO (String, Word16)
-disassemble interface addr = do
-    opcode <- (iPeekByte interface) addr
+disassemble :: a -> Interface a -> Word16 -> IO (String, Word16)
+disassemble bus interface addr = do
+    opcode <- (iPeekByte interface) bus addr
     let info = opInfo opcode
     case info of
         Just (opname, addr_mode) -> do
-            (args, offset) <- disassembleArg interface addr_mode (addr + 1)
+            (args, offset) <- disassembleArg bus interface addr_mode (addr + 1)
             return (opname ++ " " ++ args ++ (replicate (15 - length args) ' ') ++ show addr_mode, offset + 1)
         Nothing -> return $ ("", 1)
 
@@ -2255,22 +2245,22 @@ overflows :: Word16 -> Word16 -> Bool
 overflows a b = s < a || s < b where
     s = a + b
 
-disassembleL' :: Interface -> Word16 -> Word16 -> IO [(Word16, String)]
-disassembleL' interface start end 
+disassembleL' :: a -> Interface a -> Word16 -> Word16 -> IO [(Word16, String)]
+disassembleL' bus interface start end 
     | start >= end = return []
     | otherwise = do
-        (str, offset) <- disassemble interface start
+        (str, offset) <- disassemble bus interface start
         let start' = if (overflows start offset) then end else start + offset
-        rest <- disassembleL' interface start' end 
+        rest <- disassembleL' bus interface start' end 
         return $ [(start, str)] ++ rest
 
-disassembleM' :: Interface -> Word16 -> Word16 -> IO (Map.Map Word16 String)
-disassembleM' interface start end = (Map.fromList) <$> (disassembleL' interface start end)
+disassembleM' :: a -> Interface a -> Word16 -> Word16 -> IO (Map.Map Word16 String)
+disassembleM' bus interface start end = (Map.fromList) <$> (disassembleL' bus interface start end)
 
 
-disassembleL :: MOS6502 -> Word16 -> Word16 -> IO [(Word16, String)]
-disassembleL mos start end = disassembleL' (interface mos) start end
+disassembleL :: (MOS6502 a, a) -> Word16 -> Word16 -> IO [(Word16, String)]
+disassembleL (mos, bus) start end = disassembleL' bus (interface mos) start end
 
 
-disassembleM :: MOS6502 -> Word16 -> Word16 -> IO (Map.Map Word16 String)
-disassembleM mos start end = disassembleM' (interface mos) start end
+disassembleM :: (MOS6502 a, a) -> Word16 -> Word16 -> IO (Map.Map Word16 String)
+disassembleM (mos, bus) start end = disassembleM' bus (interface mos) start end

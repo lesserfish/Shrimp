@@ -1,10 +1,16 @@
 module Shrimp.Utils where
 
+import Control.Monad.State
 import System.CPUTime
 import Text.Printf
 import Data.Word
 import Data.Bits
 
+modifyFst :: (a -> a) -> StateT (a, b) IO ()
+modifyFst f = do
+    (s1, s2) <- get
+    let s1' = f s1
+    put (s1', s2)
 
 -- TODO: Check if this is affecting performance. Perhaps specifying a data type would be best. I.e. Just support Word16 and cast everything to word16?
 b0' :: Word8 -> Bool

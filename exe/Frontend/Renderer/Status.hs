@@ -17,8 +17,7 @@ renderPS :: SDLContext -> NES -> IO()
 renderPS ctx nes = do
     let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
 
-    let cpuref = B.bCPU nes
-    cpu <- readIORef cpuref
+    let cpu = B.bCPU nes
     let ps = MOS.ps . MOS.registers $ cpu
     let regcolor b = if b then green else red
 
@@ -34,8 +33,7 @@ renderPS ctx nes = do
 renderCycles :: SDLContext -> NES -> IO()
 renderCycles ctx nes = do
     let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
-    let cpuref = B.bCPU nes
-    cpu <- readIORef cpuref
+    let cpu = B.bCPU nes
     let cycles = show . MOS.cycles $ cpu
     let content = "Cycles: " ++ cycles
     renderString renderData content (120, 79) white
@@ -43,8 +41,7 @@ renderCycles ctx nes = do
 renderClock :: SDLContext -> NES -> IO()
 renderClock ctx nes = do
     let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
-    let cpuref = B.bCPU nes
-    cpu <- readIORef cpuref
+    let cpu = B.bCPU nes
     let clock = show . MOS.clock $ cpu
     let content = "Clock: " ++ clock
     renderString renderData content (5, 40) white
@@ -52,8 +49,7 @@ renderClock ctx nes = do
 renderRegisters :: SDLContext -> NES -> IO ()
 renderRegisters ctx nes = do
     let renderData = RenderData (sdlRenderer ctx) (sdlStatusFont ctx)
-    let cpuref = B.bCPU nes
-    cpu <- readIORef cpuref
+    let cpu = B.bCPU nes
 
     let registers = MOS.registers $ cpu
     let getContent regName regValue = regName ++ ": 0x" ++ regValue

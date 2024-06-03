@@ -17,11 +17,13 @@ data CommPipe = CommPipe
     { rte :: TChan Command
     , etr :: TChan Feedback
     , tControllerA :: TVar Word8
+    , tNES :: TVar NES
     }
 
-createPipe :: IO CommPipe
-createPipe = do
+createPipe :: NES -> IO CommPipe
+createPipe nes = do
     cchan <- atomically newTChan
     ichan <- atomically newTChan
     tcontrollerA <- newTVarIO 0
-    return $ CommPipe cchan ichan tcontrollerA
+    tnes <- atomically $ newTVar nes
+    return $ CommPipe cchan ichan tcontrollerA tnes
