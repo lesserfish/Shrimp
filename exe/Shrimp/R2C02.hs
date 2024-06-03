@@ -79,138 +79,137 @@ data Registers = Registers
     }
 
 
-data Interface a = Interface
-    { iReadByte :: a -> Word16 -> IO (a, Word8)
-    , iWriteByte :: a -> Word16 -> Word8 -> IO a
-    , iSetPixel :: a -> (Word16, Word16) -> Word8 -> IO a
-    , iTriggerNMI :: a -> IO a
-    , iPeekByte :: a -> Word16 -> IO Word8
+data Interface = Interface
+    { iReadByte :: Word16 -> IO Word8
+    , iWriteByte :: Word16 -> Word8 -> IO ()
+    , iSetPixel :: (Word16, Word16) -> Word8 -> IO ()
+    , iPeekByte :: Word16 -> IO Word8
     }
 
-data R2C02 a = R2C02
+data R2C02 = R2C02
     { registers :: Registers
     , context :: Context
-    , interface :: Interface a
+    , interface :: Interface
     }
 
 -- Creation
 
-new :: Interface a -> R2C02 a
+new :: Interface -> R2C02
 new interface = R2C02 reg ctx interface where
     reg = Registers 0 0 0 0 0 0 0 False
     ctx = Context False False 0 0 0 0 0 0 0 0
 
-reset :: StateT (R2C02 a, a) IO ()
+reset :: StateT R2C02 IO ()
 reset = do
-    (ppu, bus) <- get
+    ppu <- get
     let ppu' = new (interface ppu)
-    put (ppu', bus)
+    put ppu'
 
 -- Registers Setters / Getters
 
-mapControl :: (Word8 -> Word8) -> StateT (R2C02 a, a) IO ()
-mapControl f = modifyFst (\ppu -> ppu{registers = (registers ppu){ppuctrl = f . ppuctrl . registers $ ppu}})
+mapControl :: (Word8 -> Word8) -> StateT R2C02 IO ()
+mapControl f = modify (\ppu -> ppu{registers = (registers ppu){ppuctrl = f . ppuctrl . registers $ ppu}})
 
 
-mapMask :: (Word8 -> Word8) -> StateT (R2C02 a, a) IO ()
-mapMask f = modifyFst (\ppu -> ppu {registers = (registers ppu){ppumask = f . ppumask . registers $ ppu}})
+mapMask :: (Word8 -> Word8) -> StateT R2C02 IO ()
+mapMask f = modify (\ppu -> ppu {registers = (registers ppu){ppumask = f . ppumask . registers $ ppu}})
 
 
-mapStatus :: (Word8 -> Word8) -> StateT (R2C02 a, a) IO ()
-mapStatus f = modifyFst (\ppu -> ppu {registers = (registers ppu){ppustatus = f . ppustatus . registers $ ppu}})
+mapStatus :: (Word8 -> Word8) -> StateT R2C02 IO ()
+mapStatus f = modify (\ppu -> ppu {registers = (registers ppu){ppustatus = f . ppustatus . registers $ ppu}})
 
 
-mapFineX :: (Int -> Int) -> StateT (R2C02 a, a) IO ()
-mapFineX f = modifyFst (\ppu -> ppu {registers = (registers ppu){fineX = f . fineX . registers $ ppu}})
+mapFineX :: (Int -> Int) -> StateT R2C02 IO ()
+mapFineX f = modify (\ppu -> ppu {registers = (registers ppu){fineX = f . fineX . registers $ ppu}})
 
 
-mapDataBuffer :: (Word8 -> Word8) -> StateT (R2C02 a, a) IO ()
-mapDataBuffer f = modifyFst (\ppu -> ppu {registers = (registers ppu){ppuDataBuffer = f . ppuDataBuffer . registers $ ppu}})
+mapDataBuffer :: (Word8 -> Word8) -> StateT R2C02 IO ()
+mapDataBuffer f = modify (\ppu -> ppu {registers = (registers ppu){ppuDataBuffer = f . ppuDataBuffer . registers $ ppu}})
 
 
-mapVRAM :: (Word16 -> Word16) -> StateT (R2C02 a, a) IO ()
-mapVRAM f = modifyFst (\ppu -> ppu {registers = (registers ppu){vram = f . vram . registers $ ppu}})
+mapVRAM :: (Word16 -> Word16) -> StateT R2C02 IO ()
+mapVRAM f = modify (\ppu -> ppu {registers = (registers ppu){vram = f . vram . registers $ ppu}})
 
 
-mapTRAM :: (Word16 -> Word16) -> StateT (R2C02 a, a) IO ()
-mapTRAM f = modifyFst (\ppu -> ppu {registers = (registers ppu){tram = f . tram . registers $ ppu}})
+mapTRAM :: (Word16 -> Word16) -> StateT R2C02 IO ()
+mapTRAM f = modify (\ppu -> ppu {registers = (registers ppu){tram = f . tram . registers $ ppu}})
 
 
-mapWriteToggle :: (Bool -> Bool) -> StateT (R2C02 a, a) IO ()
-mapWriteToggle f = modifyFst (\ppu -> ppu {registers = (registers ppu){writeToggle = (f . writeToggle . registers $ ppu)}})
+mapWriteToggle :: (Bool -> Bool) -> StateT R2C02 IO ()
+mapWriteToggle f = modify (\ppu -> ppu {registers = (registers ppu){writeToggle = (f . writeToggle . registers $ ppu)}})
 
 
 
-setControl :: Word8 -> StateT (R2C02 a, a) IO ()
+setControl :: Word8 -> StateT R2C02 IO ()
 setControl value = mapControl (\_ -> value)
 
 
-setMask :: Word8 -> StateT (R2C02 a, a) IO ()
+setMask :: Word8 -> StateT R2C02 IO ()
 setMask value = mapMask (\_ -> value)
 
 
-setStatus :: Word8 -> StateT (R2C02 a, a) IO ()
+setStatus :: Word8 -> StateT R2C02 IO ()
 setStatus value = mapStatus (\_ -> value)
 
 
-setFineX :: Int -> StateT (R2C02 a, a) IO ()
+setFineX :: Int -> StateT R2C02 IO ()
 setFineX value = mapFineX (\_ -> value)
 
 
-setDataBuffer :: Word8 -> StateT (R2C02 a, a) IO ()
+setDataBuffer :: Word8 -> StateT R2C02 IO ()
 setDataBuffer value = mapDataBuffer (\_ -> value)
 
 
-setVRAM :: Word16 -> StateT (R2C02 a, a) IO ()
+setVRAM :: Word16 -> StateT R2C02 IO ()
 setVRAM value = mapVRAM (\_ -> value)
 
 
-setTRAM :: Word16 -> StateT (R2C02 a, a) IO ()
+setTRAM :: Word16 -> StateT R2C02 IO ()
 setTRAM value = mapTRAM (\_ -> value)
 
 
-setWriteToggle :: Bool -> StateT (R2C02 a, a) IO ()
+setWriteToggle :: Bool -> StateT R2C02 IO ()
 setWriteToggle value = mapWriteToggle (\_ -> value)
 
 
 
-getControl :: StateT (R2C02 a, a) IO Word8
-getControl = (ppuctrl . registers . fst) <$> get
+getControl :: StateT R2C02 IO Word8
+getControl = (ppuctrl . registers) <$> get
 
 
-getMask :: StateT (R2C02 a, a) IO Word8
-getMask = (ppumask . registers . fst) <$> get
+getMask :: StateT R2C02 IO Word8
+getMask = (ppumask . registers) <$> get
 
 
-getStatus :: StateT (R2C02 a, a) IO Word8
-getStatus = (ppustatus . registers . fst) <$> get
+getStatus :: StateT R2C02 IO Word8
+getStatus = (ppustatus . registers) <$> get
 
 
-getFineX :: StateT (R2C02 a, a) IO Int
-getFineX = (fineX . registers . fst) <$> get
+getFineX :: StateT R2C02 IO Int
+getFineX = (fineX . registers) <$> get
 
 
-getDataBuffer :: StateT (R2C02 a, a) IO Word8
-getDataBuffer = (ppuDataBuffer . registers . fst) <$> get
+getDataBuffer :: StateT R2C02 IO Word8
+getDataBuffer = (ppuDataBuffer . registers) <$> get
 
 
-getVRAM :: StateT (R2C02 a, a) IO Word16
-getVRAM = (vram . registers . fst) <$> get
+getVRAM :: StateT R2C02 IO Word16
+getVRAM = (vram . registers) <$> get
 
 
-getTRAM :: StateT (R2C02 a, a) IO Word16
-getTRAM = (tram . registers . fst) <$> get
+getTRAM :: StateT R2C02 IO Word16
+getTRAM = (tram . registers) <$> get
 
 
-getWriteToggle :: StateT (R2C02 a, a) IO Bool
-getWriteToggle = (writeToggle . registers . fst) <$> get
+getWriteToggle :: StateT R2C02 IO Bool
+getWriteToggle = (writeToggle . registers) <$> get
 
 
 
 -- Flag Setters / Getters
 
 
-getCTRLFlag :: CTRLFLAG -> StateT (R2C02 a, a) IO Bool
+getCTRLFlag :: CTRLFLAG -> StateT R2C02 IO Bool
 getCTRLFlag C_NAMETABLE_X           = b0' <$> getControl
 getCTRLFlag C_NAMETABLE_Y           = b1' <$> getControl
 getCTRLFlag C_INCREMENT_MODE        = b2' <$> getControl
@@ -221,7 +220,7 @@ getCTRLFlag C_SLAVE_MDOE            = b6' <$> getControl
 getCTRLFlag C_ENABLE_NMI            = b7' <$> getControl
 
 
-setCTRLFlag :: CTRLFLAG -> Bool -> StateT (R2C02 a, a) IO ()
+setCTRLFlag :: CTRLFLAG -> Bool -> StateT R2C02 IO ()
 setCTRLFlag C_NAMETABLE_X v         = mapControl (\ctrl -> if v then setBit ctrl 0 else clearBit ctrl 0)
 setCTRLFlag C_NAMETABLE_Y v         = mapControl (\ctrl -> if v then setBit ctrl 1 else clearBit ctrl 1)
 setCTRLFlag C_INCREMENT_MODE v      = mapControl (\ctrl -> if v then setBit ctrl 2 else clearBit ctrl 2)
@@ -232,7 +231,7 @@ setCTRLFlag C_SLAVE_MDOE v          = mapControl (\ctrl -> if v then setBit ctrl
 setCTRLFlag C_ENABLE_NMI v          = mapControl (\ctrl -> if v then setBit ctrl 7 else clearBit ctrl 7)
 
 
-getMASKFlag :: MASKFLAG -> StateT (R2C02 a, a) IO Bool
+getMASKFlag :: MASKFLAG -> StateT R2C02 IO Bool
 getMASKFlag M_GRAYSCALE                 = b0' <$> getMask
 getMASKFlag M_RENDER_BACKGROUND_LEFT    = b1' <$> getMask
 getMASKFlag M_RENDER_SPRITES_LEFT       = b2' <$> getMask
@@ -243,7 +242,7 @@ getMASKFlag M_ENHANCE_GREEN             = b6' <$> getMask
 getMASKFlag M_ENHANCE_BLUE              = b7' <$> getMask
 
 
-setMASKFlag :: MASKFLAG -> Bool -> StateT (R2C02 a, a) IO ()
+setMASKFlag :: MASKFLAG -> Bool -> StateT R2C02 IO ()
 setMASKFlag M_GRAYSCALE v               = mapMask (\ctrl -> if v then setBit ctrl 0 else clearBit ctrl 0)
 setMASKFlag M_RENDER_BACKGROUND_LEFT v  = mapMask (\ctrl -> if v then setBit ctrl 1 else clearBit ctrl 1)
 setMASKFlag M_RENDER_SPRITES_LEFT v     = mapMask (\ctrl -> if v then setBit ctrl 2 else clearBit ctrl 2)
@@ -254,13 +253,13 @@ setMASKFlag M_ENHANCE_GREEN v           = mapMask (\ctrl -> if v then setBit ctr
 setMASKFlag M_ENHANCE_BLUE v            = mapMask (\ctrl -> if v then setBit ctrl 7 else clearBit ctrl 7)
 
 
-getSTATUSFlag :: STATUSFLAG -> StateT (R2C02 a, a) IO Bool
+getSTATUSFlag :: STATUSFLAG -> StateT R2C02 IO Bool
 getSTATUSFlag S_SPRITE_OVERFLOW     = b5' <$> getStatus
 getSTATUSFlag S_SPRITE_ZERO_HIT     = b6' <$> getStatus
 getSTATUSFlag S_VERTICAL_BLANK      = b7' <$> getStatus
 
 
-setSTATUSFlag :: STATUSFLAG -> Bool -> StateT (R2C02 a, a) IO ()
+setSTATUSFlag :: STATUSFLAG -> Bool -> StateT R2C02 IO ()
 setSTATUSFlag S_SPRITE_OVERFLOW v       = mapStatus (\ctrl -> if v then setBit ctrl 5 else clearBit ctrl 5)
 setSTATUSFlag S_SPRITE_ZERO_HIT v       = mapStatus (\ctrl -> if v then setBit ctrl 6 else clearBit ctrl 6)
 setSTATUSFlag S_VERTICAL_BLANK v        = mapStatus (\ctrl -> if v then setBit ctrl 7 else clearBit ctrl 7)
@@ -269,7 +268,7 @@ setSTATUSFlag S_VERTICAL_BLANK v        = mapStatus (\ctrl -> if v then setBit c
 -- Loopy Registers Setters / Getters
 
 -- TRAM
-getTRAMData :: LOOPYFLAG -> StateT (R2C02 a, a) IO Word8
+getTRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getTRAMData L_COARSE_X = do
     loopy <- getTRAM
     let bits = fromIntegral . (shiftTake2 0 5) $ loopy :: Word8
@@ -285,7 +284,7 @@ getTRAMData L_FINE_Y = do
 getTRAMData _ = error "Incorrect Flag"
 
 
-setTRAMData :: LOOPYFLAG -> Word8 -> StateT (R2C02 a, a) IO ()
+setTRAMData :: LOOPYFLAG -> Word8 -> StateT R2C02 IO ()
 setTRAMData L_COARSE_X val = do
     loopy <- getTRAM
     let loopy' = (loopy .&. 0xFFE0) + ((fromIntegral val) .&. 0x1F)
@@ -301,13 +300,13 @@ setTRAMData L_FINE_Y val = do
 setTRAMData _ _ = error "Incorrect Flag"
 
 
-getTRAMBit :: LOOPYFLAG -> StateT (R2C02 a, a) IO Bool
+getTRAMBit :: LOOPYFLAG -> StateT R2C02 IO Bool
 getTRAMBit L_NAMETABLE_X = b10 <$> getTRAM
 getTRAMBit L_NAMETABLE_Y = b11 <$> getTRAM
 getTRAMBit _ = error "Incorrect Flag"
 
 
-setTRAMBit :: LOOPYFLAG -> Bool -> StateT (R2C02 a, a) IO ()
+setTRAMBit :: LOOPYFLAG -> Bool -> StateT R2C02 IO ()
 setTRAMBit L_NAMETABLE_X v = mapTRAM (\tram -> if v then setBit tram 10 else clearBit tram 10)
 setTRAMBit L_NAMETABLE_Y v = mapTRAM (\tram -> if v then setBit tram 11 else clearBit tram 11)
 setTRAMBit _ _ = error "Incorrect Flag"
@@ -316,7 +315,7 @@ setTRAMBit _ _ = error "Incorrect Flag"
 
 
 -- VRAM
-getVRAMData :: LOOPYFLAG -> StateT (R2C02 a, a) IO Word8
+getVRAMData :: LOOPYFLAG -> StateT R2C02 IO Word8
 getVRAMData L_COARSE_X = do
     loopy <- getVRAM
     let bits = fromIntegral $ shiftTake2 0 5 loopy :: Word8
@@ -332,7 +331,7 @@ getVRAMData L_FINE_Y = do
 getVRAMData _ = error "Incorrect Flag"
 
 
-setVRAMData :: LOOPYFLAG -> Word8 -> StateT (R2C02 a, a) IO ()
+setVRAMData :: LOOPYFLAG -> Word8 -> StateT R2C02 IO ()
 setVRAMData L_COARSE_X val = do
     loopy <- getVRAM
     let loopy' = (loopy .&. 0xffe0) + (shiftTake2 0 5 (fromIntegral val))
@@ -348,154 +347,158 @@ setVRAMData L_FINE_Y val = do
 setVRAMData _ _ = error "Incorrect Flag"
 
 
-getVRAMBit :: LOOPYFLAG -> StateT (R2C02 a, a) IO Bool
+getVRAMBit :: LOOPYFLAG -> StateT R2C02 IO Bool
 getVRAMBit L_NAMETABLE_X = b10 <$> getVRAM
 getVRAMBit L_NAMETABLE_Y = b11 <$> getVRAM
 getVRAMBit _ = error "Incorrect Flag"
 
-setVRAMBit :: LOOPYFLAG -> Bool -> StateT (R2C02 a, a) IO ()
+setVRAMBit :: LOOPYFLAG -> Bool -> StateT R2C02 IO ()
 setVRAMBit L_NAMETABLE_X v = mapVRAM (\vram -> if v then setBit vram 10 else clearBit vram 10)
 setVRAMBit L_NAMETABLE_Y v = mapVRAM (\vram -> if v then setBit vram 11 else clearBit vram 11)
 setVRAMBit _ _ = error "Incorrect Flag"
 
 
 
-getScanline :: StateT (R2C02 a, a) IO Int
-getScanline = ppuScanline . context . fst <$> get
+getScanline :: StateT R2C02 IO Int
+getScanline = ppuScanline . context <$> get
 
 
-getCycle :: StateT (R2C02 a, a) IO Int
-getCycle = ppuCycle . context . fst <$> get
+getCycle :: StateT R2C02 IO Int
+getCycle = ppuCycle . context <$> get
 
 
-getNMI :: StateT (R2C02 a, a) IO Bool
-getNMI = ppuNMI . context . fst <$> get
+getNMI :: StateT R2C02 IO Bool
+getNMI = ppuNMI . context <$> get
 
 
-getComplete :: StateT (R2C02 a, a) IO Bool
-getComplete = complete . context . fst <$> get
+fetchNMI :: StateT R2C02 IO Bool
+fetchNMI = do
+    nmi <- getNMI
+    setNMI False
+    return nmi
+
+getComplete :: StateT R2C02 IO Bool
+getComplete = complete . context <$> get
+
+fetchComplete :: StateT R2C02 IO Bool
+fetchComplete = do
+    done <- getComplete
+    setComplete False
+    return done
 
 
-getShifterData :: StateT (R2C02 a, a) IO Word64
-getShifterData = shifterData . context . fst <$> get
+getShifterData :: StateT R2C02 IO Word64
+getShifterData = shifterData . context <$> get
 
 
-getNextTile :: StateT (R2C02 a, a) IO Word64
-getNextTile = nextTile . context . fst <$> get
+getNextTile :: StateT R2C02 IO Word64
+getNextTile = nextTile . context <$> get
 
-getNextTileID :: StateT (R2C02 a, a) IO Word16
-getNextTileID = nextTileID . context . fst <$> get
-
-
-getNextTileAttrib :: StateT (R2C02 a, a) IO Word16
-getNextTileAttrib = nextTileAttrib . context . fst <$> get
+getNextTileID :: StateT R2C02 IO Word16
+getNextTileID = nextTileID . context <$> get
 
 
-getBGPixel :: StateT (R2C02 a, a) IO Word8
-getBGPixel = bgPixel . context . fst <$> get
+getNextTileAttrib :: StateT R2C02 IO Word16
+getNextTileAttrib = nextTileAttrib . context <$> get
 
 
-getBGPalette :: StateT (R2C02 a, a) IO Word8
-getBGPalette = bgPalette . context . fst <$> get
+getBGPixel :: StateT R2C02 IO Word8
+getBGPixel = bgPixel . context <$> get
+
+
+getBGPalette :: StateT R2C02 IO Word8
+getBGPalette = bgPalette . context <$> get
 
 
 
-setScanline :: Int -> StateT (R2C02 a, a) IO ()
-setScanline v = modifyFst(\ppu -> ppu{context = (context ppu){ppuScanline = v}})
+setScanline :: Int -> StateT R2C02 IO ()
+setScanline v = modify(\ppu -> ppu{context = (context ppu){ppuScanline = v}})
 
 
-setCycle :: Int -> StateT (R2C02 a, a) IO ()
-setCycle v = modifyFst(\ppu -> ppu{context = (context ppu){ppuCycle = v}})
+setCycle :: Int -> StateT R2C02 IO ()
+setCycle v = modify(\ppu -> ppu{context = (context ppu){ppuCycle = v}})
 
 
-setNMI :: Bool -> StateT (R2C02 a, a) IO ()
-setNMI v = modifyFst(\ppu -> ppu{context = (context ppu){ppuNMI = v}})
+setNMI :: Bool -> StateT R2C02 IO ()
+setNMI v = modify(\ppu -> ppu{context = (context ppu){ppuNMI = v}})
 
 
-setComplete :: Bool -> StateT (R2C02 a, a) IO ()
-setComplete v = modifyFst(\ppu -> ppu{context = (context ppu){complete = v}})
+setComplete :: Bool -> StateT R2C02 IO ()
+setComplete v = modify(\ppu -> ppu{context = (context ppu){complete = v}})
 
 
-setShifterData :: Word64 -> StateT (R2C02 a, a) IO ()
-setShifterData v = modifyFst(\ppu -> ppu{context = (context ppu){shifterData = v}})
+setShifterData :: Word64 -> StateT R2C02 IO ()
+setShifterData v = modify(\ppu -> ppu{context = (context ppu){shifterData = v}})
 
 
-setNextTileLsb :: Word16 -> StateT (R2C02 a, a) IO ()
+setNextTileLsb :: Word16 -> StateT R2C02 IO ()
 setNextTileLsb v = do
-    ntile <- getNextTile
+    ntile <- nextTile . context <$> get
     let ntile' = (ntile .&. 0xFFFFFFFFFFFFFF00) .|. (fromIntegral v)
-    modifyFst(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
+    modify(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
 
 
-setNextTileMsb :: Word16 -> StateT (R2C02 a, a) IO ()
+setNextTileMsb :: Word16 -> StateT R2C02 IO ()
 setNextTileMsb v = do
-    ntile <- getNextTile
+    ntile <- nextTile . context <$> get
     let ntile' = (ntile .&. 0xFFFFFFFFFF00FFFF) .|. (takeShift8 8 16 (fromIntegral v))
-    modifyFst(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
+    modify(\ppu -> ppu{context = (context ppu){nextTile = ntile'}})
 
 
-setNextTileID :: Word16 -> StateT (R2C02 a, a) IO ()
-setNextTileID v = modifyFst(\ppu -> ppu{context = (context ppu){nextTileID = v}})
+setNextTileID :: Word16 -> StateT R2C02 IO ()
+setNextTileID v = modify(\ppu -> ppu{context = (context ppu){nextTileID = v}})
 
 
-setNextTileAttrib :: Word16 -> StateT (R2C02 a, a) IO ()
-setNextTileAttrib v = modifyFst(\ppu -> ppu{context = (context ppu){nextTileAttrib = v}})
+setNextTileAttrib :: Word16 -> StateT R2C02 IO ()
+setNextTileAttrib v = modify(\ppu -> ppu{context = (context ppu){nextTileAttrib = v}})
 
 
-setBGPixel :: Word8 -> StateT (R2C02 a, a) IO ()
-setBGPixel v = modifyFst(\ppu -> ppu{context = (context ppu){bgPixel = v}})
+setBGPixel :: Word8 -> StateT R2C02 IO ()
+setBGPixel v = modify(\ppu -> ppu{context = (context ppu){bgPixel = v}})
 
 
-setBGPalette :: Word8 -> StateT (R2C02 a, a) IO ()
-setBGPalette v = modifyFst(\ppu -> ppu{context = (context ppu){bgPalette = v}})
+setBGPalette :: Word8 -> StateT R2C02 IO ()
+setBGPalette v = modify(\ppu -> ppu{context = (context ppu){bgPalette = v}})
 
 
 
 -- Interface
 
-writeByte :: Word16 -> Word8 -> StateT (R2C02 a, a) IO ()
+writeByte :: Word16 -> Word8 -> StateT R2C02 IO ()
 writeByte addr byte = do
-    (ppu, bus) <- get
+    ppu <- get
     let write = iWriteByte . interface $ ppu
-    bus' <- liftIO $ write bus addr byte
-    put (ppu, bus')
+    liftIO $ write addr byte
 
 
-readByte :: Word16 -> StateT (R2C02 a, a) IO Word8
+readByte ::Word16 -> StateT R2C02 IO Word8
 readByte addr = do
-    (ppu, bus) <- get
+    ppu <- get
     let read = iReadByte . interface $ ppu
-    (bus', byte) <- lift $ read bus addr
-    put (ppu, bus')
-    return byte
+    lift $ read addr
 
-peekByte :: Word16 -> StateT (R2C02 a, a) IO Word8
+peekByte :: Word16 -> StateT R2C02 IO Word8
 peekByte addr = do
-    (ppu, bus) <- get
+    ppu <- get
     let peek = iPeekByte . interface $ ppu
-    lift $ peek bus addr
+    lift $ peek addr
 
 
-setPixel :: (Word16, Word16) -> Word8 -> StateT (R2C02 a, a) IO ()
+setPixel :: (Word16, Word16) -> Word8 -> StateT R2C02 IO ()
 setPixel addr byte = do
-    (ppu, bus) <- get
+    ppu <- get
     let draw = iSetPixel . interface $ ppu
-    bus' <- liftIO $ draw bus addr byte
-    put (ppu, bus')
+    liftIO $ draw addr byte
 
 
-triggerNMI :: StateT (R2C02 a, a) IO ()
-triggerNMI = do
-    (ppu, bus) <- get
-    let trigger = iTriggerNMI . interface $ ppu
-    bus' <- liftIO $ trigger bus
-    put (ppu, bus')
+triggerNMI :: StateT R2C02 IO ()
+triggerNMI = setNMI True
 
 
 
 -- CPU Interface
 
-cpuRead :: Word16 -> StateT (R2C02 a, a) IO Word8
+cpuRead :: Word16 -> StateT R2C02 IO Word8
 cpuRead addr
     | addr == 0x0000 = return 0 -- Control: Write Only
     | addr == 0x0001 = return 0 -- Mask: Write Only
@@ -508,7 +511,7 @@ cpuRead addr
     | otherwise = error "CPU Attempted to read out of turn"
 
 
-readStatus :: StateT (R2C02 a, a) IO Word8
+readStatus :: StateT R2C02 IO Word8
 readStatus = do
     buff <- getDataBuffer
     status <- getStatus
@@ -518,7 +521,7 @@ readStatus = do
     return $ byte
 
 
-readData :: StateT (R2C02 a, a) IO Word8
+readData :: StateT R2C02 IO Word8
 readData = do
     v <- getVRAM
     oldbuff <- getDataBuffer
@@ -530,21 +533,21 @@ readData = do
     return byte
 
 
-cpuPeek :: Word16 -> (R2C02 a, a) -> IO Word8
-cpuPeek addr pp
+cpuPeek :: Word16 -> R2C02 -> IO Word8
+cpuPeek addr ppu
     | addr == 0x0000 = return 0 -- Control: Write Only
     | addr == 0x0001 = return 0 -- Mask: Write Only
-    | addr == 0x0002 = fst <$> (runStateT peekStatus pp) -- Status
+    | addr == 0x0002 = fst <$> (runStateT peekStatus ppu) -- Status
     | addr == 0x0003 = return 0 -- OAM Address: Write Only
     | addr == 0x0004 = return 0 -- OAM Data: TODO
     | addr == 0x0005 = return 0 -- Scroll: Write Only
     | addr == 0x0006 = return 0 -- Address: WriteOnly
-    | addr == 0x0007 = fst <$> (runStateT peekData pp)-- Data
+    | addr == 0x0007 = fst <$> (runStateT peekData ppu)-- Data
     | otherwise = error "CPU Attempted to read out of turn"
 
 
 
-peekStatus :: StateT (R2C02 a, a) IO Word8
+peekStatus :: StateT R2C02 IO Word8
 peekStatus = do
     buff <- getDataBuffer
     status <- getStatus
@@ -552,7 +555,7 @@ peekStatus = do
     return $ byte
 
 
-peekData :: StateT (R2C02 a, a) IO Word8
+peekData :: StateT R2C02 IO Word8
 peekData = do
     v <- getVRAM
     oldbuff <- getDataBuffer
@@ -561,7 +564,7 @@ peekData = do
     return byte
     
 
-cpuWrite :: Word16 -> Word8 -> StateT (R2C02 a, a) IO ()
+cpuWrite :: Word16 -> Word8 -> StateT R2C02 IO ()
 cpuWrite addr byte
     | addr == 0x0000 = writeControl byte
     | addr == 0x0001 = writeMask byte
@@ -574,7 +577,7 @@ cpuWrite addr byte
     | otherwise = return () -- TODO: Log error
 
 
-writeControl :: Word8 -> StateT (R2C02 a, a) IO ()
+writeControl :: Word8 -> StateT R2C02 IO ()
 writeControl byte = do
     setControl byte
     let nx = b0' byte
@@ -583,11 +586,11 @@ writeControl byte = do
     setTRAMBit L_NAMETABLE_Y ny
 
 
-writeMask :: Word8 -> StateT (R2C02 a, a) IO ()
+writeMask :: Word8 -> StateT R2C02 IO ()
 writeMask byte = setMask byte
 
 
-writeScroll :: Word8 -> StateT (R2C02 a, a) IO ()
+writeScroll :: Word8 -> StateT R2C02 IO ()
 writeScroll byte = do
     firstWrite <- not <$> getWriteToggle
     if firstWrite
@@ -601,7 +604,7 @@ writeScroll byte = do
             setTRAMData L_FINE_Y (shiftTake1 0 3 byte)
 
 
-writeAddress :: Word8 -> StateT (R2C02 a, a) IO ()
+writeAddress :: Word8 -> StateT R2C02 IO ()
 writeAddress byte = do
     firstWrite <- not <$> getWriteToggle
     if firstWrite
@@ -620,7 +623,7 @@ writeAddress byte = do
             setVRAM t'
 
 
-writeData :: Word8 -> StateT (R2C02 a, a) IO ()
+writeData :: Word8 -> StateT R2C02 IO ()
 writeData byte = do
     v <- getVRAM
     writeByte v byte
@@ -631,7 +634,7 @@ writeData byte = do
 -- Background Tick
 
 
-incCoarseX :: StateT (R2C02 a, a) IO ()
+incCoarseX :: StateT R2C02 IO ()
 incCoarseX = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
@@ -646,7 +649,7 @@ incCoarseX = do
                 setVRAMBit L_NAMETABLE_X (not ntx))
 
 
-incCoarseY :: StateT (R2C02 a, a) IO ()
+incCoarseY :: StateT R2C02 IO ()
 incCoarseY = do
     coarseY <- getVRAMData L_COARSE_Y
     if coarseY == 29
@@ -661,7 +664,7 @@ incCoarseY = do
                     setVRAMData L_COARSE_Y (coarseY + 1)
 
 
-incFineY :: StateT (R2C02 a, a) IO ()
+incFineY :: StateT R2C02 IO ()
 incFineY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
@@ -682,7 +685,7 @@ nametableBase nx ny = x + y where
     y = if ny then 0x800 else 0
 
 
-incScanline :: StateT (R2C02 a, a) IO ()
+incScanline :: StateT R2C02 IO ()
 incScanline = do
     scanline <- getScanline
     if scanline >= 260
@@ -693,7 +696,7 @@ incScanline = do
         setScanline (scanline + 1)
 
 
-incCycle :: StateT (R2C02 a, a) IO ()
+incCycle :: StateT R2C02 IO ()
 incCycle = do
     cycle <- getCycle
     if cycle >= 340 
@@ -704,12 +707,12 @@ incCycle = do
         setCycle (cycle + 1)
 
 
-updateShifters :: StateT (R2C02 a, a) IO ()
+updateShifters :: StateT R2C02 IO ()
 updateShifters = do
     (( .<<. 1) <$> getShifterData ) >>= setShifterData
 
 
-fetchNextTileID :: StateT (R2C02 a, a) IO ()
+fetchNextTileID :: StateT R2C02 IO ()
 fetchNextTileID = do
     vram <- getVRAM
     let addr = 0x2000 .|. (vram .&. 0x0FFF)
@@ -725,7 +728,7 @@ getAttribInfo tx ty byte = fromIntegral output where
     output = (byte .>>. shift) .&. 0x03
 
 
-fetchNextTileAttrib :: StateT (R2C02 a, a) IO ()
+fetchNextTileAttrib :: StateT R2C02 IO ()
 fetchNextTileAttrib = do
     nx <- getVRAMBit L_NAMETABLE_X
     ny <- getVRAMBit L_NAMETABLE_Y
@@ -738,7 +741,7 @@ fetchNextTileAttrib = do
     setNextTileAttrib $ getAttribInfo tx ty byte
 
 
-fetchNextTileLsb :: StateT (R2C02 a, a) IO ()
+fetchNextTileLsb :: StateT R2C02 IO ()
 fetchNextTileLsb = do
     ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
     let base = if ptrn then 0x1000 else 0x0000 :: Word16
@@ -749,7 +752,7 @@ fetchNextTileLsb = do
     setNextTileLsb byte
 
 
-fetchNextTileMsb :: StateT (R2C02 a, a) IO ()
+fetchNextTileMsb :: StateT R2C02 IO ()
 fetchNextTileMsb = do
     ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
     let base = if ptrn then 0x1000 else 0x0000
@@ -760,7 +763,7 @@ fetchNextTileMsb = do
     setNextTileMsb byte
 
 
-fetchNextInfo :: Int -> StateT (R2C02 a, a) IO ()
+fetchNextInfo :: Int -> StateT R2C02 IO ()
 fetchNextInfo 0 = loadBackgroundShifters >> fetchNextTileID
 fetchNextInfo 2 = fetchNextTileAttrib
 fetchNextInfo 4 = fetchNextTileLsb
@@ -769,7 +772,7 @@ fetchNextInfo 7 = incCoarseX
 fetchNextInfo _ = return ()
 
 
-loadBackgroundShifters :: StateT (R2C02 a, a) IO ()
+loadBackgroundShifters :: StateT R2C02 IO ()
 loadBackgroundShifters = do
     nTile <- getNextTile 
     nAttrib <- getNextTileAttrib 
@@ -782,7 +785,7 @@ loadBackgroundShifters = do
     setShifterData shifter'
 
 
-transferX :: StateT (R2C02 a, a) IO ()
+transferX :: StateT R2C02 IO ()
 transferX = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
@@ -792,7 +795,7 @@ transferX = do
         )
 
 
-transferY :: StateT (R2C02 a, a) IO ()
+transferY :: StateT R2C02 IO ()
 transferY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
     fsFlag <- getMASKFlag M_RENDER_SPRITES 
@@ -803,7 +806,7 @@ transferY = do
         )
 
 
-handleVisibleScanline :: StateT (R2C02 a, a) IO ()
+handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     scanline <- getScanline
     cycle <- getCycle
@@ -816,7 +819,7 @@ handleVisibleScanline = do
     when (scanline == (-1) && cycle == 304) transferY -- TODO: THIS IS NOT ACCURATE. THIS HAPPENS FOR EVERY CYCLE BETWEEN 280 AND 304. BUT I THINK IT SHOULD BE FIEN
 
 
-handleEndOfFrame :: StateT (R2C02 a, a) IO ()
+handleEndOfFrame :: StateT R2C02 IO ()
 handleEndOfFrame = do
     scanline <- getScanline
     cycle <- getCycle
@@ -827,7 +830,7 @@ handleEndOfFrame = do
         )
 
 
-handleComposition :: StateT (R2C02 a, a) IO ()
+handleComposition :: StateT R2C02 IO ()
 handleComposition = do
     fineX <- getFineX
     shifter <- getShifterData
@@ -844,7 +847,7 @@ handleComposition = do
     setBGPalette pl
 
 
-fetchColor :: StateT (R2C02 a, a) IO Word8
+fetchColor :: StateT R2C02 IO Word8
 fetchColor = do
     pixel <- fromIntegral <$> getBGPixel
     palette <- fromIntegral <$> getBGPalette
@@ -854,7 +857,7 @@ fetchColor = do
     return byte
 
 
-renderPixel :: StateT (R2C02 a, a) IO ()
+renderPixel :: StateT R2C02 IO ()
 renderPixel = do
     cycle <- getCycle
     scanline <- getScanline
@@ -862,19 +865,19 @@ renderPixel = do
     setPixel (fromIntegral cycle - 1, fromIntegral scanline) color
 
 
-renderScanline :: StateT (R2C02 a, a) IO ()
+renderScanline :: StateT R2C02 IO ()
 renderScanline = do
     cycle <- getCycle
     when (cycle >= 0 && cycle < 256) renderPixel
 
 
-skipFirstCycle :: StateT (R2C02 a, a) IO ()
+skipFirstCycle :: StateT R2C02 IO ()
 skipFirstCycle = do
     cycle <- getCycle
     when (cycle == 0) (setCycle 1)
 
 
-tickBackground :: StateT (R2C02 a, a) IO ()
+tickBackground :: StateT R2C02 IO ()
 tickBackground = do
     scanline <- getScanline
     when (scanline == 0) skipFirstCycle
@@ -886,13 +889,14 @@ tickBackground = do
     incCycle
 
 
-tick :: StateT (R2C02 a, a) IO ()
+tick :: StateT R2C02 IO ()
 tick = do
     tickBackground
 
-tick' :: StateT (R2C02 a, a) IO Bool
+tick' :: StateT R2C02 IO (Bool, Bool)
 tick' = do
     tick
-    done <- getComplete
-    setComplete False
-    return done
+    done <- fetchComplete
+    nmi <- fetchNMI
+    return (nmi, done)
+
