@@ -426,7 +426,7 @@ cpuRead addr = do
 
 tickDMAR :: Word16 -> StateT BUS IO Bool
 tickDMAR offset = do
-    page <- fromIntegral <$> getDMAByte
+    page <- fromIntegral <$> getDMAPage
     let addr = 0x100 * page + offset
     byte <- cpuRead addr
     setDMAByte byte
