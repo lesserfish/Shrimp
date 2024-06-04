@@ -195,9 +195,14 @@ cpuWritePPU bus addr byte = do
     let bus' = bus{bPPU = ppu'}
     return bus'
 
+-- cpuTriggerDMA: This is not particularly correct.
+-- When the CPU triggers a DMA, the bus will wait for 1 or 2 clock cycles before starting the copy,
+-- which will take place over a duration of 512 clock ticks.
+-- The correct thing would be to set dmaCycle = if mod clock 2 == 0 then (-1) else (-2),
+-- and then, in tickDMA, check whether or not dmaCycle is positive.
 cpuTriggerDMA :: BUS -> Word8 -> IO BUS
 cpuTriggerDMA bus byte = do
-    let ctx = (bContext bus){dmaPage = byte, dmaByte = 0, dmaCycle = 0, dmaHold = True}
+    let ctx = (bContext bus){dmaPage = byte, dmaByte = 0, dmaCycle = 0, dmaHold = True} 
     let bus' = bus{bContext = ctx}
     return bus'
 
