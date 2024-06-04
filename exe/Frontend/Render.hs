@@ -15,6 +15,7 @@ import qualified Frontend.Renderer.Pattern as FRPattern
 import qualified Frontend.Renderer.Status as FRStatus
 import qualified Frontend.Renderer.Nametable as FRNametable
 import qualified Frontend.Renderer.FPS as FRFPS
+import qualified Frontend.Renderer.OAM as FROAM
 
 
 getFPS :: StateT RenderContext IO Int
@@ -41,6 +42,7 @@ update = do
 
 
     let fpsTexture     = rtFPS       . rcTextures $ rctx
+    let oamTexture     = rtOAM       . rcTextures $ rctx
     let statusTexture  = rtCPUStatus . rcTextures $ rctx
     let paletteTexture = rtPalette   . rcTextures $ rctx
     let patternTexture = rtPattern   . rcTextures $ rctx
@@ -51,6 +53,7 @@ update = do
 
     liftIO $ FRStatus.update ctx nes statusTexture
     liftIO $ FRPalette.update ctx nes paletteTexture
+    when (rDisplayMode == DM_OAM) (liftIO $ FROAM.update ctx nes oamTexture )
     when (rDisplayMode == DM_INSTRUCTION) (liftIO $ FRInstructions.update ctx nes instructionTexture)
     when (rDisplayMode == DM_PATTERN_1) (liftIO $ FRPattern.update ctx nes patternTexture)
     when (rDisplayMode == DM_PATTERN_2) (liftIO $ FRPattern.update ctx nes patternTexture)
@@ -72,6 +75,7 @@ render = do
     showFPS <- getShowFPS
 
     let fpsTexture     = rtFPS       . rcTextures $ rctx
+    let oamTexture     = rtOAM       . rcTextures $ rctx
     let statusTexture  = rtCPUStatus . rcTextures $ rctx
     let paletteTexture = rtPalette   . rcTextures $ rctx
     let patternTexture = rtPattern   . rcTextures $ rctx
@@ -84,6 +88,7 @@ render = do
 
     SDL.copy renderer statusTexture Nothing (windowSegment (600, 0) (300, 200))
     SDL.copy renderer paletteTexture Nothing (windowSegment (630, 210) (300, 64))
+    when (rDisplayMode == DM_OAM) (SDL.copy renderer oamTexture Nothing (windowSegment (600, 300) (300, 350)))
     when (rDisplayMode == DM_INSTRUCTION) (SDL.copy renderer instructionTexture Nothing (windowSegment (600, 300) (300, 350)))
     when (rDisplayMode == DM_PATTERN_1)   (SDL.copy renderer patternTexture (windowSegment (0, 0) (128, 128)) (windowSegment (600, 300) (300, 300)))
     when (rDisplayMode == DM_PATTERN_2)   (SDL.copy renderer patternTexture (windowSegment (0, 128)   (128, 128)) (windowSegment (600, 300) (300, 300)))

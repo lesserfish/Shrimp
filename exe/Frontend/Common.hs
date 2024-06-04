@@ -32,6 +32,7 @@ data DisplayMode = DM_DISPLAY
                  | DM_NAMETABLE_1
                  | DM_NAMETABLE_2
                  | DM_INSTRUCTION 
+                 | DM_OAM
                  | DM_PATTERN_1 
                  | DM_PATTERN_2 
                  deriving (Show, Eq)
@@ -52,6 +53,7 @@ data RenderTextures = RenderTextures
     , rtDisplay :: SDL.Texture
     , rtNametable :: SDL.Texture
     , rtFPS :: SDL.Texture
+    , rtOAM :: SDL.Texture
     }
 
 data RenderContext = RenderContext

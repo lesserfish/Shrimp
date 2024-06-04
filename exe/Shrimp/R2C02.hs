@@ -3,21 +3,26 @@ module Shrimp.R2C02 (
     Registers (..),
     Interface (..),
     R2C02 (..),
+    Sprite (..),
+    getSprite,
     new, 
     reset,
     tick,
     tick',
     cpuPeek,
     cpuWrite,
+    dmaPort,
     cpuRead
 ) where
 
+import qualified Shrimp.Memory as Memory
 import Control.Monad (when)
 import Control.Monad.State
 import Data.Bits
 import Data.Word
 import Text.Printf
 import Shrimp.Utils
+import SDL.Raw (setWindowGammaRamp)
 
 
 -- Registers
@@ -65,6 +70,7 @@ data Context = Context
     , nextTileAttrib :: Word16
     , bgPixel :: Word8
     , bgPalette :: Word8
+    , oamAddress :: Word8
     }
 
 data Registers = Registers
@@ -90,19 +96,43 @@ data R2C02 = R2C02
     { registers :: Registers
     , context :: Context
     , interface :: Interface
+    , oamData :: Memory.RAM
     }
+
+data Sprite = Sprite
+    { sprY :: Word8
+    , sprTile :: Word8
+    , sprAttr :: Word8
+    , sprX :: Word8
+    }
+
+getSprite :: Word16 -> StateT R2C02 IO Sprite
+getSprite id = do
+    let ya = 0x04 * id + 0x00
+    let ta = 0x04 * id + 0x01
+    let aa = 0x04 * id + 0x02
+    let xa = 0x04 * id + 0x03
+    oam <- getOAM
+    y <- liftIO $ Memory.readByte oam ya
+    t <- liftIO $ Memory.readByte oam ta
+    a <- liftIO $ Memory.readByte oam aa
+    x <- liftIO $ Memory.readByte oam xa
+    return $ Sprite y t a x
+
 
 -- Creation
 
-new :: Interface -> R2C02
-new interface = R2C02 reg ctx interface where
-    reg = Registers 0 0 0 0 0 0 0 False
-    ctx = Context False False 0 0 0 0 0 0 0 0
+new :: Interface -> IO R2C02
+new interface = do
+    let reg = Registers 0 0 0 0 0 0 0 False
+    let ctx = Context False False 0 0 0 0 0 0 0 0 0
+    oam <- Memory.new 0xFF 0xFF
+    return $ R2C02 reg ctx interface oam
 
 reset :: StateT R2C02 IO ()
 reset = do
     ppu <- get
-    let ppu' = new (interface ppu)
+    ppu' <- liftIO $ new (interface ppu)
     put ppu'
 
 -- Registers Setters / Getters
@@ -409,7 +439,12 @@ getBGPixel = bgPixel . context <$> get
 getBGPalette :: StateT R2C02 IO Word8
 getBGPalette = bgPalette . context <$> get
 
+getOAMAddress :: StateT R2C02 IO Word8
+getOAMAddress = oamAddress . context <$> get
 
+
+getOAM :: StateT R2C02 IO Memory.RAM
+getOAM = oamData <$> get
 
 setScanline :: Int -> StateT R2C02 IO ()
 setScanline v = modify(\ppu -> ppu{context = (context ppu){ppuScanline = v}})
@@ -460,6 +495,8 @@ setBGPixel v = modify(\ppu -> ppu{context = (context ppu){bgPixel = v}})
 setBGPalette :: Word8 -> StateT R2C02 IO ()
 setBGPalette v = modify(\ppu -> ppu{context = (context ppu){bgPalette = v}})
 
+setOAMAddress :: Word8 -> StateT R2C02 IO ()
+setOAMAddress v = modify(\ppu -> ppu{context = (context ppu){oamAddress = v}})
 
 
 -- Interface
@@ -504,7 +541,7 @@ cpuRead addr
     | addr == 0x0001 = return 0 -- Mask: Write Only
     | addr == 0x0002 = readStatus -- Status
     | addr == 0x0003 = return 0 -- OAM Address: Write Only
-    | addr == 0x0004 = return 0 -- OAM Data: TODO
+    | addr == 0x0004 = readOAMData -- OAM Data: TODO
     | addr == 0x0005 = return 0 -- Scroll: Write Only
     | addr == 0x0006 = return 0 -- Address: WriteOnly
     | addr == 0x0007 = readData -- Data
@@ -539,13 +576,17 @@ cpuPeek addr ppu
     | addr == 0x0001 = return 0 -- Mask: Write Only
     | addr == 0x0002 = fst <$> (runStateT peekStatus ppu) -- Status
     | addr == 0x0003 = return 0 -- OAM Address: Write Only
-    | addr == 0x0004 = return 0 -- OAM Data: TODO
+    | addr == 0x0004 = fst <$> (runStateT readOAMData ppu) -- OAM Data
     | addr == 0x0005 = return 0 -- Scroll: Write Only
     | addr == 0x0006 = return 0 -- Address: WriteOnly
     | addr == 0x0007 = fst <$> (runStateT peekData ppu)-- Data
     | otherwise = error "CPU Attempted to read out of turn"
 
-
+readOAMData :: StateT R2C02 IO Word8
+readOAMData = do
+    oam <- getOAM
+    addr <- fromIntegral <$> getOAMAddress
+    liftIO $ Memory.readByte oam addr
 
 peekStatus :: StateT R2C02 IO Word8
 peekStatus = do
@@ -569,8 +610,8 @@ cpuWrite addr byte
     | addr == 0x0000 = writeControl byte
     | addr == 0x0001 = writeMask byte
     | addr == 0x0002 = return () -- Status: Read Only
-    | addr == 0x0003 = return () -- TODO: Implement OAS ADDR support
-    | addr == 0x0004 = return () -- TODO: Implement OAS DATA support
+    | addr == 0x0003 = writeOAMAddress byte
+    | addr == 0x0004 = writeOAMData byte
     | addr == 0x0005 = writeScroll byte
     | addr == 0x0006 = writeAddress byte
     | addr == 0x0007 = writeData byte
@@ -588,6 +629,15 @@ writeControl byte = do
 
 writeMask :: Word8 -> StateT R2C02 IO ()
 writeMask byte = setMask byte
+
+writeOAMAddress :: Word8 -> StateT R2C02 IO ()
+writeOAMAddress = setOAMAddress
+
+writeOAMData :: Word8 -> StateT R2C02 IO ()
+writeOAMData byte = do
+    oam <- getOAM
+    addr <- fromIntegral <$> getOAMAddress
+    liftIO $ Memory.writeByte oam addr byte
 
 
 writeScroll :: Word8 -> StateT R2C02 IO ()
@@ -630,6 +680,11 @@ writeData byte = do
     increment_mode <- getCTRLFlag C_INCREMENT_MODE
     if increment_mode then setVRAM (v + 32) else setVRAM (v + 1)
 
+
+dmaPort :: Word16 -> Word8 -> StateT R2C02 IO ()
+dmaPort addr byte = do
+    oam <- getOAM
+    liftIO $ Memory.writeByte oam addr byte
 
 -- Background Tick
 
@@ -832,19 +887,22 @@ handleEndOfFrame = do
 
 handleComposition :: StateT R2C02 IO ()
 handleComposition = do
-    fineX <- getFineX
-    shifter <- getShifterData
+    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
+    when renderBackground (do
+        fineX <- getFineX
+        shifter <- getShifterData
 
-    let px0 = if (testBit shifter (15 - fineX)) then 0x1 else 0x0
-    let px1 = if (testBit shifter (31 - fineX)) then 0x2 else 0x0
-    let px = px0 + px1
+        let px0 = if (testBit shifter (15 - fineX)) then 0x1 else 0x0
+        let px1 = if (testBit shifter (31 - fineX)) then 0x2 else 0x0
+        let px = px0 + px1
 
-    let pl0 = if (testBit shifter (47 - fineX)) then 0x1 else 0x0
-    let pl1 = if (testBit shifter (63 - fineX)) then 0x2 else 0x0
-    let pl = pl0 + pl1
+        let pl0 = if (testBit shifter (47 - fineX)) then 0x1 else 0x0
+        let pl1 = if (testBit shifter (63 - fineX)) then 0x2 else 0x0
+        let pl = pl0 + pl1
 
-    setBGPixel px
-    setBGPalette pl
+        setBGPixel px
+        setBGPalette pl
+        )
 
 
 fetchColor :: StateT R2C02 IO Word8
@@ -883,8 +941,7 @@ tickBackground = do
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
     when (scanline >= 241  && scanline < 261) handleEndOfFrame
-    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
-    when (renderBackground) handleComposition
+    when (scanline >= (-1) && scanline < 240) handleComposition
     when (scanline >= 0 && scanline < 240) renderScanline
     incCycle
 

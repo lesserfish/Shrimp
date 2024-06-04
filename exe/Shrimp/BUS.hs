@@ -24,11 +24,21 @@ import qualified Shrimp.R2C02 as R2C02
 import qualified Shrimp.Display as Display
 import qualified Shrimp.Controller as Controller
 import Data.IORef
+import SDL (R2)
 
+
+data Context = Context
+    { dmaPage :: Word8
+    , dmaByte :: Word8
+    , dmaCycle :: Int
+    , dmaHold :: Bool
+    , bClock :: Int
+    }
 
 data BUS = BUS
     { bCPU :: !(MOS6502.MOS6502 BUS)
     , bPPU :: !R2C02.R2C02
+    , bContext :: !Context
     , bCart :: !Cartridge.Cartridge
     , bRAM :: !Memory.RAM
     , bNTRAM :: !Memory.RAM
@@ -48,6 +58,53 @@ data Helper = Helper
     , helperControllerB :: !Controller.Controller
     }
 
+
+-- Setters / Getters
+
+getDMAPage :: StateT BUS IO Word8
+getDMAPage = dmaPage . bContext <$> get
+
+getDMAByte :: StateT BUS IO Word8
+getDMAByte = dmaByte . bContext <$> get
+
+getDMACycle :: StateT BUS IO Int
+getDMACycle = dmaCycle . bContext <$> get
+
+getDMAHold :: StateT BUS IO Bool
+getDMAHold = dmaHold . bContext <$> get
+
+getClock :: StateT BUS IO Int
+getClock = bClock . bContext <$> get
+
+setDMAPage :: Word8 -> StateT BUS IO ()
+setDMAPage v = modify (\bus -> bus{bContext = (bContext bus){dmaPage = v}})
+
+setDMAByte :: Word8 -> StateT BUS IO ()
+setDMAByte v = modify (\bus -> bus{bContext = (bContext bus){dmaByte = v}})
+
+setDMACycle :: Int -> StateT BUS IO ()
+setDMACycle v = modify (\bus -> bus{bContext = (bContext bus){dmaCycle = v}})
+
+setDMAHold :: Bool -> StateT BUS IO ()
+setDMAHold v = modify (\bus -> bus{bContext = (bContext bus){dmaHold = v}})
+
+setClock :: Int -> StateT BUS IO ()
+setClock v = modify (\bus -> bus{bContext = (bContext bus){bClock = v}})
+
+incDMACycle :: StateT BUS IO ()
+incDMACycle = (( + 1) <$> getDMACycle) >>= setDMACycle
+
+getPPU :: StateT BUS IO R2C02.R2C02
+getPPU = bPPU <$> get
+
+getCPU :: StateT BUS IO (MOS6502.MOS6502 BUS)
+getCPU = bCPU <$> get
+
+setPPU :: R2C02.R2C02 -> StateT BUS IO ()
+setPPU ppu = modify(\bus -> bus{bPPU = ppu})
+
+setCPU :: (MOS6502.MOS6502 BUS) -> StateT BUS IO ()
+setCPU cpu = modify(\bus -> bus{bCPU = cpu})
 
 
 -- CPU
@@ -138,6 +195,11 @@ cpuWritePPU bus addr byte = do
     let bus' = bus{bPPU = ppu'}
     return bus'
 
+cpuTriggerDMA :: BUS -> Word8 -> IO BUS
+cpuTriggerDMA bus byte = do
+    let ctx = (bContext bus){dmaPage = byte, dmaByte = 0, dmaCycle = 0, dmaHold = True}
+    let bus' = bus{bContext = ctx}
+    return bus'
 
 cpuWriteAPU :: BUS -> Word16 -> Word8 -> IO BUS
 cpuWriteAPU bus addr byte = return bus -- TODO: Implement APU Support
@@ -149,7 +211,6 @@ cpuWriteControl bus addr byte = do
     let controller = if addr' == 0 then (bControllerA bus) else (bControllerB bus)
     Controller.writeController controller
     return bus
-
 
 
 cpuWriteCart :: BUS -> Word16 -> Word8 -> IO BUS
@@ -173,6 +234,7 @@ cWriteByte :: BUS -> Word16 -> Word8 -> IO BUS
 cWriteByte bus addr byte
     | (addr >= 0x0000 && addr <= 0x1FFF) = cpuWriteRAM bus addr byte
     | (addr >= 0x2000 && addr <= 0x3FFF) = cpuWritePPU bus addr byte
+    | addr == 0x4014                     = cpuTriggerDMA bus byte
     | (addr >= 0x4000 && addr <= 0x4015) = cpuWriteAPU bus addr byte 
     | (addr >= 0x4016 && addr <= 0x4017) = cpuWriteControl bus addr byte
     | (addr >= 0x4020 && addr <= 0xFFFF) = cpuWriteCart bus addr byte
@@ -344,6 +406,53 @@ ppuInterface bus = R2C02.Interface reader writer painter peeker
 
 -- BUS Interface
 
+cpuWrite :: Word16 -> Word8 -> StateT BUS IO () 
+cpuWrite addr byte = do
+    bus <- get
+    let cpu = bCPU bus
+    let writer = MOS6502.iWriteByte . MOS6502.interface $ cpu
+    bus' <- liftIO $ writer bus addr byte
+    put bus'
+
+
+cpuRead :: Word16 -> StateT BUS IO Word8
+cpuRead addr = do
+    bus <- get
+    let cpu = bCPU bus
+    let reader = MOS6502.iReadByte . MOS6502.interface $ cpu
+    (bus', byte) <- liftIO $ reader bus addr
+    put bus'
+    return byte
+
+tickDMAR :: Word16 -> StateT BUS IO Bool
+tickDMAR offset = do
+    page <- fromIntegral <$> getDMAByte
+    let addr = 0x100 * page + offset
+    byte <- cpuRead addr
+    setDMAByte byte
+    incDMACycle
+    return False
+
+
+tickDMAW :: Word16 -> StateT BUS IO Bool
+tickDMAW offset = do
+    byte <- getDMAByte
+    ppu <- getPPU
+    ppu' <- liftIO $ execStateT (R2C02.dmaPort offset byte) ppu
+    setPPU ppu'
+    incDMACycle
+    let done = offset == 255
+    when done (setDMAHold False)
+    return $ done
+
+tickDMA :: StateT BUS IO Bool
+tickDMA = do
+    dmaCycle <- getDMACycle
+    let offset = fromIntegral $ dmaCycle `div` 2
+    if mod dmaCycle 2 == 0 
+       then tickDMAR offset 
+       else tickDMAW offset
+
 tickCPU :: StateT BUS IO Bool
 tickCPU = do
     bus <- get
@@ -351,6 +460,7 @@ tickCPU = do
     (done, (cpu', bus')) <- liftIO $ runStateT MOS6502.tick' (cpu, bus)
     put bus'{bCPU = cpu'}
     return done
+
 
 triggerNMI :: StateT BUS IO ()
 triggerNMI = do
@@ -370,10 +480,15 @@ tick3PPU = do
     return done
 
 
+chooseTick :: StateT BUS IO Bool
+chooseTick = do
+    hold <- getDMAHold
+    if hold then tickDMA else tickCPU
+
 tick' :: StateT BUS IO (Bool, Bool)
 tick' = do
     ppuDone <- tick3PPU
-    cpuDone <- tickCPU
+    cpuDone <- chooseTick
     return (ppuDone, cpuDone)
 
 
@@ -417,10 +532,13 @@ load fp = do
                         }
 
     let cpu = MOS6502.new cpuInterface
-    let ppu = R2C02.new (ppuInterface helper)
+    ppu <- R2C02.new (ppuInterface helper)
+
+    let ctx = Context 0 0 0 False 0
 
     let bus = BUS { bCPU = cpu
                   , bPPU = ppu
+                  , bContext = ctx
                   , bCart = cart
                   , bRAM = ram
                   , bNTRAM = ntram

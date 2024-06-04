@@ -10,6 +10,7 @@ import Data.Word
 import Numeric (showHex)
 import Text.Printf
 
+
 data Interface a = Interface
     { iReadByte :: a -> Word16 -> IO (a, Word8)
     , iWriteByte :: a -> Word16 -> Word8 -> IO a

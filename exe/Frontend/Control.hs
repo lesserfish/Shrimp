@@ -67,9 +67,10 @@ fetchFeedback = do
 
 modeRight :: StateT RenderContext IO ()
 modeRight = modify (\rctx -> rctx{rcRDisplayMode = prevMode . rcRDisplayMode $ rctx}) where
-    prevMode DM_PATTERN_1 = DM_INSTRUCTION
-    prevMode DM_PATTERN_2 = DM_PATTERN_1
-    prevMode DM_INSTRUCTION = DM_PATTERN_2
+    prevMode DM_PATTERN_1 = DM_PATTERN_2
+    prevMode DM_PATTERN_2 = DM_INSTRUCTION
+    prevMode DM_INSTRUCTION = DM_OAM
+    prevMode DM_OAM = DM_PATTERN_1
     prevMode _ = DM_PATTERN_1
 
 modeUp :: StateT RenderContext IO ()
