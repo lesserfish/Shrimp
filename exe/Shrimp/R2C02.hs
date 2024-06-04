@@ -15,6 +15,7 @@ module Shrimp.R2C02 (
     cpuRead
 ) where
 
+import qualified Shrimp.Display as Display
 import qualified Shrimp.Memory as Memory
 import Control.Monad (when)
 import Control.Monad.State
@@ -23,6 +24,7 @@ import Data.Word
 import Text.Printf
 import Shrimp.Utils
 import SDL.Raw (setWindowGammaRamp)
+import qualified Shrimp.MOS6502 as Display
 
 
 -- Registers
@@ -58,6 +60,12 @@ data LOOPYFLAG
     | L_NAMETABLE_X
     | L_NAMETABLE_Y
     | L_FINE_Y
+
+data SPRITEFLAG
+    = SPRITE_PALETTE
+    | SPRITE_PRIORITY
+    | SPRITE_HORIZONTAL_FLIP
+    | SPRITE_VERTICAL_FLIP
 
 data Context = Context
     { ppuNMI :: Bool
@@ -97,6 +105,7 @@ data R2C02 = R2C02
     , context :: Context
     , interface :: Interface
     , oamData :: Memory.RAM
+    , lineBuffer :: Display.LineBuffer
     }
 
 data Sprite = Sprite
@@ -127,7 +136,8 @@ new interface = do
     let reg = Registers 0 0 0 0 0 0 0 False
     let ctx = Context False False 0 0 0 0 0 0 0 0 0
     oam <- Memory.new 0xFF 0xFF
-    return $ R2C02 reg ctx interface oam
+    lb <- Display.newLineBuffer
+    return $ R2C02 reg ctx interface oam lb
 
 reset :: StateT R2C02 IO ()
 reset = do
@@ -387,7 +397,13 @@ setVRAMBit L_NAMETABLE_X v = mapVRAM (\vram -> if v then setBit vram 10 else cle
 setVRAMBit L_NAMETABLE_Y v = mapVRAM (\vram -> if v then setBit vram 11 else clearBit vram 11)
 setVRAMBit _ _ = error "Incorrect Flag"
 
+getSpriteBit :: SPRITEFLAG -> Sprite -> Bool
+getSpriteBit SPRITE_PRIORITY sprite        = b5' . sprAttr $ sprite
+getSpriteBit SPRITE_HORIZONTAL_FLIP sprite = b6' . sprAttr $ sprite
+getSpriteBit SPRITE_VERTICAL_FLIP sprite   = b7' . sprAttr $ sprite
 
+getSpritePalette :: Sprite -> Word8
+getSpritePalette sprite = 4 + ((shiftTake1 0 2) . sprAttr $ sprite)
 
 getScanline :: StateT R2C02 IO Int
 getScanline = ppuScanline . context <$> get
@@ -445,6 +461,9 @@ getOAMAddress = oamAddress . context <$> get
 
 getOAM :: StateT R2C02 IO Memory.RAM
 getOAM = oamData <$> get
+
+getLineBuffer :: StateT R2C02 IO Display.LineBuffer
+getLineBuffer = lineBuffer <$> get
 
 setScanline :: Int -> StateT R2C02 IO ()
 setScanline v = modify(\ppu -> ppu{context = (context ppu){ppuScanline = v}})
@@ -688,6 +707,52 @@ dmaPort addr byte = do
 
 -- Background Tick
 
+resetLineBuffer :: StateT R2C02 IO ()
+resetLineBuffer = do
+    lineBuffer <- getLineBuffer
+    liftIO $ Display.resetLB lineBuffer
+
+spriteIsVisible :: Sprite -> StateT R2C02 IO Bool
+spriteIsVisible sprite = do
+    screenY <- ( + 1) <$> getScanline -- We are prerendering the sprites, so it's the next scanline that counts
+    longSprites <- getCTRLFlag C_SPRITE_SIZE
+    let offset = if longSprites then 8 else 16
+    let spriteY = fromIntegral $ sprY sprite
+    return $ (screenY <= spriteY && spriteY < screenY + offset)
+
+
+fetchVisible8 :: Int -> Int -> StateT R2C02 IO [Sprite]
+fetchVisible8 _ 8 = return []  -- Stop after 8 visible sprites
+fetchVisible8 64 _ = return [] -- Stop after 64 sprites
+fetchVisible8 offset count = do 
+    sprite <- getSprite (fromIntegral offset)
+    visible <- spriteIsVisible sprite
+
+    if visible
+        then do
+            rest <- fetchVisible8 (offset + 1) (count + 1)
+            return $ [sprite] ++ rest
+        else do
+            rest <- fetchVisible8 (offset + 1) count
+            return rest
+
+
+fetchVisibleSprites :: StateT R2C02 IO [Sprite]
+fetchVisibleSprites = fetchVisible8 0 0
+
+getSprPixelByte :: Sprite -> StateT R2C02 IO ()
+getSprPixelByte sprite = return ()
+
+preRenderSprite :: Sprite -> StateT R2C02 IO ()
+preRenderSprite sprite = do
+    return ()
+
+preRenderSprites :: StateT R2C02 IO ()
+preRenderSprites = do
+    resetLineBuffer
+    sprites <- fetchVisibleSprites
+    mapM_ preRenderSprite sprites
+    return ()
 
 incCoarseX :: StateT R2C02 IO ()
 incCoarseX = do
@@ -870,6 +935,7 @@ handleVisibleScanline = do
     when (cycle >= 321  && cycle < 338) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
     when (cycle == 256) incFineY
     when (cycle == 257) (loadBackgroundShifters >> transferX)
+    when (cycle == 329) preRenderSprites
     when (cycle == 340) fetchNextTileID
     when (scanline == (-1) && cycle == 304) transferY -- TODO: THIS IS NOT ACCURATE. THIS HAPPENS FOR EVERY CYCLE BETWEEN 280 AND 304. BUT I THINK IT SHOULD BE FIEN
 
@@ -905,22 +971,40 @@ handleComposition = do
         )
 
 
-fetchColor :: StateT R2C02 IO Word8
-fetchColor = do
-    pixel <- fromIntegral <$> getBGPixel
-    palette <- fromIntegral <$> getBGPalette
+fetchColor :: Word8 -> Word8 -> StateT R2C02 IO Word8
+fetchColor pixel' palette' = do
+    let pixel = fromIntegral pixel'
+    let palette = fromIntegral palette'
     let offset = 0x3F00
     let addr = offset + 4 * palette + pixel :: Word16
     byte <- readByte addr
     return byte
 
 
+chooseBGFG :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> (Word8, Word8)
+chooseBGFG bg _ Display.UNSET = bg        -- If there is no foreground pixel, draw the background
+chooseBGFG (0, _) (0, _) _ = (0, 0)       
+chooseBGFG (0, _) fg _ = fg
+chooseBGFG bg (0, _) _ = bg
+chooseBGFG bg fg Display.VISIBLE = fg
+chooseBGFG bg fg Display.INVISIBLE = bg
+
+getPP :: StateT R2C02 IO (Word8, Word8)
+getPP = do
+    x <- fromIntegral . (  + (-1))  <$> getCycle  -- x = cycle - 1
+    lb <- getLineBuffer
+    bgPixel <- getBGPixel
+    bgPalette <- getBGPalette
+    (sprPixel, sprPalette, sprPriority) <- liftIO $ Display.getSPixel lb x
+    return $ chooseBGFG (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
+
 renderPixel :: StateT R2C02 IO ()
 renderPixel = do
-    cycle <- getCycle
-    scanline <- getScanline
-    color <- fetchColor
-    setPixel (fromIntegral cycle - 1, fromIntegral scanline) color
+    x <- fromIntegral . (  + (-1))  <$> getCycle  -- x = cycle - 1
+    y <- fromIntegral <$> getScanline             -- y = scanline
+    (pixel, palette) <- getPP
+    color <-fetchColor pixel palette
+    setPixel (x, y) color
 
 
 renderScanline :: StateT R2C02 IO ()
