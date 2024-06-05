@@ -755,11 +755,11 @@ getSpriteAddress sprite = do
             let addr = (tileID .&. 0x01) * 0x1000 + (tileID .>>. 1) * 0x20
             return addr
         else do
-            ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
-            let base = if ptrn then 0x1000 else 0x0000
+            ptrn <- getCTRLFlag C_PATTERN_SPRITE
+            let base = if ptrn then 0x1000 else 0x0000 :: Word16
             let tileID = (fromIntegral . sprTile $ sprite)
             let addr = base + tileID * 16
-            return addr
+            return $ addr
             
 mergeSpritePixel :: (Word8, Word8) -> [Word8]
 mergeSpritePixel (lsb, msb) = fmap f [0..7] where
@@ -769,10 +769,10 @@ mergeSpritePixel (lsb, msb) = fmap f [0..7] where
 -- Fetches the pixel data of (all pixels) of a sprite. 
 getSprPixelByte :: Sprite -> StateT R2C02 IO [Word8]
 getSprPixelByte sprite = do
-    screenY <- fromIntegral . ( + 1) <$> getScanline
+    screenY <- fromIntegral <$> getScanline
     let spriteY = fromIntegral $ sprY sprite
     let flipVertical = getSpriteBit SPRITE_VERTICAL_FLIP sprite
-    let offset = if flipVertical then 7 - (spriteY - screenY) else (spriteY - screenY)
+    let offset = if flipVertical then 7 - (screenY - spriteY) else (screenY - spriteY)
     base <- getSpriteAddress sprite
     let addr = base + offset
     lsb <- readByte $ addr + 0x00
@@ -783,7 +783,7 @@ getSprPixelByte sprite = do
 -- Writes sprite pixel/palette data to the line buffer
 preRenderSprite :: Sprite -> StateT R2C02 IO ()
 preRenderSprite sprite = do
-    let flipHorizontal = getSpriteBit SPRITE_HORIZONTAL_FLIP sprite
+    let flipHorizontal = not $ getSpriteBit SPRITE_HORIZONTAL_FLIP sprite
     spriteBytes <- if flipHorizontal then (reverse <$> getSprPixelByte sprite) else (getSprPixelByte sprite)
     let palette = getSpritePalette sprite
     let spriteX = fromIntegral $ sprX sprite :: Int
