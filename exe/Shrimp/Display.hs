@@ -77,23 +77,32 @@ newLineBuffer = do
     prb <- Memory.new 256 0x01
     return $ LineBuffer pib pab prb
 
-setSPixel :: LineBuffer -> Word16 -> (Word8, Word8, Priority) -> IO ()
-setSPixel lb x (pixel, palette, priority) = do
-    Memory.writeByte (lPixelBuffer lb) x pixel
-    Memory.writeByte (lPaletteBuffer lb) x palette
-    Memory.writeByte (lPriorityBuffer lb) x (p2w priority)
+setSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+setSPixel lb x' (pixel, palette, priority)
+    | x' >= 256 = return ()
+    | otherwise = do
+        let x = fromIntegral x'
+        Memory.writeByte (lPixelBuffer lb) x pixel
+        Memory.writeByte (lPaletteBuffer lb) x palette
+        Memory.writeByte (lPriorityBuffer lb) x (p2w priority)
 
-trySetSPixel :: LineBuffer -> Word16 -> (Word8, Word8, Priority) -> IO ()
-trySetSPixel lb x info = do
-    currentPriority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
-    when (currentPriority /= VISIBLE) (setSPixel lb x info)
+trySetSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+trySetSPixel lb x' info
+    | x' >= 256 = return ()
+    | otherwise = do
+        let x = fromIntegral x'
+        currentPriority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
+        when (currentPriority /= VISIBLE) (setSPixel lb x' info)
 
-getSPixel :: LineBuffer -> Word16 -> IO (Word8, Word8, Priority)
-getSPixel lb x = do
-    pixel <- Memory.readByte (lPixelBuffer lb) x
-    palette <- Memory.readByte (lPaletteBuffer lb) x
-    priority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
-    return $ (pixel, palette, priority)
+getSPixel :: LineBuffer -> Int -> IO (Word8, Word8, Priority)
+getSPixel lb x'
+    | x' >= 256 = return (0, 0, UNSET)
+    | otherwise = do
+        let x = fromIntegral x'
+        pixel <- Memory.readByte (lPixelBuffer lb) x
+        palette <- Memory.readByte (lPaletteBuffer lb) x
+        priority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
+        return $ (pixel, palette, priority)
 
 resetLB :: LineBuffer -> IO ()
 resetLB lb = do

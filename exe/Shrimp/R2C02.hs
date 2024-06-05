@@ -25,6 +25,7 @@ import Text.Printf
 import Shrimp.Utils
 import SDL.Raw (setWindowGammaRamp)
 import qualified Shrimp.MOS6502 as Display
+import GHC.Read (parens)
 
 
 -- Registers
@@ -712,15 +713,18 @@ resetLineBuffer = do
     lineBuffer <- getLineBuffer
     liftIO $ Display.resetLB lineBuffer
 
+-- Checks whether or not a sprite is going to be visible next scanline
 spriteIsVisible :: Sprite -> StateT R2C02 IO Bool
 spriteIsVisible sprite = do
-    screenY <- ( + 1) <$> getScanline -- We are prerendering the sprites, so it's the next scanline that counts
+    screenY <- getScanline -- We are prerendering the sprites, so it's the next scanline that counts
     longSprites <- getCTRLFlag C_SPRITE_SIZE
-    let offset = if longSprites then 8 else 16
+    let spriteHeight = if longSprites then 16 else 8
     let spriteY = fromIntegral $ sprY sprite
-    return $ (screenY <= spriteY && spriteY < screenY + offset)
+    let difference = screenY - spriteY :: Int
+    return $ (difference >= 0 && difference < spriteHeight)
 
 
+-- Fetches a maximum of 8 sprites that are going to be visible next scanline
 fetchVisible8 :: Int -> Int -> StateT R2C02 IO [Sprite]
 fetchVisible8 _ 8 = return []  -- Stop after 8 visible sprites
 fetchVisible8 64 _ = return [] -- Stop after 64 sprites
@@ -736,23 +740,70 @@ fetchVisible8 offset count = do
             rest <- fetchVisible8 (offset + 1) count
             return rest
 
-
+-- Fetches a maximum of 8 sprites that are going to be visible next scanline
 fetchVisibleSprites :: StateT R2C02 IO [Sprite]
 fetchVisibleSprites = fetchVisible8 0 0
 
-getSprPixelByte :: Sprite -> StateT R2C02 IO ()
-getSprPixelByte sprite = return ()
+-- Gets the base pattern table address of the current sprite
+-- Pixel row information is then located in an offset of this value. TODO NOW
+getSpriteAddress :: Sprite -> StateT R2C02 IO Word16
+getSpriteAddress sprite = do
+    longSprites <- getCTRLFlag C_SPRITE_SIZE 
+    if longSprites
+        then do
+            let tileID = (fromIntegral . sprTile $ sprite)
+            let addr = (tileID .&. 0x01) * 0x1000 + (tileID .>>. 1) * 0x20
+            return addr
+        else do
+            ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
+            let base = if ptrn then 0x1000 else 0x0000
+            let tileID = (fromIntegral . sprTile $ sprite)
+            let addr = base + tileID * 16
+            return addr
+            
+mergeSpritePixel :: (Word8, Word8) -> [Word8]
+mergeSpritePixel (lsb, msb) = fmap f [0..7] where
+    f id = (if testBit lsb id then 0x01 else 0x00) 
+         + (if testBit msb id then 0x02 else 0x00)
 
+-- Fetches the pixel data of (all pixels) of a sprite. 
+getSprPixelByte :: Sprite -> StateT R2C02 IO [Word8]
+getSprPixelByte sprite = do
+    screenY <- fromIntegral . ( + 1) <$> getScanline
+    let spriteY = fromIntegral $ sprY sprite
+    let flipVertical = getSpriteBit SPRITE_VERTICAL_FLIP sprite
+    let offset = if flipVertical then 7 - (spriteY - screenY) else (spriteY - screenY)
+    base <- getSpriteAddress sprite
+    let addr = base + offset
+    lsb <- readByte $ addr + 0x00
+    msb <- readByte $ addr + 0x08
+    let pixels = mergeSpritePixel (lsb, msb)
+    return pixels
+
+-- Writes sprite pixel/palette data to the line buffer
 preRenderSprite :: Sprite -> StateT R2C02 IO ()
 preRenderSprite sprite = do
-    return ()
+    let flipHorizontal = getSpriteBit SPRITE_HORIZONTAL_FLIP sprite
+    spriteBytes <- if flipHorizontal then (reverse <$> getSprPixelByte sprite) else (getSprPixelByte sprite)
+    let palette = getSpritePalette sprite
+    let spriteX = fromIntegral $ sprX sprite :: Int
+    lb <- getLineBuffer
+    let priority = if (getSpriteBit SPRITE_PRIORITY sprite) then Display.INVISIBLE else Display.VISIBLE
+    mapM_ (\offset -> do
+        let pixel = spriteBytes !! offset
+        let x = spriteX + offset
+        liftIO $ Display.trySetSPixel lb x (pixel, palette, priority)
+        ) [0..7]
 
+-- Pre-Renders the sprites that are going to be visible next scanline.
+-- This does the following:
+-- 1. Iterate over all the sprites, fetching the first 8 that are going to be visible next scanline
+-- 2. Iterates over all of the visible sprites, rendering them into a line buffer
 preRenderSprites :: StateT R2C02 IO ()
 preRenderSprites = do
     resetLineBuffer
     sprites <- fetchVisibleSprites
     mapM_ preRenderSprite sprites
-    return ()
 
 incCoarseX :: StateT R2C02 IO ()
 incCoarseX = do
@@ -799,12 +850,14 @@ incFineY = do
                 incCoarseY)
 
 
+-- Gets the nametable base address
 nametableBase :: Bool -> Bool -> Word16
 nametableBase nx ny = x + y where
     x = if nx then 0x400 else 0
     y = if ny then 0x800 else 0
 
 
+-- Increases the current scanline, looping around if needed.
 incScanline :: StateT R2C02 IO ()
 incScanline = do
     scanline <- getScanline
@@ -816,6 +869,7 @@ incScanline = do
         setScanline (scanline + 1)
 
 
+-- Increases the current cycle, looping around if needed
 incCycle :: StateT R2C02 IO ()
 incCycle = do
     cycle <- getCycle
@@ -827,11 +881,13 @@ incCycle = do
         setCycle (cycle + 1)
 
 
+-- Shifts the background shifters one bit to the right
 updateShifters :: StateT R2C02 IO ()
 updateShifters = do
     (( .<<. 1) <$> getShifterData ) >>= setShifterData
 
 
+-- Fetches the nametable ID of the next tile
 fetchNextTileID :: StateT R2C02 IO ()
 fetchNextTileID = do
     vram <- getVRAM
@@ -839,7 +895,8 @@ fetchNextTileID = do
     byte <- readByte addr
     setNextTileID (fromIntegral byte)
 
-
+-- Each attribute byte (in the attribute section of the nametable) contains information on 4 blocks of tiles (a 16x16 pixel square)
+-- This takes the current til, the attribute byte, and gets the correct palette info for that tile.
 getAttribInfo :: Word16 -> Word16 -> Word8 -> Word16
 getAttribInfo tx ty byte = fromIntegral output where
     shiftX = if b1 tx then 0x2 else 0x0
@@ -848,6 +905,7 @@ getAttribInfo tx ty byte = fromIntegral output where
     output = (byte .>>. shift) .&. 0x03
 
 
+-- Fetches the palette data for the next tile row. This information is located on the last two rows of the current nametable
 fetchNextTileAttrib :: StateT R2C02 IO ()
 fetchNextTileAttrib = do
     nx <- getVRAMBit L_NAMETABLE_X
@@ -861,6 +919,7 @@ fetchNextTileAttrib = do
     setNextTileAttrib $ getAttribInfo tx ty byte
 
 
+-- Fetches the most significant bits of the pixel data for the next tile row
 fetchNextTileLsb :: StateT R2C02 IO ()
 fetchNextTileLsb = do
     ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
@@ -872,6 +931,7 @@ fetchNextTileLsb = do
     setNextTileLsb byte
 
 
+-- Fetches the least significant bits of the pixel data for the next tile row
 fetchNextTileMsb :: StateT R2C02 IO ()
 fetchNextTileMsb = do
     ptrn <- getCTRLFlag C_PATTERN_BACKGROUND
@@ -883,15 +943,17 @@ fetchNextTileMsb = do
     setNextTileMsb byte
 
 
-fetchNextInfo :: Int -> StateT R2C02 IO ()
-fetchNextInfo 0 = loadBackgroundShifters >> fetchNextTileID
-fetchNextInfo 2 = fetchNextTileAttrib
-fetchNextInfo 4 = fetchNextTileLsb
-fetchNextInfo 6 = fetchNextTileMsb
-fetchNextInfo 7 = incCoarseX
-fetchNextInfo _ = return ()
+-- Background tile fetch cycle
+fetchNextTileInfo :: Int -> StateT R2C02 IO ()
+fetchNextTileInfo 0 = loadBackgroundShifters >> fetchNextTileID
+fetchNextTileInfo 2 = fetchNextTileAttrib
+fetchNextTileInfo 4 = fetchNextTileLsb
+fetchNextTileInfo 6 = fetchNextTileMsb
+fetchNextTileInfo 7 = incCoarseX
+fetchNextTileInfo _ = return ()
 
 
+-- Inserts the next tile information into the background shifter
 loadBackgroundShifters :: StateT R2C02 IO ()
 loadBackgroundShifters = do
     nTile <- getNextTile 
@@ -905,6 +967,7 @@ loadBackgroundShifters = do
     setShifterData shifter'
 
 
+-- Transfers the X information from TRAM to VRAM
 transferX :: StateT R2C02 IO ()
 transferX = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
@@ -915,6 +978,7 @@ transferX = do
         )
 
 
+-- Transfers the Y information from the TRAM to VRAM
 transferY :: StateT R2C02 IO ()
 transferY = do
     rbgFlag <- getMASKFlag M_RENDER_BACKGROUND
@@ -926,20 +990,22 @@ transferY = do
         )
 
 
+-- Performs the visible scanline loop
 handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     scanline <- getScanline
     cycle <- getCycle
     when (scanline == (-1) && cycle == 1)  (setSTATUSFlag S_VERTICAL_BLANK False)
-    when (cycle >= 2    && cycle < 258) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
-    when (cycle >= 321  && cycle < 338) (updateShifters >> (fetchNextInfo (mod (cycle - 1) 8)))
+    when (cycle >= 2    && cycle < 258) (updateShifters >> (fetchNextTileInfo (mod (cycle - 1) 8)))
+    when (cycle >= 321  && cycle < 338) (updateShifters >> (fetchNextTileInfo (mod (cycle - 1) 8)))
     when (cycle == 256) incFineY
     when (cycle == 257) (loadBackgroundShifters >> transferX)
-    when (cycle == 329) preRenderSprites
+    when (cycle == 0) preRenderSprites
     when (cycle == 340) fetchNextTileID
     when (scanline == (-1) && cycle == 304) transferY -- TODO: THIS IS NOT ACCURATE. THIS HAPPENS FOR EVERY CYCLE BETWEEN 280 AND 304. BUT I THINK IT SHOULD BE FIEN
 
 
+-- Sets the appropriate flags when the render reaches the end of frame
 handleEndOfFrame :: StateT R2C02 IO ()
 handleEndOfFrame = do
     scanline <- getScanline
@@ -951,6 +1017,7 @@ handleEndOfFrame = do
         )
 
 
+-- Calculates the pixel value and the palette value from the least significant bits and the fine X value
 handleComposition :: StateT R2C02 IO ()
 handleComposition = do
     renderBackground <- getMASKFlag M_RENDER_BACKGROUND
@@ -971,8 +1038,11 @@ handleComposition = do
         )
 
 
-fetchColor :: Word8 -> Word8 -> StateT R2C02 IO Word8
-fetchColor pixel' palette' = do
+-- Given a pixel and a palette, selects the appropriate color.
+-- Pixel is a value from 0 to 3 specifying which color to use within the palette
+-- Palette is a value from 0 to 7 specifyinig the memory address of the current palette.
+toColor :: Word8 -> Word8 -> StateT R2C02 IO Word8
+toColor pixel' palette' = do
     let pixel = fromIntegral pixel'
     let palette = fromIntegral palette'
     let offset = 0x3F00
@@ -981,46 +1051,70 @@ fetchColor pixel' palette' = do
     return byte
 
 
-chooseBGFG :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> (Word8, Word8)
-chooseBGFG bg _ Display.UNSET = bg        -- If there is no foreground pixel, draw the background
-chooseBGFG (0, _) (0, _) _ = (0, 0)       
-chooseBGFG (0, _) fg _ = fg
-chooseBGFG bg (0, _) _ = bg
-chooseBGFG bg fg Display.VISIBLE = fg
-chooseBGFG bg fg Display.INVISIBLE = bg
+-- Chooses whether or not to render the foreground of the background based on priority rules
+choosePixelPalette :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> (Word8, Word8)
+choosePixelPalette bg _ Display.UNSET = bg        -- If there is no foreground pixel, draw the background
+choosePixelPalette (0, _) (0, _) _ = (0, 0)       
+choosePixelPalette (0, _) fg _ = fg
+choosePixelPalette bg (0, _) _ = bg
+choosePixelPalette bg fg Display.VISIBLE = fg
+choosePixelPalette bg fg Display.INVISIBLE = bg
 
-getPP :: StateT R2C02 IO (Word8, Word8)
-getPP = do
-    x <- fromIntegral . (  + (-1))  <$> getCycle  -- x = cycle - 1
-    lb <- getLineBuffer
-    bgPixel <- getBGPixel
-    bgPalette <- getBGPalette
-    (sprPixel, sprPalette, sprPriority) <- liftIO $ Display.getSPixel lb x
-    return $ chooseBGFG (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
 
+getSprPixelPalette :: StateT R2C02 IO (Word8, Word8, Display.Priority)
+getSprPixelPalette = do
+    renderSprite <- getMASKFlag M_RENDER_SPRITES
+    if renderSprite
+        then do
+            x <- fromIntegral . (  + (-1))  <$> getCycle  -- x = cycle - 1
+            lb <- getLineBuffer
+            liftIO $ Display.getSPixel lb x
+        else return $ (0, 0, Display.UNSET)
+            
+getBGPixelPalette :: StateT R2C02 IO (Word8, Word8)
+getBGPixelPalette = do
+    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
+    if renderBackground
+        then do
+            bgPixel <- getBGPixel
+            bgPalette <- getBGPalette
+            return (bgPixel, bgPalette)
+        else return $ (0, 0)
+
+
+-- Gets the pixel value and the palette for the current cycle, scanline
+getPixelPalette :: StateT R2C02 IO (Word8, Word8)
+getPixelPalette = do
+    (bgPixel, bgPalette) <- getBGPixelPalette
+    (sprPixel, sprPalette, sprPriority) <- getSprPixelPalette
+    return $ choosePixelPalette (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
+
+-- Renders the pixel given by (cycle - 1, scanline)
 renderPixel :: StateT R2C02 IO ()
 renderPixel = do
     x <- fromIntegral . (  + (-1))  <$> getCycle  -- x = cycle - 1
     y <- fromIntegral <$> getScanline             -- y = scanline
-    (pixel, palette) <- getPP
-    color <-fetchColor pixel palette
+    (pixel, palette) <- getPixelPalette
+    color <- toColor pixel palette
     setPixel (x, y) color
 
 
+-- Renders all of the pixels in the current scanline
 renderScanline :: StateT R2C02 IO ()
 renderScanline = do
     cycle <- getCycle
     when (cycle >= 0 && cycle < 256) renderPixel
 
 
+-- When scanline == 0, cycle 0 is skipped
 skipFirstCycle :: StateT R2C02 IO ()
 skipFirstCycle = do
     cycle <- getCycle
     when (cycle == 0) (setCycle 1)
 
 
-tickBackground :: StateT R2C02 IO ()
-tickBackground = do
+tick :: StateT R2C02 IO ()
+tick = do
     scanline <- getScanline
     when (scanline == 0) skipFirstCycle
     when (scanline >= (-1) && scanline < 240) handleVisibleScanline
@@ -1028,11 +1122,6 @@ tickBackground = do
     when (scanline >= (-1) && scanline < 240) handleComposition
     when (scanline >= 0 && scanline < 240) renderScanline
     incCycle
-
-
-tick :: StateT R2C02 IO ()
-tick = do
-    tickBackground
 
 tick' :: StateT R2C02 IO (Bool, Bool)
 tick' = do
