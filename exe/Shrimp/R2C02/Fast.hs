@@ -191,8 +191,6 @@ preRenderTile tile = do
 
 preRenderBackground :: StateT R2C02 IO ()
 preRenderBackground = do
-    createCheckpoint
-    resetBuffers
     let tiles = [0..31] --
     mapM_ (\tile -> do
         preRenderTile tile
@@ -210,18 +208,6 @@ toColor (pixel, palette) = do
     let addr = offset + 4 * toW16 palette + toW16 pixel
     byte <- readByte addr
     return byte
-
-render :: StateT R2C02 IO ()
-render = do
-    cycle <- getCycle
-    scanline <- getScanline
-    fineX <- getFineX
-    let x = cycle + fineX
-    bgBuffer <- getBackgroundBuffer
-    (pixel, palette, _) <- liftIO $ Display.getSPixel bgBuffer x
-    color <- toColor (pixel, palette)
-    setPixel (toW16 cycle, toW16 scanline) color
-
 
 readFromBGBuffer :: Int -> StateT R2C02 IO (Word8, Word8)
 readFromBGBuffer cycle = do
@@ -244,8 +230,8 @@ decidePriority bg (0, _) _ = bg
 decidePriority bg fg Display.VISIBLE = fg
 decidePriority bg fg Display.INVISIBLE = bg
 
-preRender :: StateT R2C02 IO ()
-preRender = do
+render :: StateT R2C02 IO ()
+render = do
     scanline <- getScanline
     mapM_ (\cycle -> do
         (bgPixel, bgPalette) <- readFromBGBuffer cycle
@@ -255,13 +241,20 @@ preRender = do
         setPixel (toW16 cycle, toW16 scanline) color
         ) [0..255]
 
+preRender :: StateT R2C02 IO ()
+preRender = do
+    createCheckpoint
+    resetBuffers
+    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
+    renderSprite <- getMASKFlag M_RENDER_SPRITES
+    when renderBackground preRenderBackground
+    when renderSprite preRenderSprites
+    render
+
 handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     cycle <- getCycle
-    when (cycle == 0) preRenderBackground
-    when (cycle == 0) preRenderSprites
-    when (cycle == 0) preRender               -- Write pixels to video buffer immediately
-    --when (cycle >= 0 && cycle < 256) render -- Assemble pixel every pixel
+    when (cycle == 0) preRender
     when (cycle == 256) incFineY
     when (cycle == 257) transferX
 
