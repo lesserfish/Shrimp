@@ -87,8 +87,8 @@ writeTileToBuffer tile (tileData, tileAttribute) = do
         liftIO $ Display.setSPixel bgBuffer addr (pixel, palette, priority)
         ) [0..7]
 
-preRenderBGTile :: Int -> StateT R2C02 IO ()
-preRenderBGTile tile = do
+preRenderTile :: Int -> StateT R2C02 IO ()
+preRenderTile tile = do
     tileID <- fetchTileID 
     tileAttribute <- fetchTileAttribute
     tileData <- reverse <$> fetchTileData (toW16 tileID)
@@ -100,9 +100,9 @@ preRenderBackground = do
     resetBuffers
     let tiles = [0..31] --
     mapM_ (\tile -> do
-        preRenderBGTile tile
+        preRenderTile tile
         incCoarseX ) tiles
-    preRenderBGTile 32 -- Render an additional tile, to accomodate fine x scrolling
+    preRenderTile 32 -- Render an additional tile, to accomodate fine x scrolling
 
 toColor :: (Word8, Word8) -> StateT R2C02 IO Word8
 toColor (pixel, palette) = do
