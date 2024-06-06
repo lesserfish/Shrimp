@@ -1,6 +1,12 @@
 # Build Directory
 build/
 Build/
+Tools/Roms/
+Tools/palgen-persune/
+dist-newstyle/*
+*.prof
+*.html
+Todo
 
 
 # CMake files
