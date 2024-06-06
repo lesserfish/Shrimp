@@ -56,7 +56,7 @@ spriteIsVisible sprite = do
 
 
 fetchVisibleSprites' :: Int -> Int -> StateT R2C02 IO [Sprite]
-fetchVisibleSprites' _ 8 = return []  -- Stop after 8 visible sprites
+fetchVisibleSprites' _ 9 = return []  -- Stop after 8 visible sprites
 fetchVisibleSprites' 64 _ = return [] -- Stop after 64 sprites
 fetchVisibleSprites' offset count = do 
     sprite <- getSprite . toW16 $ offset
@@ -71,7 +71,10 @@ fetchVisibleSprites' offset count = do
 
 -- Fetches a maximum of 8 sprites that are going to be visible next scanline
 fetchVisibleSprites :: StateT R2C02 IO [Sprite]
-fetchVisibleSprites = fetchVisibleSprites' 0 0
+fetchVisibleSprites = do
+    sprites <- fetchVisibleSprites' 0 0
+    when (length sprites == 9) (setSTATUSFlag S_SPRITE_OVERFLOW True)
+    return $ take 8 sprites
 
 fetchSpriteAddress :: Sprite -> StateT R2C02 IO Word16
 fetchSpriteAddress sprite = do
@@ -99,11 +102,11 @@ fetchSpriteData sprite = do
     msb <- readByte (base + offset + 0x08)
     return $ mergeBytes (lsb, msb)
 
-fetchSpriteAttribute :: Sprite -> StateT R2C02 IO Word8
-fetchSpriteAttribute sprite = return $ 4 + ((shiftTake1 0 2) . sprAttr $ sprite)
+fetchSpriteAttribute :: Sprite -> Word8
+fetchSpriteAttribute sprite =  4 + ((shiftTake1 0 2) . sprAttr $ sprite)
 
-fetchSpritePriority :: Sprite -> StateT R2C02 IO Display.Priority
-fetchSpritePriority sprite = return $ if (getSpriteBit SPRITE_PRIORITY sprite) then Display.INVISIBLE else Display.VISIBLE
+fetchSpritePriority :: Sprite -> Display.Priority
+fetchSpritePriority sprite = if (getSpriteBit SPRITE_PRIORITY sprite) then Display.INVISIBLE else Display.VISIBLE
 
 writeToSpriteBuffer :: Int -> ([Word8], Word8, Display.Priority) -> StateT R2C02 IO ()
 writeToSpriteBuffer x (spriteData, spriteAttribute, spritePriority) = do
@@ -122,8 +125,8 @@ preRenderSprite :: Sprite -> StateT R2C02 IO ()
 preRenderSprite sprite = do
     let flipHorizontal = getSpriteBit SPRITE_HORIZONTAL_FLIP sprite
     spriteData <- if flipHorizontal then (reverse <$> fetchSpriteData sprite) else (fetchSpriteData sprite)
-    spriteAttribute <- fetchSpriteAttribute sprite
-    spritePriority <- fetchSpritePriority sprite
+    let spriteAttribute = fetchSpriteAttribute sprite
+    let spritePriority  = fetchSpritePriority sprite
 
     let x = toInt . sprX $ sprite
     writeToSpriteBuffer x (spriteData, spriteAttribute, spritePriority)
@@ -222,13 +225,13 @@ readFromSpriteBuffer cycle = do
     spriteBuffer <- getSpriteBuffer
     liftIO $ Display.getSPixel spriteBuffer cycle
 
-decidePriority :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> (Word8, Word8)
-decidePriority bg _ Display.UNSET = bg        -- If there is no foreground pixel, draw the background
-decidePriority (0, _) (0, _) _ = (0, 0)       
-decidePriority (0, _) fg _ = fg
-decidePriority bg (0, _) _ = bg
-decidePriority bg fg Display.VISIBLE = fg
-decidePriority bg fg Display.INVISIBLE = bg
+decidePriority :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> ((Word8, Word8), Bool)
+decidePriority bg _ Display.UNSET = (bg, False)
+decidePriority (0, _) (0, _) _ = ((0, 0), False)
+decidePriority (0, _) fg _ = (fg, True)
+decidePriority bg (0, _) _ = (bg, False)
+decidePriority bg fg Display.VISIBLE = (fg, True)
+decidePriority bg fg Display.INVISIBLE = (bg, True)
 
 render :: StateT R2C02 IO ()
 render = do
@@ -236,10 +239,32 @@ render = do
     mapM_ (\cycle -> do
         (bgPixel, bgPalette) <- readFromBGBuffer cycle
         (sprPixel, sprPalette, sprPriority) <- readFromSpriteBuffer cycle
-        let (pixel, palette) = decidePriority (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
+        let ((pixel, palette), _) = decidePriority (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
         color <- toColor (pixel, palette)
         setPixel (toW16 cycle, toW16 scanline) color
         ) [0..255]
+
+checkSprite0Hit' :: Int -> (Word8, Word8, Display.Priority) -> StateT R2C02 IO Bool
+checkSprite0Hit' x (spritePixel, spritePalette, spritePriority) = do
+    (bgPixel, bgPalette) <- readFromBGBuffer x
+    let (_, hit) = decidePriority (bgPixel, bgPalette) (spritePixel, spritePalette) spritePriority
+    return hit
+
+checkSprite0Hit :: StateT R2C02 IO ()
+checkSprite0Hit = do
+    sprite0 <- getSprite 0
+    isVisible <- spriteIsVisible sprite0
+    when (isVisible) (do
+        sprite0Data <- fetchSpriteData sprite0
+        let sprite0Attribute = fetchSpriteAttribute sprite0
+        let sprite0Priority = fetchSpritePriority sprite0
+        let x = toInt . sprX $ sprite0
+
+        hits <- mapM (\id -> checkSprite0Hit' (x + id) (sprite0Data !! id, sprite0Attribute, sprite0Priority)) [0..7]
+        let hit = or hits
+        when (isVisible && hit) (setSTATUSFlag S_SPRITE_ZERO_HIT True)
+        )
+
 
 preRender :: StateT R2C02 IO ()
 preRender = do
@@ -247,8 +272,10 @@ preRender = do
     resetBuffers
     renderBackground <- getMASKFlag M_RENDER_BACKGROUND
     renderSprite <- getMASKFlag M_RENDER_SPRITES
+    sprite0HIt <- getSTATUSFlag S_SPRITE_ZERO_HIT
     when renderBackground preRenderBackground
     when renderSprite preRenderSprites
+    when (renderBackground && renderSprite && not sprite0HIt) checkSprite0Hit
     render
 
 handleVisibleScanline :: StateT R2C02 IO ()
@@ -271,6 +298,7 @@ handlePreRender :: StateT R2C02 IO ()
 handlePreRender = do
     cycle <- getCycle
     when (cycle == 0) (setSTATUSFlag S_VERTICAL_BLANK False)
+    when (cycle == 0) (setSTATUSFlag S_SPRITE_ZERO_HIT False)
     when (cycle == 304) transferY
 
 tick :: StateT R2C02 IO ()
