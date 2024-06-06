@@ -7,8 +7,8 @@ import Control.Monad
 import Data.Word
 import Control.Monad.State
 import Shrimp.R2C02.Internal
+import qualified Shrimp.MOS6502 as Display
 
--- Tiles are tiles; Sprites are sprites;
 
 -- Helper
 
@@ -24,8 +24,9 @@ toW32 = fromIntegral
 toW64 :: (Integral i) => i -> Word64
 toW64 = fromIntegral
 
+toInt :: (Integral i) => i -> Int
+toInt = fromIntegral
 
---
 createCheckpoint :: StateT R2C02 IO ()
 createCheckpoint = do
     -- Create a save of the current Nametable X, coarse X and fine X
@@ -41,6 +42,100 @@ mergeBytes (lsb, msb) = fmap f (reverse [0..7]) where
     f id = (if testBit lsb id then 0x01 else 0x00) 
          + (if testBit msb id then 0x02 else 0x00)
 
+-- SPRITES
+--
+
+spriteIsVisible :: Sprite -> StateT R2C02 IO Bool
+spriteIsVisible sprite = do
+    screenY <- getScanline
+    longSprites <- getCTRLFlag C_SPRITE_SIZE
+    let spriteHeight = if longSprites then 16 else 8
+    let spriteY = toInt $ sprY sprite
+    let difference = screenY - spriteY
+    return $ (difference >= 0 && difference < spriteHeight)
+
+
+fetchVisibleSprites' :: Int -> Int -> StateT R2C02 IO [Sprite]
+fetchVisibleSprites' _ 8 = return []  -- Stop after 8 visible sprites
+fetchVisibleSprites' 64 _ = return [] -- Stop after 64 sprites
+fetchVisibleSprites' offset count = do 
+    sprite <- getSprite . toW16 $ offset
+    visible <- spriteIsVisible sprite
+    if visible
+        then do
+            rest <- fetchVisibleSprites' (offset + 1) (count + 1)
+            return $ [sprite] ++ rest
+        else do
+            rest <- fetchVisibleSprites' (offset + 1) count
+            return rest
+
+-- Fetches a maximum of 8 sprites that are going to be visible next scanline
+fetchVisibleSprites :: StateT R2C02 IO [Sprite]
+fetchVisibleSprites = fetchVisibleSprites' 0 0
+
+fetchSpriteAddress :: Sprite -> StateT R2C02 IO Word16
+fetchSpriteAddress sprite = do
+    longSprites <- getCTRLFlag C_SPRITE_SIZE 
+    if longSprites
+        then do
+            let spriteID = toW16 . sprTile $ sprite
+            let addr = (spriteID .&. 0x01) * 0x1000 + (spriteID .>>. 1) * 0x20
+            return addr
+        else do
+            ptrn <- getCTRLFlag C_PATTERN_SPRITE
+            let spriteID = toW16 . sprTile $ sprite
+            let base = if ptrn then 0x1000 else 0x0000 :: Word16
+            let addr = base + spriteID * 16
+            return $ addr
+
+fetchSpriteData :: Sprite -> StateT R2C02 IO [Word8]
+fetchSpriteData sprite = do
+    screenY <- getScanline
+    let spriteY = toInt . sprY $ sprite
+    let flipVertical = getSpriteBit SPRITE_VERTICAL_FLIP sprite
+    let offset = toW16 $ if flipVertical then 7 - (screenY - spriteY) else (screenY - spriteY)
+    base <- fetchSpriteAddress sprite
+    lsb <- readByte (base + offset + 0x00)
+    msb <- readByte (base + offset + 0x08)
+    return $ mergeBytes (lsb, msb)
+
+fetchSpriteAttribute :: Sprite -> StateT R2C02 IO Word8
+fetchSpriteAttribute sprite = return $ 4 + ((shiftTake1 0 2) . sprAttr $ sprite)
+
+fetchSpritePriority :: Sprite -> StateT R2C02 IO Display.Priority
+fetchSpritePriority sprite = return $ if (getSpriteBit SPRITE_PRIORITY sprite) then Display.INVISIBLE else Display.VISIBLE
+
+writeToSpriteBuffer :: Int -> ([Word8], Word8, Display.Priority) -> StateT R2C02 IO ()
+writeToSpriteBuffer x (spriteData, spriteAttribute, spritePriority) = do
+    spriteBuffer <- getSpriteBuffer
+    mapM_ (\offset -> do
+        let addr = x + offset
+        let pixel = spriteData !! offset
+        let palette = spriteAttribute
+        let priority = spritePriority
+
+        liftIO $ Display.trySetSPixel spriteBuffer addr (pixel, palette, priority)
+        ) [0..7]
+
+
+preRenderSprite :: Sprite -> StateT R2C02 IO ()
+preRenderSprite sprite = do
+    let flipHorizontal = getSpriteBit SPRITE_HORIZONTAL_FLIP sprite
+    spriteData <- if flipHorizontal then (reverse <$> fetchSpriteData sprite) else (fetchSpriteData sprite)
+    spriteAttribute <- fetchSpriteAttribute sprite
+    spritePriority <- fetchSpritePriority sprite
+
+    let x = toInt . sprX $ sprite
+    writeToSpriteBuffer x (spriteData, spriteAttribute, spritePriority)
+
+preRenderSprites :: StateT R2C02 IO ()
+preRenderSprites = do
+    sprites <- fetchVisibleSprites
+    mapM_ preRenderSprite sprites
+
+
+-- BACKGROUND
+--
 fetchTileID :: StateT R2C02 IO Word8
 fetchTileID = do
     vram <- getVRAM
@@ -76,8 +171,8 @@ fetchTileData tileID = do
     msb <- readByte (addr + 0x08)
     return $ mergeBytes (lsb, msb)
 
-writeTileToBuffer :: Int -> ([Word8], Word8) -> StateT R2C02 IO ()
-writeTileToBuffer tile (tileData, tileAttribute) = do
+writeToBGBuffer :: Int -> ([Word8], Word8) -> StateT R2C02 IO ()
+writeToBGBuffer tile (tileData, tileAttribute) = do
     bgBuffer <- getBackgroundBuffer
     mapM_ (\x -> do
         let addr = tile * 8 + x
@@ -92,7 +187,7 @@ preRenderTile tile = do
     tileID <- fetchTileID 
     tileAttribute <- fetchTileAttribute
     tileData <- fetchTileData (toW16 tileID)
-    writeTileToBuffer tile (tileData, tileAttribute)
+    writeToBGBuffer tile (tileData, tileAttribute)
 
 preRenderBackground :: StateT R2C02 IO ()
 preRenderBackground = do
@@ -103,6 +198,11 @@ preRenderBackground = do
         preRenderTile tile
         incCoarseX ) tiles
     preRenderTile 32 -- Render an additional tile, to accomodate fine x scrolling
+
+
+-- PPU Logic
+--
+
 
 toColor :: (Word8, Word8) -> StateT R2C02 IO Word8
 toColor (pixel, palette) = do
@@ -122,14 +222,35 @@ render = do
     color <- toColor (pixel, palette)
     setPixel (toW16 cycle, toW16 scanline) color
 
+
+readFromBGBuffer :: Int -> StateT R2C02 IO (Word8, Word8)
+readFromBGBuffer cycle = do
+    fineX <- getFineX
+    let x = cycle + fineX
+    bgBuffer <- getBackgroundBuffer
+    (pixel, palette, _) <- liftIO $ Display.getSPixel bgBuffer x
+    return (pixel, palette)
+
+readFromSpriteBuffer :: Int -> StateT R2C02 IO (Word8, Word8, Display.Priority)
+readFromSpriteBuffer cycle = do
+    spriteBuffer <- getSpriteBuffer
+    liftIO $ Display.getSPixel spriteBuffer cycle
+
+decidePriority :: (Word8, Word8) -> (Word8, Word8) -> Display.Priority -> (Word8, Word8)
+decidePriority bg _ Display.UNSET = bg        -- If there is no foreground pixel, draw the background
+decidePriority (0, _) (0, _) _ = (0, 0)       
+decidePriority (0, _) fg _ = fg
+decidePriority bg (0, _) _ = bg
+decidePriority bg fg Display.VISIBLE = fg
+decidePriority bg fg Display.INVISIBLE = bg
+
 preRender :: StateT R2C02 IO ()
 preRender = do
     scanline <- getScanline
     mapM_ (\cycle -> do
-        fineX <- getFineX
-        let x = cycle + fineX
-        bgBuffer <- getBackgroundBuffer
-        (pixel, palette, _) <- liftIO $ Display.getSPixel bgBuffer x
+        (bgPixel, bgPalette) <- readFromBGBuffer cycle
+        (sprPixel, sprPalette, sprPriority) <- readFromSpriteBuffer cycle
+        let (pixel, palette) = decidePriority (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
         color <- toColor (pixel, palette)
         setPixel (toW16 cycle, toW16 scanline) color
         ) [0..255]
@@ -138,6 +259,7 @@ handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     cycle <- getCycle
     when (cycle == 0) preRenderBackground
+    when (cycle == 0) preRenderSprites
     when (cycle == 0) preRender               -- Write pixels to video buffer immediately
     --when (cycle >= 0 && cycle < 256) render -- Assemble pixel every pixel
     when (cycle == 256) incFineY
