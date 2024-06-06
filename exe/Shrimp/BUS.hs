@@ -266,13 +266,13 @@ mirrorNametable Cartridge.Horizontal addr
     | (addr >= 0x2400 && addr <= 0x27FF) = 0x400
     | (addr >= 0x2800 && addr <= 0x2BFF) = 0x000
     | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
-    | otherwise = error "Address out of range"
+    | otherwise = error ("Nametable Address (" ++ toHex2 addr ++ ") out of range")
 mirrorNametable Cartridge.Vertical addr
     | (addr >= 0x2000 && addr <= 0x23FF) = 0x000
     | (addr >= 0x2400 && addr <= 0x27FF) = 0x000
     | (addr >= 0x2800 && addr <= 0x2BFF) = 0x400
     | (addr >= 0x2C00 && addr <= 0x2FFF) = 0x400
-    | otherwise = error "Address out of range"
+    | otherwise = error ("Nametable Address (" ++ toHex2 addr ++ ") out of range")
 
 
 

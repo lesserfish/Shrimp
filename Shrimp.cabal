@@ -27,6 +27,8 @@ executable Shrimp-exe
                     Shrimp.MOS6502, 
                     Shrimp.Utils, 
                     Shrimp.R2C02, 
+                    Shrimp.R2C02.Fast, 
+                    Shrimp.R2C02.Internal, 
                     Shrimp.Memory, 
                     Shrimp.Display, 
                     Shrimp.Cartridge, 

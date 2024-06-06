@@ -68,18 +68,19 @@ data LineBuffer = LineBuffer
     { lPixelBuffer :: Memory.RAM
     , lPaletteBuffer :: Memory.RAM
     , lPriorityBuffer :: Memory.RAM
+    , lWidth :: Int
     }
 
-newLineBuffer :: IO LineBuffer
-newLineBuffer = do
-    pib <- Memory.new 256 0x00
-    pab <- Memory.new 256 0x00
-    prb <- Memory.new 256 0x01
-    return $ LineBuffer pib pab prb
+newLineBuffer :: Int -> IO LineBuffer
+newLineBuffer width = do
+    pib <- Memory.new width 0x00
+    pab <- Memory.new width 0x00
+    prb <- Memory.new width 0x01
+    return $ LineBuffer pib pab prb width
 
 setSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
 setSPixel lb x' (pixel, palette, priority)
-    | x' >= 256 = return ()
+    | x' >= (lWidth lb) = return ()
     | otherwise = do
         let x = fromIntegral x'
         Memory.writeByte (lPixelBuffer lb) x pixel
@@ -88,7 +89,7 @@ setSPixel lb x' (pixel, palette, priority)
 
 trySetSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
 trySetSPixel lb x' info
-    | x' >= 256 = return ()
+    | x' >= (lWidth lb) = return ()
     | otherwise = do
         let x = fromIntegral x'
         currentPriority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
@@ -96,7 +97,7 @@ trySetSPixel lb x' info
 
 getSPixel :: LineBuffer -> Int -> IO (Word8, Word8, Priority)
 getSPixel lb x'
-    | x' >= 256 = return (0, 0, UNSET)
+    | x' >= (lWidth lb) = return (0, 0, UNSET)
     | otherwise = do
         let x = fromIntegral x'
         pixel <- Memory.readByte (lPixelBuffer lb) x
