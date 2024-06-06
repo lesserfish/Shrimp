@@ -6,11 +6,8 @@ import Control.Monad (when)
 import Control.Monad.State
 import Data.Bits
 import Data.Word
-import Text.Printf
 import Shrimp.Utils
-import SDL.Raw (setWindowGammaRamp)
 import qualified Shrimp.MOS6502 as Display
-import GHC.Read (parens)
 
 
 -- Registers

@@ -1,4 +1,4 @@
-module Shrimp.R2C02.Fast where
+module Shrimp.R2C02.Fast (tick, tick') where
 
 import Shrimp.Utils
 import qualified Shrimp.Display as Display
@@ -37,7 +37,7 @@ resetBuffers = do
     getBackgroundBuffer >>= (liftIO . Display.resetLB)
 
 mergeBytes :: (Word8, Word8) -> [Word8]
-mergeBytes (lsb, msb) = fmap f [0..7] where
+mergeBytes (lsb, msb) = fmap f (reverse [0..7]) where
     f id = (if testBit lsb id then 0x01 else 0x00) 
          + (if testBit msb id then 0x02 else 0x00)
 
@@ -91,7 +91,7 @@ preRenderTile :: Int -> StateT R2C02 IO ()
 preRenderTile tile = do
     tileID <- fetchTileID 
     tileAttribute <- fetchTileAttribute
-    tileData <- reverse <$> fetchTileData (toW16 tileID)
+    tileData <- fetchTileData (toW16 tileID)
     writeTileToBuffer tile (tileData, tileAttribute)
 
 preRenderBackground :: StateT R2C02 IO ()
@@ -122,12 +122,24 @@ render = do
     color <- toColor (pixel, palette)
     setPixel (toW16 cycle, toW16 scanline) color
 
+preRender :: StateT R2C02 IO ()
+preRender = do
+    scanline <- getScanline
+    mapM_ (\cycle -> do
+        fineX <- getFineX
+        let x = cycle + fineX
+        bgBuffer <- getBackgroundBuffer
+        (pixel, palette, _) <- liftIO $ Display.getSPixel bgBuffer x
+        color <- toColor (pixel, palette)
+        setPixel (toW16 cycle, toW16 scanline) color
+        ) [0..255]
+
 handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
-    scanline <- getScanline
     cycle <- getCycle
     when (cycle == 0) preRenderBackground
-    when (cycle >= 0 && cycle < 256) render
+    when (cycle == 0) preRender               -- Write pixels to video buffer immediately
+    --when (cycle >= 0 && cycle < 256) render -- Assemble pixel every pixel
     when (cycle == 256) incFineY
     when (cycle == 257) transferX
 
@@ -135,7 +147,7 @@ handleEndOfFrame :: StateT R2C02 IO ()
 handleEndOfFrame = do
     scanline <- getScanline
     cycle <- getCycle
-    when (scanline == 241 && cycle == 1) (do
+    when (scanline == 241 && cycle == 0) (do
         setSTATUSFlag S_VERTICAL_BLANK True
         enableNMI <- getCTRLFlag C_ENABLE_NMI
         when enableNMI triggerNMI)
@@ -149,10 +161,8 @@ handlePreRender = do
 tick :: StateT R2C02 IO ()
 tick = do
     scanline <- getScanline
-    cycle <- getCycle
     when (scanline >= 0   && scanline < 240) handleVisibleScanline
     when (scanline >= 241 && scanline < 261) handleEndOfFrame
-    when (scanline == 241 && cycle == 0) (setSTATUSFlag S_VERTICAL_BLANK True)
     when (scanline == 261) handlePreRender
     incCycle
 
