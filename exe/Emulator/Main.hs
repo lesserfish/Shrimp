@@ -19,7 +19,6 @@ data EmulatorContext = EmulatorContext
     { ecPipe :: CommPipe
     , ecExit :: Bool
     , ecRunning :: Bool
-    , ecNES :: NES
     , rLastTime :: UTCTime
     }
 
@@ -29,34 +28,49 @@ getRTE = rte . ecPipe <$> get
 getETR :: StateT EmulatorContext IO (TChan Feedback)
 getETR = etr . ecPipe <$> get
 
+getTNES :: StateT EmulatorContext IO (TVar NES)
+getTNES = tNES . ecPipe <$> get
+
 getNES :: StateT EmulatorContext IO NES
-getNES = ecNES <$> get
+getNES = do
+    tnes <- getTNES
+    nes <- liftIO . atomically $ readTVar tnes
+    return nes
+
+setNES :: NES -> StateT EmulatorContext IO ()
+setNES nes = do
+    tnes <- getTNES
+    liftIO . atomically $ writeTVar tnes nes
 
 getTCONTROLLER :: StateT EmulatorContext IO (TVar Word8)
 getTCONTROLLER = tControllerA . ecPipe <$> get
 
 
-initializeEmulator :: NES -> CommPipe -> IO EmulatorContext
-initializeEmulator nes pipe = do
+initializeEmulator ::  CommPipe -> IO EmulatorContext
+initializeEmulator pipe = do
     now <- getCurrentTime
-    return $ EmulatorContext pipe False False nes now
+    return $ EmulatorContext pipe False False now
 
 
 tick :: StateT EmulatorContext IO ()
 tick = do
     nes <- getNES
-    liftIO $ B.tick nes
+    (_, nes') <- liftIO $ B.tick nes
+    setNES nes'
+
 
 fullTick :: StateT EmulatorContext IO ()
 fullTick = do
     nes <- getNES 
-    liftIO $ B.fullTick nes
+    (_, nes') <- liftIO $ B.fullTick nes
+    setNES nes'
 
 fullFrame :: StateT EmulatorContext IO ()
 fullFrame = do
     nes <- getNES 
     --liftIO $ timeIt (B.fullFrame nes)
-    liftIO $ B.fullFrame nes
+    nes' <- liftIO $ B.fullFrame nes
+    setNES nes'
 
 
 runNES :: StateT EmulatorContext IO ()

@@ -6,15 +6,25 @@ module Shrimp.Display (
     toList,
     toByteString,
     toByteString',
-    reset
+    reset,
+    LineBuffer(..),
+    Priority(..),
+    setSPixel,
+    trySetSPixel,
+    getSPixel,
+    resetLB,
+    newLineBuffer
 ) where
 
+import Control.Monad (when)
 import Data.Word
 import qualified Data.ByteString as BS
 import qualified Shrimp.Memory as Memory
+import GHC.Arr (writeSTArray)
+import Shrimp.MOS6502 (setSP)
 
 data Display = Display
-    { dVideoBuffer :: Memory.RAM
+    { dBuffer :: Memory.RAM
     }
 
 newDisplay :: IO Display
@@ -24,13 +34,13 @@ newDisplay = do
 
 
 setPixel :: Display -> (Word16, Word16) -> Word8 -> IO ()
-setPixel d (x, y) px = Memory.writeByte (dVideoBuffer d) (y * 256 + x) px
+setPixel d (x, y) px = Memory.writeByte (dBuffer d) (y * 256 + x) px
 
 getPixel :: Display -> (Word16, Word16) -> IO Word8
-getPixel d (x, y) = Memory.readByte (dVideoBuffer d) (y * 256 + x)
+getPixel d (x, y) = Memory.readByte (dBuffer d) (y * 256 + x)
 
 toList :: Display -> IO [Word8]
-toList = Memory.toList . dVideoBuffer
+toList = Memory.toList . dBuffer
     
 toByteString :: Display -> (Word8 -> BS.ByteString) -> IO BS.ByteString
 toByteString d colorMap = (BS.concat . (fmap colorMap)) <$> (toList d)
@@ -39,4 +49,63 @@ toByteString' :: Display -> (Word8 -> [BS.ByteString]) -> IO BS.ByteString
 toByteString' d colorMap = (BS.concat . concat . (fmap colorMap)) <$> (toList d)
 
 reset :: Display -> IO ()
-reset d = return () --Memory.reset (dVideoBuffer d)
+reset d = Memory.reset' (dBuffer d) 0x3F
+
+
+data Priority = VISIBLE | INVISIBLE | UNSET deriving (Show, Eq)
+
+p2w :: Priority -> Word8
+p2w VISIBLE = 0
+p2w INVISIBLE = 1
+p2w UNSET = 2
+
+w2p :: Word8 -> Priority
+w2p 0 = VISIBLE
+w2p 1 = INVISIBLE
+w2p _ = UNSET
+
+data LineBuffer = LineBuffer
+    { lPixelBuffer :: Memory.RAM
+    , lPaletteBuffer :: Memory.RAM
+    , lPriorityBuffer :: Memory.RAM
+    }
+
+newLineBuffer :: IO LineBuffer
+newLineBuffer = do
+    pib <- Memory.new 256 0x00
+    pab <- Memory.new 256 0x00
+    prb <- Memory.new 256 0x01
+    return $ LineBuffer pib pab prb
+
+setSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+setSPixel lb x' (pixel, palette, priority)
+    | x' >= 256 = return ()
+    | otherwise = do
+        let x = fromIntegral x'
+        Memory.writeByte (lPixelBuffer lb) x pixel
+        Memory.writeByte (lPaletteBuffer lb) x palette
+        Memory.writeByte (lPriorityBuffer lb) x (p2w priority)
+
+trySetSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+trySetSPixel lb x' info
+    | x' >= 256 = return ()
+    | otherwise = do
+        let x = fromIntegral x'
+        currentPriority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
+        when (currentPriority /= VISIBLE) (setSPixel lb x' info)
+
+getSPixel :: LineBuffer -> Int -> IO (Word8, Word8, Priority)
+getSPixel lb x'
+    | x' >= 256 = return (0, 0, UNSET)
+    | otherwise = do
+        let x = fromIntegral x'
+        pixel <- Memory.readByte (lPixelBuffer lb) x
+        palette <- Memory.readByte (lPaletteBuffer lb) x
+        priority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
+        return $ (pixel, palette, priority)
+
+resetLB :: LineBuffer -> IO ()
+resetLB lb = do
+    Memory.reset' (lPixelBuffer lb) 0x00
+    Memory.reset' (lPaletteBuffer lb) 0x00
+    Memory.reset' (lPriorityBuffer lb) 0x01

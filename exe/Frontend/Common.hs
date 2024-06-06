@@ -32,6 +32,7 @@ data DisplayMode = DM_DISPLAY
                  | DM_NAMETABLE_1
                  | DM_NAMETABLE_2
                  | DM_INSTRUCTION 
+                 | DM_OAM
                  | DM_PATTERN_1 
                  | DM_PATTERN_2 
                  deriving (Show, Eq)
@@ -52,6 +53,7 @@ data RenderTextures = RenderTextures
     , rtDisplay :: SDL.Texture
     , rtNametable :: SDL.Texture
     , rtFPS :: SDL.Texture
+    , rtOAM :: SDL.Texture
     }
 
 data RenderContext = RenderContext
@@ -62,7 +64,6 @@ data RenderContext = RenderContext
     , rcRDisplayMode :: DisplayMode
     , rcSDLContext :: SDLContext
     , rcController :: Controller
-    , rcNES :: NES
     }
 
 data CKEY = CUP | CDOWN | CLEFT | CRIGHT | CSELECT | CSTART | CA | CB
@@ -99,7 +100,14 @@ getETR :: StateT RenderContext IO (TChan Feedback)
 getETR = etr . rcCommunicationPipe <$> get
 
 getNES :: StateT RenderContext IO NES
-getNES = rcNES <$> get
+getNES = do
+    tnes <- getTNES
+    nes <- liftIO . atomically $ readTVar tnes
+    return nes
+
+getTNES :: StateT RenderContext IO (TVar NES)
+getTNES = tNES . rcCommunicationPipe <$> get
+
 
 getTCONTROLLER :: StateT RenderContext IO (TVar Word8)
 getTCONTROLLER = tControllerA . rcCommunicationPipe <$> get

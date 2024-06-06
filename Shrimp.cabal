@@ -14,10 +14,10 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-ghc-options: -Wall
+ghc-options: -Wall -fwarn-missing-signatures
 
 executable Shrimp-exe
-  ghc-options: -O2
+  ghc-options: -O2 
   import:           warnings
   main-is:          Main.hs
 
@@ -49,6 +49,7 @@ executable Shrimp-exe
                     Frontend.Renderer.Palette,
                     Frontend.Renderer.Display,
                     Frontend.Renderer.FPS,
+                    Frontend.Renderer.OAM,
                     Emulator.Main
                    -- Add other necessary modules here
   -- other-extensions:

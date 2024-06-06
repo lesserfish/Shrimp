@@ -22,6 +22,7 @@ import qualified Frontend.Renderer.Pattern as FRPattern
 import qualified Frontend.Renderer.Status as FRStatus
 import qualified Frontend.Renderer.Nametable as FRNametable
 import qualified Frontend.Renderer.FPS as FRFPS
+import qualified Frontend.Renderer.OAM as FROAM
 import Frontend.Control
 import Frontend.Render
 
@@ -51,6 +52,7 @@ initializeTextures ctx = do
    patternTexture <- FRPattern.new ctx
    nametableTexture <- FRNametable.new ctx
    fpsTexture <- FRFPS.new ctx
+   oamTexture <- FROAM.new ctx
 
    return $ RenderTextures 
                 { rtCPUStatus = statusTexture
@@ -60,11 +62,12 @@ initializeTextures ctx = do
                 , rtDisplay = displayTexture
                 , rtNametable = nametableTexture
                 , rtFPS = fpsTexture
+                , rtOAM = oamTexture
                 }
 
 
-initializeFrontend :: NES -> CommPipe -> IO RenderContext
-initializeFrontend nes pipe = do
+initializeFrontend :: CommPipe -> IO RenderContext
+initializeFrontend pipe = do
     ctx <- initializeSDL
     textures <- initializeTextures ctx
     now <- getCurrentTime
@@ -87,7 +90,6 @@ initializeFrontend nes pipe = do
                 , rcRDisplayMode = DM_INSTRUCTION
                 , rcSDLContext = ctx
                 , rcController = controller
-                , rcNES = nes
                 }
 
 loop :: StateT RenderContext IO ()

@@ -31,3 +31,8 @@ writeController controller = do
 
 writeLive :: Controller -> Word8 -> IO ()
 writeLive controller byte = writeIORef (liveData controller) byte
+
+reset :: Controller -> IO ()
+reset (Controller s l) = do
+    writeIORef s 0
+    writeIORef l 0

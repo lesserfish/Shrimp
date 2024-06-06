@@ -21,12 +21,11 @@ renderInstruction ctx color yoffset (addr, instruction) = do
 
 renderInstructions :: SDLContext -> NES -> IO()
 renderInstructions ctx nes = do
-    let cpuref = B.bCPU nes
-    cpu <- readIORef cpuref
+    let cpu = B.bCPU nes
     let pc = MOS.pc . MOS.registers $ cpu
 
-    instructionsBefore <- MOS.disassembleL cpu (pc - 80) (pc + 1) 
-    instructionsAfter  <- MOS.disassembleL cpu pc (pc + 80) 
+    instructionsBefore <- MOS.disassembleL (cpu, nes) (pc - 80) (pc + 1) 
+    instructionsAfter  <- MOS.disassembleL (cpu, nes) pc (pc + 80) 
 
     let selectAfter = take 8 instructionsAfter
     let selectBefore = reverse . (drop 1) . (take 7) . reverse $ instructionsBefore
