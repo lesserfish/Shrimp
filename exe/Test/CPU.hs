@@ -34,7 +34,7 @@ data Test = Test
     deriving (Generic, Show, FromJSON)
 
 data Barebones = Barebones
-    { bCpu :: MOS6502
+    { bCpu :: MOS6502 ()
     , bRam :: M.RAM
     , bLog :: [(Word16, Word8, String)]
     }
@@ -46,11 +46,11 @@ pushLog :: (Word16, Word8, String) -> Barebones -> Barebones
 pushLog info barebones = barebones{bLog = (bLog barebones) ++ [info]}
 
 
-cpuInterface :: M.RAM -> Interface
+cpuInterface :: M.RAM -> Interface ()
 cpuInterface ram = Interface readByte writeByte peekByte where
-    readByte addr = M.readByte ram addr
-    writeByte addr byte = M.writeByte ram addr byte
-    peekByte = readByte
+    readByte _ addr = (\x -> ((), x)) <$> M.readByte ram addr
+    writeByte _ addr byte = M.writeByte ram addr byte
+    peekByte _ addr = snd <$> (readByte () addr)
 
 loadMemory :: [(Word16, Word8)] -> IO M.RAM
 loadMemory [] = M.new (1024 * 64) 0
@@ -60,7 +60,7 @@ loadMemory (y : ys) = do
     M.writeByte m addr byte
     return m
 
-loadCPU :: Interface -> CPUState -> MOS6502
+loadCPU :: Interface () -> CPUState -> MOS6502 ()
 loadCPU interface (CPUState rpc rs ra rx ry rp _) = mos{registers = reg, context = (context mos){decMode = True}} where
     mos = new interface
     reg = Registers{
@@ -81,7 +81,7 @@ bLoad cpustate = do
 
 bTick :: Barebones -> IO Barebones
 bTick barebones = do
-    mos' <- execStateT tick (bCpu barebones)
+    (mos', _) <- execStateT tick (bCpu barebones, ())
     return barebones{bCpu = mos'}
 
 verifyRam :: M.RAM -> [(Word16, Word8)] -> IO Bool
@@ -93,7 +93,7 @@ verifyRam ram (y : ys) = do
     let this = byte == byte'
     return $ this && that
 
-verifyCPU :: MOS6502 -> CPUState -> Bool
+verifyCPU :: MOS6502 () -> CPUState -> Bool
 verifyCPU mos6502 cpustate = condition where
     pc_condition  = (Test.CPU.pc cpustate) == (Shrimp.MOS6502.pc  . registers $ mos6502) 
     sp_condition  = (Test.CPU.s  cpustate) == (sp  . registers $ mos6502)
