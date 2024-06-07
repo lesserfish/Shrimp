@@ -474,11 +474,11 @@ triggerNMI = do
     (cpu', bus') <- liftIO $ execStateT MOS6502.iNMI (cpu, bus)
     put bus'{bCPU = cpu'}
 
-tick3PPU :: StateT BUS IO Bool
-tick3PPU = do
+tick2PPU :: StateT BUS IO Bool
+tick2PPU = do
     bus <- get
     let ppu = bPPU bus
-    let action = R2C02.tick >> R2C02.tick >> R2C02.tick'
+    let action = R2C02.tick >> R2C02.tick'
     ((nmi, done), ppu') <- liftIO $ runStateT action ppu
     put bus{bPPU = ppu'}
     when nmi triggerNMI
@@ -492,7 +492,7 @@ chooseTick = do
 
 tick' :: StateT BUS IO (Bool, Bool)
 tick' = do
-    ppuDone <- tick3PPU
+    ppuDone <- tick2PPU
     cpuDone <- chooseTick
     return (ppuDone, cpuDone)
 

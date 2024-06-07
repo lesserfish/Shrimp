@@ -9,9 +9,9 @@ module Shrimp.Display (
     reset,
     LineBuffer(..),
     Priority(..),
-    setSPixel,
-    trySetSPixel,
-    getSPixel,
+    setLBPixel,
+    trySetLBPixel,
+    getLBPixel,
     resetLB,
     newLineBuffer
 ) where
@@ -52,16 +52,16 @@ reset :: Display -> IO ()
 reset d = Memory.reset' (dBuffer d) 0x3F
 
 
-data Priority = VISIBLE | INVISIBLE | UNSET deriving (Show, Eq)
+data Priority = FRONT | BACK | UNSET deriving (Show, Eq)
 
 p2w :: Priority -> Word8
-p2w VISIBLE = 0
-p2w INVISIBLE = 1
+p2w FRONT = 0
+p2w BACK = 1
 p2w UNSET = 2
 
 w2p :: Word8 -> Priority
-w2p 0 = VISIBLE
-w2p 1 = INVISIBLE
+w2p 0 = FRONT 
+w2p 1 = BACK 
 w2p _ = UNSET
 
 data LineBuffer = LineBuffer
@@ -78,8 +78,8 @@ newLineBuffer width = do
     prb <- Memory.new width 0x01
     return $ LineBuffer pib pab prb width
 
-setSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
-setSPixel lb x' (pixel, palette, priority)
+setLBPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+setLBPixel lb x' (pixel, palette, priority)
     | x' >= (lWidth lb) = return ()
     | otherwise = do
         let x = fromIntegral x'
@@ -87,16 +87,16 @@ setSPixel lb x' (pixel, palette, priority)
         Memory.writeByte (lPaletteBuffer lb) x palette
         Memory.writeByte (lPriorityBuffer lb) x (p2w priority)
 
-trySetSPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
-trySetSPixel lb x' info
+trySetLBPixel :: LineBuffer -> Int -> (Word8, Word8, Priority) -> IO ()
+trySetLBPixel lb x' info
     | x' >= (lWidth lb) = return ()
     | otherwise = do
         let x = fromIntegral x'
         currentPriority <- w2p <$> Memory.readByte (lPriorityBuffer lb) x
-        when (currentPriority /= VISIBLE) (setSPixel lb x' info)
+        when (currentPriority /= FRONT) (setLBPixel lb x' info)
 
-getSPixel :: LineBuffer -> Int -> IO (Word8, Word8, Priority)
-getSPixel lb x'
+getLBPixel :: LineBuffer -> Int -> IO (Word8, Word8, Priority)
+getLBPixel lb x'
     | x' >= (lWidth lb) = return (0, 0, UNSET)
     | otherwise = do
         let x = fromIntegral x'

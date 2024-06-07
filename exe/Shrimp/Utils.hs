@@ -188,3 +188,11 @@ toInt :: (Integral i) => i -> Int
 toInt = fromIntegral
 
 
+flattenListToByte' :: [Word8] -> Word8
+flattenListToByte' [] = 0
+flattenListToByte' (y:ys) = x + (rest .<<. 1) where
+    x = if y > 0 then 1 else 0
+    rest = flattenListToByte' ys
+
+flattenListToByte :: [Word8] -> Word8
+flattenListToByte = flattenListToByte' . reverse
