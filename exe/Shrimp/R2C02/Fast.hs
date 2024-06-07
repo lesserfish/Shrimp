@@ -242,8 +242,9 @@ checkSprite0Hit = do
             sprite0Data <- getSprite0Data
             (bgPixel, bgPalette) <- readFromBGBuffer screenX
             let sprite0Pixel = sprite0Data !! xh
-            let sprite0Palette = 0
-            let (_, hit) = decidePriority (bgPixel, bgPalette) (sprite0Pixel, sprite0Palette) Display.FRONT
+            sprite0Priority <- fetchSpritePriority <$> (getSprite 0)
+            sprite0Palette <- fetchSpriteAttribute <$> (getSprite 0)
+            let (_, hit) = decidePriority (bgPixel, bgPalette) (sprite0Pixel, sprite0Palette) sprite0Priority
             when hit (setSTATUSFlag S_SPRITE_ZERO_HIT True)
             )
 
