@@ -170,3 +170,21 @@ timeIt action = do
     let microseconds = div diff 1000000
     putStrLn $ "CPU Time difference: " ++ show microseconds ++ " microseconds"
     return output
+
+
+toW8 :: (Integral i) => i -> Word8
+toW8 = fromIntegral
+
+toW16 :: (Integral i) => i -> Word16
+toW16 = fromIntegral
+
+toW32 :: (Integral i) => i -> Word32
+toW32 = fromIntegral
+
+toW64 :: (Integral i) => i -> Word64
+toW64 = fromIntegral
+
+toInt :: (Integral i) => i -> Int
+toInt = fromIntegral
+
+
