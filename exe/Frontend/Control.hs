@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Frontend.Control (control) where
 
+import qualified Frontend.Renderer.Display as FRDisplay
 import Frontend.Common
 import Data.Time.Clock
 import Control.Monad
@@ -80,6 +81,13 @@ modeUp = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx
     prevMode DM_NAMETABLE_2 = DM_DISPLAY
     prevMode _ = DM_DISPLAY
 
+clearScreen :: StateT RenderContext IO ()
+clearScreen = do
+    nes <- getNES
+    liftIO $ FRDisplay.clearScreen nes
+
+
+
 modifyController :: (Controller -> Controller) -> StateT RenderContext IO ()
 modifyController f = modify (\rctx -> rctx {rcController = f . rcController $ rctx})
 
@@ -120,6 +128,7 @@ handleKeydown SDL.KeycodeBackspace  = controllerUP CSELECT
 handleKeydown SDL.KeycodeReturn     = controllerUP CSTART
 handleKeydown SDL.KeycodeZ          = controllerUP CB
 handleKeydown SDL.KeycodeX          = controllerUP CA
+handleKeydown SDL.KeycodeR          = clearScreen
 handleKeydown _ = return ()
 
 

@@ -1,4 +1,4 @@
-module Frontend.Renderer.Display (new, update) where
+module Frontend.Renderer.Display (new, update, clearScreen) where
 
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (castPtr, Ptr)
@@ -13,6 +13,9 @@ import Data.Word
 import qualified SDL as SDL
 import qualified Shrimp.BUS as B
 
+clearScreen :: NES -> IO ()
+clearScreen nes = do
+    Display.reset . B.bDisplay $ nes
 
 update :: SDLContext -> NES -> SDL.Texture -> IO()
 update ctx nes texture = do
