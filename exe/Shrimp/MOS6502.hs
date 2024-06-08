@@ -704,7 +704,7 @@ execute 0x5E = do
     opLSR ABSOLUTE_X
 execute 0xEA = do
     updateCycles 2
-    opNOP IMPLICIT
+    opNOP IMPLICIT -- ?
 execute 0x09 = do
     updateCycles 2
     opORA IMMEDIATE
@@ -784,7 +784,7 @@ execute 0xE5 = do
     updateCycles 3
     opSBC ZEROPAGE
 execute 0xF5 = do
-    updateCycles 5
+    updateCycles 4
     opSBC ZEROPAGE_X
 execute 0xED = do
     updateCycles 4
