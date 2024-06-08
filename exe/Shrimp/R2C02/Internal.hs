@@ -62,7 +62,7 @@ data Context = Context
     , bgPixel :: Word8
     , bgPalette :: Word8
     , oamAddress :: Word8
-    , sprite0Data :: [Word8]
+    , sprite0Alpha :: Word8
     , sprite0X :: Int
     }
 
@@ -122,7 +122,7 @@ new :: Interface -> IO R2C02
 new interface = do
     p8b <- Display.newLineBuffer (32 * 8)
     let reg = Registers 0 0 0 0 0 0 0 False
-    let ctx = Context False False 0 0 0 0 0 0 0 0 0 [] (-1)
+    let ctx = Context False False 0 0 0 0 0 0 0 0 0 0 (-1)
     oam <- Memory.new 0xFF 0xFF
     sb <- Display.newLineBuffer (32 * 8)
     bb <- Display.newLineBuffer (32 * 8 + 32)
@@ -447,8 +447,8 @@ getBGPalette = bgPalette . context <$> get
 getOAMAddress :: StateT R2C02 IO Word8
 getOAMAddress = oamAddress . context <$> get
 
-getSprite0Data :: StateT R2C02 IO [Word8]
-getSprite0Data = sprite0Data . context <$> get
+getSprite0Alpha :: StateT R2C02 IO Word8
+getSprite0Alpha = sprite0Alpha . context <$> get
 
 getSprite0X :: StateT R2C02 IO Int
 getSprite0X = sprite0X . context <$> get
@@ -516,8 +516,8 @@ setBGPalette v = modify(\ppu -> ppu{context = (context ppu){bgPalette = v}})
 setOAMAddress :: Word8 -> StateT R2C02 IO ()
 setOAMAddress v = modify(\ppu -> ppu{context = (context ppu){oamAddress = v}})
 
-setSprite0Data :: [Word8] -> StateT R2C02 IO ()
-setSprite0Data v = modify(\ppu -> ppu{context = (context ppu){sprite0Data = v}})
+setSprite0Alpha :: Word8 -> StateT R2C02 IO ()
+setSprite0Alpha v = modify(\ppu -> ppu{context = (context ppu){sprite0Alpha = v}})
 
 setSprite0X :: Int -> StateT R2C02 IO ()
 setSprite0X v = modify(\ppu -> ppu{context = (context ppu){sprite0X = v}})

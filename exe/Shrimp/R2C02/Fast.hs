@@ -123,7 +123,7 @@ preRenderSprite sprite = do
     writeToSpriteBuffer x (spriteData, spriteAttribute, spritePriority)
     when (spriteID == 0) (do
         setSprite0X (toInt $ sprX sprite)
-        setSprite0Data spriteData
+        setSprite0Alpha $ flattenListToByte spriteData
         )
 
 preRenderSprites' :: StateT R2C02 IO ()
@@ -206,12 +206,15 @@ preRenderTile tile = do
     tileID <- fetchTileID 
     tileAttribute <- fetchTileAttribute
     tileData <- fetchTileData (toW16 tileID)
+    -- liftIO . putStr $ show tileData
     writeToBGBuffer tile (tileData, tileAttribute)
 
 
 preRenderBackground' :: StateT R2C02 IO ()
 preRenderBackground' = do
     let tiles = [0..31] --
+    sl <- getScanline
+    -- liftIO . putStr $ show sl ++ " "
     mapM_ (\tile -> do
         preRenderTile tile
         incCoarseX ) tiles
@@ -224,30 +227,66 @@ preRenderBackground = do
     renderBackground <- getMASKFlag M_RENDER_BACKGROUND
     when renderBackground preRenderBackground'
 
+-- Sprite 0 collision logic
+
+
+-- Gets the distance of the current screen x position, to the x start position of sprite 0
+s0XH :: Int -> StateT R2C02 IO Int
+s0XH screenX = do
+    sprite0X <- getSprite0X
+    return $ screenX - sprite0X
+
+
+s0BeingRendered :: Int -> StateT R2C02 IO Bool
+s0BeingRendered screenX = do
+    xh <- s0XH screenX
+    return $ (xh >= 0 && xh < 8)
+
+s0Opaque :: Int -> StateT R2C02 IO Bool
+s0Opaque screenX = do
+    safe <- s0BeingRendered screenX
+    if safe
+        then do
+            xh <- s0XH screenX
+            alpha <- getSprite0Alpha 
+            return $ testBit alpha xh
+        else return $ False
+
+getScreenX :: StateT R2C02 IO Int
+getScreenX = ( + (-1)) <$> getCycle
+
+bgOpaque :: Int -> StateT R2C02 IO Bool
+bgOpaque screenX = do
+    (pixel, _) <- readFromBGBuffer screenX
+    return $ pixel > 0
 
 checkSprite0Hit :: StateT R2C02 IO ()
 checkSprite0Hit = do
-    cycle <- getCycle
-    let screenX = cycle - 1
-    sprite0X <- getSprite0X
+    -- List of conditions for sprite 0 hit
+    -- 1. Sprite 0 is being renderer
+    -- 2. Sprite 0 flag has not been set in this frame
+    -- 3. The background is opaque
+    -- 4. The sprite pixel is opaque
+    -- 5. Mask.Render_Background is set
+    -- 6. Mask.Render_Foreground is set
+    -- 7. If not (Mask.Render_Background_Left) or not(Mask.Render_Sprites_Left), then cycle >= 9
+
+    screenX  <- getScreenX
+    backgroundLeft <- getMASKFlag M_RENDER_BACKGROUND_LEFT
+    spriteLeft <- getMASKFlag M_RENDER_SPRITES_LEFT
+
+    -- Conditions
+    check1 <- s0BeingRendered screenX
+    check2 <- not <$> getSTATUSFlag S_SPRITE_ZERO_HIT
+    check3 <- bgOpaque screenX 
+    check4 <- s0Opaque screenX
+    check5 <- getMASKFlag M_RENDER_BACKGROUND
+    check6 <- getMASKFlag M_RENDER_SPRITES
+    let check7 = if (backgroundLeft || spriteLeft) then screenX >= 8 else True
+
+    let hit = check1 && check2 && check3 && check4 && check5 && check6 && check7
+    when hit (setSTATUSFlag S_SPRITE_ZERO_HIT True)
     
-    let xh = sprite0X - screenX
-
-    let collision = xh >= 0 && xh < 8
-    renderBackground <- getMASKFlag M_RENDER_BACKGROUND
-    renderSprite <- getMASKFlag M_RENDER_SPRITES
-    notSet <- not <$> getSTATUSFlag S_SPRITE_ZERO_HIT
-
-    when (collision && renderBackground && renderSprite && notSet) (do
-            sprite0Data <- getSprite0Data
-            (bgPixel, bgPalette) <- readFromBGBuffer screenX
-            let sprite0Pixel = sprite0Data !! xh
-            sprite0Priority <- fetchSpritePriority <$> (getSprite 0)
-            sprite0Palette <- fetchSpriteAttribute <$> (getSprite 0)
-            let (_, hit) = decidePriority (bgPixel, bgPalette) (sprite0Pixel, sprite0Palette) sprite0Priority
-            when hit (setSTATUSFlag S_SPRITE_ZERO_HIT True)
-            )
-
 -- PPU Logic
 
 
@@ -275,6 +314,7 @@ render screenX = do
     (sprPixel, sprPalette, sprPriority) <- readFromSpriteBuffer screenX
     let ((pixel, palette), _) = decidePriority (bgPixel, bgPalette) (sprPixel, sprPalette) sprPriority
     color <- toColor (pixel, palette)
+    -- liftIO . putStr $ " " ++ show bgPixel
     setPixel (toW16 screenX, toW16 screenY) color
 
 
@@ -282,9 +322,9 @@ handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     cycle <- getCycle
     when (cycle == 1) preRenderBackground
+    when (cycle == 257) preRenderSprites
     when (cycle == 257) incFineY
     when (cycle == 257) transferX
-    when (cycle == 257) preRenderSprites
     when (cycle >= 1 && cycle < 257) (render $ cycle - 1)
     when (cycle >= 1 && cycle < 257) checkSprite0Hit
 
@@ -304,15 +344,16 @@ handlePreRender = do
     cycle <- getCycle
     when (cycle == 1) (setSTATUSFlag S_VERTICAL_BLANK False)
     when (cycle == 1) (setSTATUSFlag S_SPRITE_ZERO_HIT False)
-    when (cycle == 1) (setSprite0Data [])
     when (cycle == 1) (setSprite0X (-1))
+    when (cycle == 1) (setSprite0Alpha 0)
     when (cycle == 304) transferY
 
 tick :: StateT R2C02 IO ()
 tick = do
     scanline <- getScanline
     cycle <- getCycle
-    
+    -- when (cycle == 0 && scanline == 0) (liftIO . putStr $ "\n\n") 
+    -- when (cycle == 0 && scanline >= 0 && scanline < 240) (liftIO . putStr $ "\n" ++ show scanline)
     when (scanline == (-1)) handlePreRender
     when (scanline == 0 && cycle == 0) incCycle
     when (scanline >= 0   && scanline < 240) handleVisibleScanline

@@ -1,6 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 module Shrimp.BUS (
     BUS(..),
+    Context(..),
     tick,
     fullTick,
     fullFrame,
@@ -90,6 +90,9 @@ setDMAHold v = modify (\bus -> bus{bContext = (bContext bus){dmaHold = v}})
 
 setClock :: Int -> StateT BUS IO ()
 setClock v = modify (\bus -> bus{bContext = (bContext bus){bClock = v}})
+
+incClock :: StateT BUS IO ()
+incClock = ((+1) <$> getClock) >>= setClock
 
 incDMACycle :: StateT BUS IO ()
 incDMACycle = (( + 1) <$> getDMACycle) >>= setDMACycle
@@ -474,12 +477,11 @@ triggerNMI = do
     (cpu', bus') <- liftIO $ execStateT MOS6502.iNMI (cpu, bus)
     put bus'{bCPU = cpu'}
 
-tick2PPU :: StateT BUS IO Bool
-tick2PPU = do
+tickPPU :: StateT BUS IO Bool
+tickPPU = do
     bus <- get
     let ppu = bPPU bus
-    let action = R2C02.tick >> R2C02.tick'
-    ((nmi, done), ppu') <- liftIO $ runStateT action ppu
+    ((nmi, done), ppu') <- liftIO $ runStateT R2C02.tick' ppu
     put bus{bPPU = ppu'}
     when nmi triggerNMI
     return done
@@ -492,8 +494,12 @@ chooseTick = do
 
 tick' :: StateT BUS IO (Bool, Bool)
 tick' = do
-    ppuDone <- tick2PPU
-    cpuDone <- chooseTick
+    clock <- getClock
+    ppuDone <- tickPPU
+    cpuDone <- if mod clock 3 == 0
+        then chooseTick 
+        else return False
+    incClock
     return (ppuDone, cpuDone)
 
 

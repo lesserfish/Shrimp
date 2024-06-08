@@ -386,6 +386,7 @@ tick = do
         else do
             opcode <- fetch
             execute opcode
+            updateCycles (-1)
             setComplete True
 
 tick' :: StateT (MOS6502 a, a) IO Bool
@@ -399,6 +400,7 @@ tick' = do
         else do
             opcode <- fetch
             execute opcode
+            updateCycles (-1)
             return True
 
 
