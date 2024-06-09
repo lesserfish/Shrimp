@@ -263,7 +263,7 @@ bgOpaque screenX = do
 checkSprite0Hit :: StateT R2C02 IO ()
 checkSprite0Hit = do
     -- List of conditions for sprite 0 hit
-    -- 1. Sprite 0 is being renderer
+    -- 1. Sprite 0 is being rendered
     -- 2. Sprite 0 flag has not been set in this frame
     -- 3. The background is opaque
     -- 4. The sprite pixel is opaque
@@ -272,20 +272,30 @@ checkSprite0Hit = do
     -- 7. If not (Mask.Render_Background_Left) or not(Mask.Render_Sprites_Left), then cycle >= 9
 
     screenX  <- getScreenX
-    backgroundLeft <- getMASKFlag M_RENDER_BACKGROUND_LEFT
-    spriteLeft <- getMASKFlag M_RENDER_SPRITES_LEFT
 
-    -- Conditions
+    -- Conditions (This might be ugly, but it gives us better performance
     check1 <- s0BeingRendered screenX
-    check2 <- not <$> getSTATUSFlag S_SPRITE_ZERO_HIT
-    check3 <- bgOpaque screenX 
-    check4 <- s0Opaque screenX
-    check5 <- getMASKFlag M_RENDER_BACKGROUND
-    check6 <- getMASKFlag M_RENDER_SPRITES
-    let check7 = if (backgroundLeft || spriteLeft) then screenX >= 8 else True
-
-    let hit = check1 && check2 && check3 && check4 && check5 && check6 && check7
-    when hit (setSTATUSFlag S_SPRITE_ZERO_HIT True)
+    when check1 (do
+        check2 <- not <$> getSTATUSFlag S_SPRITE_ZERO_HIT
+        when check2 (do
+            check3 <- bgOpaque screenX 
+            when check3 (do
+                check4 <- s0Opaque screenX
+                when check4 (do
+                    check5 <- getMASKFlag M_RENDER_BACKGROUND
+                    when check5 (do
+                        check6 <- getMASKFlag M_RENDER_SPRITES
+                        when check6 (do
+                            backgroundLeft <- getMASKFlag M_RENDER_BACKGROUND_LEFT
+                            spriteLeft <- getMASKFlag M_RENDER_SPRITES_LEFT
+                            let check7 = if (backgroundLeft || spriteLeft) then screenX >= 8 else True
+                            when check7 (setSTATUSFlag S_SPRITE_ZERO_HIT True)
+                            )
+                        )
+                    )
+                )
+            )
+        )
     
 -- PPU Logic
 
