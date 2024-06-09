@@ -1,5 +1,6 @@
 module Shrimp.Utils where
 
+import Control.Monad (when)
 import Control.Monad.State
 import System.CPUTime
 import Text.Printf
@@ -196,3 +197,9 @@ flattenListToByte' (y:ys) = x + (rest .<<. 1) where
 
 flattenListToByte :: [Word8] -> Word8
 flattenListToByte = flattenListToByte' . reverse
+
+whenM :: IO Bool -> IO () -> IO ()
+whenM conditionM action = do
+    condition <- conditionM
+    when condition action
+
