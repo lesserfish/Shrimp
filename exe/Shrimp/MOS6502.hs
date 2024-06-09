@@ -61,6 +61,7 @@ data ADDR_MODE
 data MOS6502 a = MOS6502
     { registers :: !Registers
     , clock :: !Int
+    , opCounter :: !Int
     , cycles :: !Int
     , context :: !Context
     , interface :: !(Interface a)
@@ -71,7 +72,7 @@ data MOS6502 a = MOS6502
 
 
 new :: Interface a -> (MOS6502 a)
-new interface = MOS6502 reg 0 0 ctx interface where
+new interface = MOS6502 reg 0 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
     ctx = Context False False
 
@@ -346,13 +347,19 @@ getComplete = complete . context . fst <$> get
 incClock :: StateT (MOS6502 a, a) IO ()
 incClock = modifyFst (\mos -> mos{clock = 1 + (clock mos)})
 
+incCounter :: StateT (MOS6502 a, a) IO ()
+incCounter = modifyFst (\mos -> mos{opCounter = 1 + (opCounter mos)})
+
 
 resetCycles :: StateT (MOS6502 a, a) IO ()
-resetCycles = modifyFst (\mos -> mos{cycles = 0})
+resetCycles = modifyFst (\mos -> mos{cycles = 8})
 
 
 resetClock :: StateT (MOS6502 a, a) IO ()
 resetClock = modifyFst (\mos -> mos{clock = 0})
+
+resetCounter :: StateT (MOS6502 a, a) IO ()
+resetCounter = modifyFst (\mos -> mos{opCounter = 0})
 
 
 updateCycles :: Int -> StateT (MOS6502 a, a) IO ()
@@ -384,9 +391,10 @@ tick = do
         then do
             updateCycles (-1)
         else do
+            incCounter
             opcode <- fetch
+            updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
-            updateCycles (-1)
             setComplete True
 
 tick' :: StateT (MOS6502 a, a) IO Bool
@@ -398,9 +406,10 @@ tick' = do
             updateCycles (-1)
             return False
         else do
+            incCounter
             opcode <- fetch
+            updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
-            updateCycles (-1)
             return True
 
 
@@ -920,6 +929,7 @@ reset = do
     setPS (setBit 0x00 5 :: Word8) -- Set the Status Flag. (UNUSED flag set to 1)
     resetClock
     resetCycles
+    resetCounter
 
 -- TODO: Reset CPU Context
 
