@@ -29,6 +29,7 @@ data Registers = Registers
 data Context = Context
     { complete :: Bool 
     , decMode :: Bool
+    , superInstruction :: Bool
     }
     deriving (Show)
 
@@ -74,7 +75,7 @@ data MOS6502 a = MOS6502
 new :: Interface a -> (MOS6502 a)
 new interface = MOS6502 reg 0 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
-    ctx = Context False False
+    ctx = Context False False False
 
 -- Setters / Getters
 
@@ -223,6 +224,15 @@ writeByte addr byte = do
 
 -- Addresing Modes
 
+pageCross :: Word16 -> Word16 -> Bool
+pageCross x y = check where
+    z = x + y
+    check = (z .&. 0xFF00) == (x .&. 0xFF)
+
+superAddressing :: StateT (MOS6502 a, a) IO ()
+superAddressing = do
+    super <- getSuperInstruction
+    when super (updateCycles 1)
 
 getAddr :: ADDR_MODE -> StateT (MOS6502 a, a) IO Word16
 getAddr IMPLICIT = return 0 -- Implicit does not require getAddr
@@ -257,6 +267,7 @@ getAddr RELATIVE = do
     let iPC = fromIntegral cPC :: Int
     let iOffset = fromIntegral (fromIntegral offset :: Int8) :: Int
     let addr = fromIntegral (iPC + iOffset) + 1 :: Word16
+    when (addr .&. 0xFF00 /= cPC .&. 0xFF00) superAddressing -- Page cross
     setPC (cPC + 1)
     return addr
 getAddr ABSOLUTE = do
@@ -272,6 +283,8 @@ getAddr ABSOLUTE_X = do
     lb <- readByte cPC -- Load the low byte of the address location
     hb <- readByte (cPC + 1) -- Load the high byte of the address location
     let addr = (joinBytes hb lb) + (joinBytes 0x00 xreg) -- Add the resulting 2-byte with the IDX register
+    let pageCrossed = pageCross (joinBytes hb lb) (joinBytes 0x00 xreg) -- Checks if a page cross has happened
+    when pageCrossed superAddressing -- If it did, deal with it
     setPC (cPC + 2)
     return addr
 getAddr ABSOLUTE_Y = do
@@ -280,6 +293,8 @@ getAddr ABSOLUTE_Y = do
     lb <- readByte cPC -- Load the low byte of the address location
     hb <- readByte (cPC + 1) -- Load the high byte of the address location
     let addr = (joinBytes hb lb) + (joinBytes 0x00 yreg) -- Add the resulting 2-byte with the IDY register
+    let pageCrossed = pageCross (joinBytes hb lb) (joinBytes 0x00 yreg) -- Checks if a page cross has happened
+    when pageCrossed superAddressing -- If it did, deal with it
     setPC (cPC + 2)
     return addr
 getAddr INDIRECT = do
@@ -316,6 +331,10 @@ getAddr INDIRECT_Y = do
     let addr = joinBytes addr_hb addr_lb
     yreg <- getIDY
     let faddr = addr + (joinBytes 0x00 yreg)
+
+    let pageCrossed = pageCross addr (joinBytes 0x00 yreg) -- Checks if a page cross has happened
+    when pageCrossed superAddressing -- If it did, deal with it
+
     setPC (cPC + 1)
     return faddr
 
@@ -375,6 +394,12 @@ setDecMode b = modifyFst (\mos -> mos{context = (context mos){decMode = b}})
 getDecMode  :: StateT (MOS6502 a, a) IO Bool
 getDecMode = decMode . context . fst <$> get
 
+setSuperInstruction :: Bool -> StateT (MOS6502 a, a) IO ()
+setSuperInstruction v = modifyFst (\mos -> mos{context = (context mos){superInstruction = v}})
+
+getSuperInstruction :: StateT (MOS6502 a, a) IO Bool
+getSuperInstruction = superInstruction . context . fst <$> get
+
 
 fetchComplete :: StateT (MOS6502 a, a) IO Bool
 fetchComplete = do
@@ -418,6 +443,7 @@ fetch = do
     pc <- getPC
     opcode <- readByte pc
     setPC (pc + 1)
+    setSuperInstruction False
     return opcode
 
 
@@ -437,15 +463,18 @@ execute 0x6D = do
     opADC ABSOLUTE
 execute 0x7D = do
     updateCycles 4
+    setSuperInstruction True
     opADC ABSOLUTE_X
 execute 0x79 = do
     updateCycles 4
+    setSuperInstruction True
     opADC ABSOLUTE_Y
 execute 0x61 = do
     updateCycles 6
     opADC INDIRECT_X
 execute 0x71 = do
     updateCycles 5
+    setSuperInstruction True
     opADC INDIRECT_Y
 execute 0x29 = do
     updateCycles 2
@@ -461,15 +490,18 @@ execute 0x2D = do
     opAND ABSOLUTE
 execute 0x3D = do
     updateCycles 4
+    setSuperInstruction True
     opAND ABSOLUTE_X
 execute 0x39 = do
     updateCycles 4
+    setSuperInstruction True
     opAND ABSOLUTE_Y
 execute 0x21 = do
     updateCycles 6
     opAND INDIRECT_X
 execute 0x31 = do
     updateCycles 5
+    setSuperInstruction True
     opAND INDIRECT_Y
 execute 0x0A = do
     updateCycles 2
@@ -545,15 +577,18 @@ execute 0xCD = do
     opCMP ABSOLUTE
 execute 0xDD = do
     updateCycles 4
+    setSuperInstruction True
     opCMP ABSOLUTE_X
 execute 0xD9 = do
     updateCycles 4
+    setSuperInstruction True
     opCMP ABSOLUTE_Y
 execute 0xC1 = do
     updateCycles 6
     opCMP INDIRECT_X
 execute 0xD1 = do
     updateCycles 5
+    setSuperInstruction True
     opCMP INDIRECT_Y
 execute 0xE0 = do
     updateCycles 2
@@ -605,15 +640,18 @@ execute 0x4D = do
     opEOR ABSOLUTE
 execute 0x5D = do
     updateCycles 4
+    setSuperInstruction True
     opEOR ABSOLUTE_X
 execute 0x59 = do
     updateCycles 4
+    setSuperInstruction True
     opEOR ABSOLUTE_Y
 execute 0x41 = do
     updateCycles 6
     opEOR INDIRECT_X
 execute 0x51 = do
     updateCycles 5
+    setSuperInstruction True
     opEOR INDIRECT_Y
 execute 0xE6 = do
     updateCycles 5
@@ -656,15 +694,18 @@ execute 0xAD = do
     opLDA ABSOLUTE
 execute 0xBD = do
     updateCycles 4
+    setSuperInstruction True
     opLDA ABSOLUTE_X
 execute 0xB9 = do
     updateCycles 4
+    setSuperInstruction True
     opLDA ABSOLUTE_Y
 execute 0xA1 = do
     updateCycles 6
     opLDA INDIRECT_X
 execute 0xB1 = do
     updateCycles 5
+    setSuperInstruction True
     opLDA INDIRECT_Y
 execute 0xA2 = do
     updateCycles 2
@@ -681,6 +722,7 @@ execute 0xAE = do
 execute 0xBE = do
     updateCycles 4
     opLDX ABSOLUTE_Y
+    setSuperInstruction True
 execute 0xA0 = do
     updateCycles 2
     opLDY IMMEDIATE
@@ -696,6 +738,7 @@ execute 0xAC = do
 execute 0xBC = do
     updateCycles 4
     opLDY ABSOLUTE_X
+    setSuperInstruction True
 execute 0x4A = do
     updateCycles 2
     opLSR ACCUMULATOR
@@ -728,15 +771,18 @@ execute 0x0D = do
     opORA ABSOLUTE
 execute 0x1D = do
     updateCycles 4
+    setSuperInstruction True
     opORA ABSOLUTE_X
 execute 0x19 = do
     updateCycles 4
+    setSuperInstruction True
     opORA ABSOLUTE_Y
 execute 0x01 = do
     updateCycles 6
     opORA INDIRECT_X
 execute 0x11 = do
     updateCycles 5
+    setSuperInstruction True
     opORA INDIRECT_Y
 execute 0x48 = do
     updateCycles 3
@@ -800,15 +846,18 @@ execute 0xED = do
     opSBC ABSOLUTE
 execute 0xFD = do
     updateCycles 4
+    setSuperInstruction True
     opSBC ABSOLUTE_X
 execute 0xF9 = do
     updateCycles 4
+    setSuperInstruction True
     opSBC ABSOLUTE_Y
 execute 0xE1 = do
     updateCycles 6
     opSBC INDIRECT_X
 execute 0xF1 = do
     updateCycles 5
+    setSuperInstruction True
     opSBC INDIRECT_Y
 execute 0x38 = do
     updateCycles 2
@@ -1048,8 +1097,10 @@ opBCC INDIRECT_X = error "Operation BCC does not support INDIRECT_X addressing m
 opBCC INDIRECT_Y = error "Operation BCC does not support INDIRECT_Y addressing mode"
 opBCC RELATIVE = do
     carry_flag <- getFlag CARRY -- Get carry flag
+    when (not carry_flag) (updateCycles 1)
+    when (not carry_flag) (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf (not carry_flag) addr -- Jump if Carry flag is clear
+    when (not carry_flag) (setPC addr)
 
 opBCS ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBCS IMPLICIT = error "Operation BCS does not support IMPLICIT addressing mode"
@@ -1066,8 +1117,10 @@ opBCS INDIRECT_X = error "Operation BCS does not support INDIRECT_X addressing m
 opBCS INDIRECT_Y = error "Operation BCS does not support INDIRECT_Y addressing mode"
 opBCS RELATIVE = do
     carry_flag <- getFlag CARRY -- Get carry flag
+    when carry_flag (updateCycles 1)
+    when carry_flag (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf carry_flag addr -- Jump if Carry flag is set
+    when carry_flag (setPC addr)
 
 opBEQ ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBEQ IMPLICIT = error "Operation BEQ does not support IMPLICIT addressing mode"
@@ -1084,8 +1137,10 @@ opBEQ INDIRECT_X = error "Operation BEQ does not support INDIRECT_X addressing m
 opBEQ INDIRECT_Y = error "Operation BEQ does not support INDIRECT_Y addressing mode"
 opBEQ RELATIVE = do
     zero_flag <- getFlag ZERO -- Get Zero flag
+    when zero_flag (updateCycles 1)
+    when zero_flag (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf zero_flag addr -- Jump if Zero flag is set
+    when zero_flag (setPC addr)
 
 opBIT ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBIT IMPLICIT = error "Operation BIT does not support IMPLICIT addressing mode"
@@ -1123,8 +1178,10 @@ opBMI INDIRECT_X = error "Operation BMI does not support INDIRECT_X addressing m
 opBMI INDIRECT_Y = error "Operation BMI does not support INDIRECT_Y addressing mode"
 opBMI RELATIVE = do
     negative_flag <- getFlag NEGATIVE -- Get Negative flag
+    when negative_flag (updateCycles 1)
+    when negative_flag (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf negative_flag addr -- Jump if Negative flag is set
+    when negative_flag (setPC addr)
 
 opBNE ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBNE IMPLICIT = error "Operation BNE does not support IMPLICIT addressing mode"
@@ -1141,8 +1198,10 @@ opBNE INDIRECT_X = error "Operation BNE does not support INDIRECT_X addressing m
 opBNE INDIRECT_Y = error "Operation BNE does not support INDIRECT_Y addressing mode"
 opBNE RELATIVE = do
     zero_flag <- getFlag ZERO -- Get Zero flag
+    when (not zero_flag) (updateCycles 1)
+    when (not zero_flag) (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf (not zero_flag) addr -- Jump if Zero flag is set
+    when (not zero_flag) (setPC addr)
 
 opBPL ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBPL IMPLICIT = error "Operation BPL does not support IMPLICIT addressing mode"
@@ -1159,8 +1218,10 @@ opBPL INDIRECT_X = error "Operation BPL does not support INDIRECT_X addressing m
 opBPL INDIRECT_Y = error "Operation BPL does not support INDIRECT_Y addressing mode"
 opBPL RELATIVE = do
     negative_flag <- getFlag NEGATIVE -- Get Zero flag
+    when (not negative_flag) (updateCycles 1)
+    when (not negative_flag) (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf (not negative_flag) addr -- Jump if Zero flag is set
+    when (not negative_flag) (setPC addr)
 
 opBRK ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBRK ACCUMULATOR = error "Operation BRK does not support ACCUMULATOR addressing mode"
@@ -1204,8 +1265,10 @@ opBVC INDIRECT_X = error "Operation BVC does not support INDIRECT_X addressing m
 opBVC INDIRECT_Y = error "Operation BVC does not support INDIRECT_Y addressing mode"
 opBVC RELATIVE = do
     overflow_flag <- getFlag OVERFLOW -- Get Overflow flag
+    when (not overflow_flag) (updateCycles 1)
+    when (not overflow_flag) (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf (not overflow_flag) addr -- Jump if Zero flag is set
+    when (not overflow_flag) (setPC addr)
 
 opBVS ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opBVS IMPLICIT = error "Operation BVS does not support IMPLICIT addressing mode"
@@ -1222,8 +1285,10 @@ opBVS INDIRECT_X = error "Operation BVS does not support INDIRECT_X addressing m
 opBVS INDIRECT_Y = error "Operation BVS does not support INDIRECT_Y addressing mode"
 opBVS RELATIVE = do
     overflow_flag <- getFlag OVERFLOW -- Get Overflow flag
+    when overflow_flag (updateCycles 1)
+    when overflow_flag (setSuperInstruction True)
     addr <- getAddr RELATIVE -- Get jump address
-    setPCIf overflow_flag addr -- Jump if Zero flag is set
+    when overflow_flag (setPC addr)
 
 opCLC ::ADDR_MODE -> StateT (MOS6502 a, a) IO ()
 opCLC ACCUMULATOR = error "Operation CLC does not support ACCUMULATOR addressing mode"
