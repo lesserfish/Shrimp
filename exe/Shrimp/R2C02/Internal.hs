@@ -64,6 +64,7 @@ data Context = Context
     , oamAddress :: Word8
     , sprite0Alpha :: Word8
     , sprite0X :: Int
+    , sprite0HitPosition :: Int
     }
 
 data Registers = Registers
@@ -122,7 +123,7 @@ new :: Interface -> IO R2C02
 new interface = do
     p8b <- Display.newLineBuffer (32 * 8)
     let reg = Registers 0 0 0 0 0 0 0 False
-    let ctx = Context False False 0 0 0 0 0 0 0 0 0 0 (-1)
+    let ctx = Context False False 0 0 0 0 0 0 0 0 0 0 (-1) (-1)
     oam <- Memory.new 0xFF 0xFF
     sb <- Display.newLineBuffer (32 * 8)
     bb <- Display.newLineBuffer (32 * 8 + 32)
@@ -453,6 +454,10 @@ getSprite0Alpha = sprite0Alpha . context <$> get
 getSprite0X :: StateT R2C02 IO Int
 getSprite0X = sprite0X . context <$> get
 
+getSprite0HitPosition :: StateT R2C02 IO Int
+getSprite0HitPosition = sprite0HitPosition . context <$> get
+
+
 
 getOAM :: StateT R2C02 IO Memory.RAM
 getOAM = oamData <$> get
@@ -521,6 +526,10 @@ setSprite0Alpha v = modify(\ppu -> ppu{context = (context ppu){sprite0Alpha = v}
 
 setSprite0X :: Int -> StateT R2C02 IO ()
 setSprite0X v = modify(\ppu -> ppu{context = (context ppu){sprite0X = v}})
+
+setSprite0HitPosition :: Int -> StateT R2C02 IO ()
+setSprite0HitPosition v = modify(\ppu -> ppu{context = (context ppu){sprite0HitPosition = v}})
+
 
 
 -- Interface

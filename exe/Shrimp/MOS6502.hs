@@ -1,5 +1,6 @@
 module Shrimp.MOS6502 where
 
+import Data.Maybe
 import Shrimp.Utils
 import Control.Monad
 import Control.Monad.State
@@ -30,6 +31,7 @@ data Context = Context
     { complete :: Bool 
     , decMode :: Bool
     , superInstruction :: Bool
+    , lastInstruction :: String
     }
     deriving (Show)
 
@@ -75,7 +77,7 @@ data MOS6502 a = MOS6502
 new :: Interface a -> (MOS6502 a)
 new interface = MOS6502 reg 0 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
-    ctx = Context False False False
+    ctx = Context False False False ""
 
 -- Setters / Getters
 
@@ -400,6 +402,12 @@ setSuperInstruction v = modifyFst (\mos -> mos{context = (context mos){superInst
 getSuperInstruction :: StateT (MOS6502 a, a) IO Bool
 getSuperInstruction = superInstruction . context . fst <$> get
 
+setLastInstruction :: String -> StateT (MOS6502 a, a) IO ()
+setLastInstruction v = modifyFst (\mos -> mos{context = (context mos){lastInstruction = v}})
+
+getLastInstruction :: StateT (MOS6502 a, a) IO String
+getLastInstruction = lastInstruction . context . fst <$> get
+
 
 fetchComplete :: StateT (MOS6502 a, a) IO Bool
 fetchComplete = do
@@ -418,6 +426,7 @@ tick = do
         else do
             incCounter
             opcode <- fetch
+            setLastInstruction $ fromMaybe "XXX" (fmap fst (opInfo opcode))
             updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
             setComplete True
@@ -433,6 +442,7 @@ tick' = do
         else do
             incCounter
             opcode <- fetch
+            setLastInstruction $ fromMaybe "XXX" (fmap fst (opInfo opcode))
             updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
             return True
@@ -721,8 +731,8 @@ execute 0xAE = do
     opLDX ABSOLUTE
 execute 0xBE = do
     updateCycles 4
-    opLDX ABSOLUTE_Y
     setSuperInstruction True
+    opLDX ABSOLUTE_Y
 execute 0xA0 = do
     updateCycles 2
     opLDY IMMEDIATE
@@ -737,8 +747,8 @@ execute 0xAC = do
     opLDY ABSOLUTE
 execute 0xBC = do
     updateCycles 4
-    opLDY ABSOLUTE_X
     setSuperInstruction True
+    opLDY ABSOLUTE_X
 execute 0x4A = do
     updateCycles 2
     opLSR ACCUMULATOR
