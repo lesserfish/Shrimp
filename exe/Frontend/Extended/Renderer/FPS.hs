@@ -1,7 +1,7 @@
-module Frontend.Renderer.FPS (new, update) where
+module Frontend.Extended.Renderer.FPS (new, update) where
 
 import Data.List
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import Data.Word
 import qualified SDL as SDL

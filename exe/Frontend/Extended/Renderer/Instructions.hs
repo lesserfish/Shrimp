@@ -1,4 +1,4 @@
-module Frontend.Renderer.Instructions (new, update) where
+module Frontend.Extended.Renderer.Instructions (new, update) where
 
 import Data.Bits
 import Data.IORef
@@ -6,11 +6,12 @@ import Data.Text (Text, pack)
 import Data.Word
 import qualified SDL as SDL
 import qualified SDL.Font as Font
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import qualified Shrimp.MOS6502 as MOS
 import qualified Shrimp.BUS as B
 import Text.Printf
+import qualified Shrimp.Cartridge as Frontend
 
 
 renderInstruction :: SDLContext -> Color -> Int -> (Word16, String) -> IO ()

@@ -1,7 +1,7 @@
-module Frontend.Common where
+module Frontend.Simple.Common where
 
 
-import Shrimp.NES
+import qualified Shrimp.Display as Display
 import Control.Monad.State
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TVar
@@ -19,51 +19,21 @@ import Text.Printf (printf)
 data SDLContext = SDLContext
     { sdlWindow :: SDL.Window
     , sdlRenderer :: SDL.Renderer
-    , sdlStatusFont :: Font.Font
-    , sdlNametableFont :: Font.Font
     }
-
-data RenderData = RenderData
-    { rdRenderer :: SDL.Renderer
-    , rdFont :: Font.Font
-    }
-
-data DisplayMode = DM_DISPLAY
-                 | DM_NAMETABLE_1
-                 | DM_NAMETABLE_2
-                 | DM_INSTRUCTION 
-                 | DM_OAM
-                 | DM_PATTERN_1 
-                 | DM_PATTERN_2 
-                 deriving (Show, Eq)
 
 data RenderStatus = RenderStatus
     { rsExit :: Bool
     , rsLastRender :: UTCTime
-    , rsUpdateTextures :: Bool
     , rsRunning :: Bool
-    , rsShowFPS :: Bool
-    }
-
-data RenderTextures = RenderTextures
-    { rtCPUStatus :: SDL.Texture
-    , rtCPUInstructions :: SDL.Texture
-    , rtPattern :: SDL.Texture
-    , rtPalette :: SDL.Texture
-    , rtDisplay :: SDL.Texture
-    , rtNametable :: SDL.Texture
-    , rtFPS :: SDL.Texture
-    , rtOAM :: SDL.Texture
     }
 
 data RenderContext = RenderContext
-    { rcTextures :: RenderTextures
-    , rcStatus :: RenderStatus
+    { rcStatus :: RenderStatus
     , rcCommunicationPipe :: CommPipe
-    , rcLDisplayMode :: DisplayMode
-    , rcRDisplayMode :: DisplayMode
     , rcSDLContext :: SDLContext
     , rcController :: Controller
+    , rcDisplay :: Display.Display
+    , rtScreen :: SDL.Texture
     }
 
 data CKEY = CUP | CDOWN | CLEFT | CRIGHT | CSELECT | CSTART | CA | CB
@@ -99,14 +69,8 @@ getRTE = rte . rcCommunicationPipe <$> get
 getETR :: StateT RenderContext IO (TChan Feedback)
 getETR = etr . rcCommunicationPipe <$> get
 
-getNES :: StateT RenderContext IO NES
-getNES = do
-    tnes <- getTNES
-    nes <- liftIO . atomically $ readTVar tnes
-    return nes
-
-getTNES :: StateT RenderContext IO (TVar NES)
-getTNES = tNES . rcCommunicationPipe <$> get
+getDisplay :: StateT RenderContext IO Display.Display
+getDisplay = rcDisplay <$> get
 
 
 getTCONTROLLER :: StateT RenderContext IO (TVar Word8)
@@ -114,7 +78,6 @@ getTCONTROLLER = tControllerA . rcCommunicationPipe <$> get
 
 getControllerData :: StateT RenderContext IO Word8
 getControllerData = controllerToByte . rcController <$> get
-
 
 setExit :: Bool -> StateT RenderContext IO ()
 setExit v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsExit = v}})
@@ -128,73 +91,15 @@ setRunning v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsRunning = v}}
 getRunning :: StateT RenderContext IO Bool
 getRunning = rsRunning . rcStatus <$> get
 
-setShowFPS :: Bool -> StateT RenderContext IO ()
-setShowFPS v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsShowFPS = v}})
+setLastRender :: UTCTime -> StateT RenderContext IO ()
+setLastRender v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsLastRender = v}})
 
-getShowFPS :: StateT RenderContext IO Bool
-getShowFPS = rsShowFPS . rcStatus <$> get
+getLastRender :: StateT RenderContext IO UTCTime
+getLastRender = rsLastRender . rcStatus <$> get
 
-
-setUpdateTextures :: Bool -> StateT RenderContext IO ()
-setUpdateTextures v = modify (\rctx -> rctx {rcStatus = (rcStatus rctx){rsUpdateTextures = v}})
-
-getUpdateTextures :: StateT RenderContext IO Bool
-getUpdateTextures = rsUpdateTextures . rcStatus <$> get
-
-getSDLContext :: StateT RenderContext IO SDLContext
-getSDLContext = rcSDLContext <$> get
-
--- Auxiliary methods
-
-
-toHex2  :: (Integral a) => a -> String
-toHex2 w = printf "%02X" (fromIntegral w :: Int)
-
-toHex4  :: (Integral a) => a -> String
-toHex4 w = printf "%04X" (fromIntegral w :: Int)
-
-renderString :: RenderData -> String -> (Int, Int) -> Color -> IO ()
-renderString rd string (px, py) color= do
-    let text = pack string
-    let font = rdFont rd
-    let renderer = rdRenderer rd
-    (width, height) <- Font.size font text
-    let position = SDL.P $ SDL.V2 (fromIntegral px) (fromIntegral py)
-    let size = SDL.V2 (fromIntegral width) (fromIntegral height)
-    textSurface <- Font.blended font color text
-    textTexture <- SDL.createTextureFromSurface renderer textSurface
-    SDL.copy renderer textTexture Nothing (Just $ SDL.Rectangle position size)
-    SDL.freeSurface textSurface
-    SDL.destroyTexture textTexture
-
-windowSegment :: (Int, Int) -> (Int, Int) -> Maybe (SDL.Rectangle CInt)
-windowSegment (sx, sy) (w, h) = Just $ SDL.Rectangle (SDL.P $ SDL.V2 (fromIntegral sx) (fromIntegral sy)) (SDL.V2 (fromIntegral w) (fromIntegral h))
 
 
 -- Colors
-
-
-type Color = Font.Color
-black :: Color
-black = SDL.V4 0 0 0 255
-gray :: Color
-gray = SDL.V4 180 180 180 255
-white :: Color
-white = SDL.V4 255 255 255 0
-red :: Color
-red = SDL.V4 255 0 0 255
-green :: Color
-green = SDL.V4 0 255 0 255
-blue :: Color
-blue = SDL.V4 0 0 255 255
-yellow :: Color
-yellow = SDL.V4 255 255 0 255
-magenta :: Color
-magenta = SDL.V4 255 0 255 255
-cyan :: Color
-cyan = SDL.V4 0 255 255 255
-
-
 
 toColor :: Word8 -> BS.ByteString
 toColor 0x00 = BS.pack $ [255, 84, 84, 84]

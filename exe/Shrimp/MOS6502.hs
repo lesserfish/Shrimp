@@ -31,7 +31,6 @@ data Context = Context
     { complete :: Bool 
     , decMode :: Bool
     , superInstruction :: Bool
-    , lastInstruction :: String
     }
     deriving (Show)
 
@@ -70,14 +69,12 @@ data MOS6502 a = MOS6502
     , interface :: !(Interface a)
     }
 
-
 -- Creation
-
 
 new :: Interface a -> (MOS6502 a)
 new interface = MOS6502 reg 0 0 0 ctx interface where
     reg = Registers 0 0 0 0 0 0
-    ctx = Context False False False ""
+    ctx = Context False False False
 
 -- Setters / Getters
 
@@ -402,12 +399,6 @@ setSuperInstruction v = modifyFst (\mos -> mos{context = (context mos){superInst
 getSuperInstruction :: StateT (MOS6502 a, a) IO Bool
 getSuperInstruction = superInstruction . context . fst <$> get
 
-setLastInstruction :: String -> StateT (MOS6502 a, a) IO ()
-setLastInstruction v = modifyFst (\mos -> mos{context = (context mos){lastInstruction = v}})
-
-getLastInstruction :: StateT (MOS6502 a, a) IO String
-getLastInstruction = lastInstruction . context . fst <$> get
-
 
 fetchComplete :: StateT (MOS6502 a, a) IO Bool
 fetchComplete = do
@@ -426,7 +417,6 @@ tick = do
         else do
             incCounter
             opcode <- fetch
-            setLastInstruction $ fromMaybe "XXX" (fmap fst (opInfo opcode))
             updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
             setComplete True
@@ -442,7 +432,6 @@ tick' = do
         else do
             incCounter
             opcode <- fetch
-            setLastInstruction $ fromMaybe "XXX" (fmap fst (opInfo opcode))
             updateCycles (-1) -- Fetch uses one cycle of the instruction
             execute opcode
             return True

@@ -1,7 +1,7 @@
-module Frontend.Renderer.Palette (new, update) where
+module Frontend.Extended.Renderer.Palette (new, update) where
 
 import qualified Data.ByteString as BS
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import Data.Word
 import qualified SDL as SDL

@@ -1,4 +1,4 @@
-module Frontend.Renderer.Display (new, update, clearScreen) where
+module Frontend.Extended.Renderer.Display (new, update, clearScreen) where
 
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (castPtr, Ptr)
@@ -6,7 +6,7 @@ import qualified Data.ByteString as BS
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as UV
 import Control.Monad.State
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import qualified Shrimp.Display as Display
 import Data.Word

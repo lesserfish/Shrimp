@@ -366,11 +366,13 @@ handleEndOfFrame = do
 handlePreRender :: StateT R2C02 IO ()
 handlePreRender = do
     cycle <- getCycle
-    when (cycle == 1) (setSTATUSFlag S_VERTICAL_BLANK False)
-    when (cycle == 1) (setSTATUSFlag S_SPRITE_ZERO_HIT False)
-    when (cycle == 1) (setSprite0X (-1))
-    when (cycle == 1) (setSprite0HitPosition (-1))
-    when (cycle == 1) (setSprite0Alpha 0)
+    when (cycle == 1) (do 
+        setSTATUSFlag S_VERTICAL_BLANK False
+        setSTATUSFlag S_SPRITE_ZERO_HIT False
+        setSprite0X (-1)
+        setSprite0HitPosition (-1)
+        setSprite0Alpha 0
+        )
     when (cycle == 304) transferY
 
 tick :: StateT R2C02 IO ()

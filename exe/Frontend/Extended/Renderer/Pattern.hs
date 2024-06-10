@@ -1,4 +1,4 @@
-module Frontend.Renderer.Pattern (new, update) where
+module Frontend.Extended.Renderer.Pattern (new, update) where
 
 import Data.Bits
 import qualified Shrimp.Cartridge as Cartridge
@@ -7,7 +7,7 @@ import qualified Data.Vector.Unboxed.Mutable as UMV
 import qualified Data.Vector.Unboxed as UV
 import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Marshal.Utils (copyBytes)
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import qualified Shrimp.BUS as B
 import Data.Word

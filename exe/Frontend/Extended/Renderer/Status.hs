@@ -1,4 +1,4 @@
-module Frontend.Renderer.Status (new, update) where
+module Frontend.Extended.Renderer.Status (new, update) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Bits
@@ -6,7 +6,7 @@ import Data.Text (Text, pack)
 import Data.Word
 import qualified SDL as SDL
 import qualified SDL.Font as Font
-import Frontend.Common
+import Frontend.Extended.Common
 import Shrimp.NES
 import qualified Shrimp.BUS as B
 import qualified Shrimp.MOS6502 as MOS

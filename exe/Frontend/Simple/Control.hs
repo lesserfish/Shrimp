@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Frontend.Control (control) where
+module Frontend.Simple.Control (control) where
 
-import qualified Frontend.Renderer.Display as FRDisplay
-import Frontend.Common
+import qualified Shrimp.Display as Display
+import Frontend.Simple.Common
 import Data.Time.Clock
 import Control.Monad
 import Communication
 import Shrimp.NES
 import Control.Concurrent.STM
 import qualified SDL as SDL
-import Frontend.Common
 import Control.Monad.State
 
 
@@ -32,9 +31,6 @@ toggleEmulation = do
     liftIO . atomically $ writeTChan comm cmd
     (not <$> getRunning) >>= setRunning
 
-toggleShowFPS :: StateT RenderContext IO ()
-toggleShowFPS = (not <$> getShowFPS) >>= setShowFPS
-
 sendTick :: StateT RenderContext IO ()
 sendTick = do
     rctx <- get
@@ -51,41 +47,10 @@ sendFrame = do
     comm <- getRTE
     liftIO . atomically $ writeTChan comm FRAME
 
-
-handleFeedback :: Feedback -> StateT RenderContext IO ()
-handleFeedback CPUCOMPLETE = setUpdateTextures True
-
-fetchFeedback :: StateT RenderContext IO ()
-fetchFeedback = do
-    comm <- getETR
-    command <- liftIO . atomically $ tryReadTChan comm
-    case command of
-        Nothing -> return ()
-        Just info -> do
-            handleFeedback info
-
-
-
-modeRight :: StateT RenderContext IO ()
-modeRight = modify (\rctx -> rctx{rcRDisplayMode = prevMode . rcRDisplayMode $ rctx}) where
-    prevMode DM_PATTERN_1 = DM_PATTERN_2
-    prevMode DM_PATTERN_2 = DM_INSTRUCTION
-    prevMode DM_INSTRUCTION = DM_OAM
-    prevMode DM_OAM = DM_PATTERN_1
-    prevMode _ = DM_PATTERN_1
-
-modeUp :: StateT RenderContext IO ()
-modeUp = modify (\rctx -> rctx{rcLDisplayMode = prevMode . rcLDisplayMode $ rctx}) where
-    prevMode DM_DISPLAY = DM_NAMETABLE_1
-    prevMode DM_NAMETABLE_1 = DM_NAMETABLE_2
-    prevMode DM_NAMETABLE_2 = DM_DISPLAY
-    prevMode _ = DM_DISPLAY
-
 clearScreen :: StateT RenderContext IO ()
 clearScreen = do
-    nes <- getNES
-    liftIO $ FRDisplay.clearScreen nes
-
+    display <- getDisplay
+    liftIO $ Display.reset display
 
 
 modifyController :: (Controller -> Controller) -> StateT RenderContext IO ()
@@ -117,9 +82,6 @@ handleKeydown SDL.KeycodeSpace      = toggleEmulation
 handleKeydown SDL.KeycodeC          = sendTick
 handleKeydown SDL.KeycodeT          = sendFullTick 
 handleKeydown SDL.KeycodeF          = sendFrame
-handleKeydown SDL.KeycodeI          = modeUp >> (setUpdateTextures True)
-handleKeydown SDL.KeycodeO          = modeRight >> (setUpdateTextures True)
-handleKeydown SDL.KeycodeP          = toggleShowFPS
 handleKeydown SDL.KeycodeUp         = controllerUP CUP
 handleKeydown SDL.KeycodeDown       = controllerUP CDOWN
 handleKeydown SDL.KeycodeRight      = controllerUP CRIGHT
@@ -157,18 +119,6 @@ handleEvents e = do
         SDL.QuitEvent -> exitProgram
         _ -> return ()
    
-frameReady :: StateT RenderContext IO Bool
-frameReady = do
-    rctx <- get
-    let before = rsLastRender . rcStatus $ rctx
-    now <- liftIO $ getCurrentTime
-    let diff = diffUTCTime now before
-    if diff > (1/60)
-        then do
-            put rctx{rcStatus = (rcStatus rctx){rsLastRender = now}}
-            return True
-        else return False
-
 updateController :: StateT RenderContext IO ()
 updateController = do
     tcontroller <- getTCONTROLLER
@@ -180,5 +130,4 @@ control :: StateT RenderContext IO ()
 control = do
     events <- SDL.pollEvents
     mapM_ handleEvents events
-    fetchFeedback
     updateController
