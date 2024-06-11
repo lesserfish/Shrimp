@@ -1,5 +1,6 @@
 module Shrimp.MOS6502 where
 
+import Data.Maybe
 import Shrimp.Utils
 import Control.Monad
 import Control.Monad.State
@@ -68,9 +69,7 @@ data MOS6502 a = MOS6502
     , interface :: !(Interface a)
     }
 
-
 -- Creation
-
 
 new :: Interface a -> (MOS6502 a)
 new interface = MOS6502 reg 0 0 0 ctx interface where
@@ -721,8 +720,8 @@ execute 0xAE = do
     opLDX ABSOLUTE
 execute 0xBE = do
     updateCycles 4
-    opLDX ABSOLUTE_Y
     setSuperInstruction True
+    opLDX ABSOLUTE_Y
 execute 0xA0 = do
     updateCycles 2
     opLDY IMMEDIATE
@@ -737,8 +736,8 @@ execute 0xAC = do
     opLDY ABSOLUTE
 execute 0xBC = do
     updateCycles 4
-    opLDY ABSOLUTE_X
     setSuperInstruction True
+    opLDY ABSOLUTE_X
 execute 0x4A = do
     updateCycles 2
     opLSR ACCUMULATOR

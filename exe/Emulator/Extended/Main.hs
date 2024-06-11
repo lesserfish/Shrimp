@@ -1,4 +1,4 @@
-module Emulator.Main (
+module Emulator.Extended.Main (
    startLoop,
    loop,
    initializeEmulator
@@ -12,8 +12,10 @@ import Control.Monad
 import Communication
 import Shrimp.NES
 import qualified Shrimp.BUS as B
+import qualified Shrimp.MOS6502 as MOS
 import Control.Concurrent.STM
 import Control.Monad.State
+import qualified Shrimp.MOS6502 as MOS
 
 data EmulatorContext = EmulatorContext
     { ecPipe :: CommPipe
@@ -51,13 +53,11 @@ initializeEmulator pipe = do
     now <- getCurrentTime
     return $ EmulatorContext pipe False False now
 
-
 tick :: StateT EmulatorContext IO ()
 tick = do
     nes <- getNES
     (_, nes') <- liftIO $ B.tick nes
     setNES nes'
-
 
 fullTick :: StateT EmulatorContext IO ()
 fullTick = do

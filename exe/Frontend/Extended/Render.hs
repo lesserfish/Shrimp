@@ -1,4 +1,4 @@
-module Frontend.Render (render) where
+module Frontend.Extended.Render (render) where
 
 import Foreign.C.Types (CInt)
 import Control.Monad
@@ -7,15 +7,15 @@ import qualified SDL as SDL
 import qualified SDL.Font as Font
 import Data.Time
 import Control.Monad.State
-import Frontend.Common
-import qualified Frontend.Renderer.Display as FRDisplay
-import qualified Frontend.Renderer.Instructions as FRInstructions
-import qualified Frontend.Renderer.Palette as FRPalette
-import qualified Frontend.Renderer.Pattern as FRPattern
-import qualified Frontend.Renderer.Status as FRStatus
-import qualified Frontend.Renderer.Nametable as FRNametable
-import qualified Frontend.Renderer.FPS as FRFPS
-import qualified Frontend.Renderer.OAM as FROAM
+import Frontend.Extended.Common
+import qualified Frontend.Extended.Renderer.Display as FRDisplay
+import qualified Frontend.Extended.Renderer.Instructions as FRInstructions
+import qualified Frontend.Extended.Renderer.Palette as FRPalette
+import qualified Frontend.Extended.Renderer.Pattern as FRPattern
+import qualified Frontend.Extended.Renderer.Status as FRStatus
+import qualified Frontend.Extended.Renderer.Nametable as FRNametable
+import qualified Frontend.Extended.Renderer.FPS as FRFPS
+import qualified Frontend.Extended.Renderer.OAM as FROAM
 
 
 getFPS :: StateT RenderContext IO Int

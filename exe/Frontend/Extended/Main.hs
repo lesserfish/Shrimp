@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Frontend.Main ( 
+module Frontend.Extended.Main ( 
     initializeFrontend,
     quit,
     startLoop,
@@ -14,17 +14,17 @@ import Shrimp.NES
 import qualified SDL as SDL
 import qualified SDL.Font as Font
 import Control.Monad.State
-import Frontend.Common
-import qualified Frontend.Renderer.Display as FRDisplay
-import qualified Frontend.Renderer.Instructions as FRInstructions
-import qualified Frontend.Renderer.Palette as FRPalette
-import qualified Frontend.Renderer.Pattern as FRPattern
-import qualified Frontend.Renderer.Status as FRStatus
-import qualified Frontend.Renderer.Nametable as FRNametable
-import qualified Frontend.Renderer.FPS as FRFPS
-import qualified Frontend.Renderer.OAM as FROAM
-import Frontend.Control
-import Frontend.Render
+import Frontend.Extended.Common
+import qualified Frontend.Extended.Renderer.Display as FRDisplay
+import qualified Frontend.Extended.Renderer.Instructions as FRInstructions
+import qualified Frontend.Extended.Renderer.Palette as FRPalette
+import qualified Frontend.Extended.Renderer.Pattern as FRPattern
+import qualified Frontend.Extended.Renderer.Status as FRStatus
+import qualified Frontend.Extended.Renderer.Nametable as FRNametable
+import qualified Frontend.Extended.Renderer.FPS as FRFPS
+import qualified Frontend.Extended.Renderer.OAM as FROAM
+import Frontend.Extended.Control
+import Frontend.Extended.Render
 
 initializeSDL :: IO SDLContext
 initializeSDL = do

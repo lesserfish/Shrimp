@@ -227,6 +227,7 @@ preRenderBackground = do
     renderBackground <- getMASKFlag M_RENDER_BACKGROUND
     when renderBackground preRenderBackground'
 
+
 -- Sprite 0 collision logic
 
 
@@ -260,8 +261,8 @@ bgOpaque screenX = do
     (pixel, _) <- readFromBGBuffer screenX
     return $ pixel > 0
 
-checkSprite0Hit :: StateT R2C02 IO ()
-checkSprite0Hit = do
+checkSprite0Hit' :: Int -> StateT R2C02 IO ()
+checkSprite0Hit' screenX = do
     -- List of conditions for sprite 0 hit
     -- 1. Sprite 0 is being rendered
     -- 2. Sprite 0 flag has not been set in this frame
@@ -270,8 +271,6 @@ checkSprite0Hit = do
     -- 5. Mask.Render_Background is set
     -- 6. Mask.Render_Foreground is set
     -- 7. If not (Mask.Render_Background_Left) or not(Mask.Render_Sprites_Left), then cycle >= 9
-
-    screenX  <- getScreenX
 
     -- Conditions (This might be ugly, but it gives us better performance
     check1 <- s0BeingRendered screenX
@@ -289,13 +288,24 @@ checkSprite0Hit = do
                             backgroundLeft <- getMASKFlag M_RENDER_BACKGROUND_LEFT
                             spriteLeft <- getMASKFlag M_RENDER_SPRITES_LEFT
                             let check7 = if (backgroundLeft || spriteLeft) then screenX >= 8 else True
-                            when check7 (setSTATUSFlag S_SPRITE_ZERO_HIT True)
+                            when check7 (setSprite0HitPosition screenX)
+                            --when check7 (setSTATUSFlag S_SPRITE_ZERO_HIT True)
                             )
                         )
                     )
                 )
             )
         )
+
+checkSprite0Hit :: StateT R2C02 IO ()
+checkSprite0Hit = do
+    screenX <- getScreenX
+    screenHit <- getSprite0HitPosition
+    when (screenX == screenHit) (setSTATUSFlag S_SPRITE_ZERO_HIT True)
+    
+
+preCheck0SpriteHit :: StateT R2C02 IO ()
+preCheck0SpriteHit = mapM_ checkSprite0Hit' [0..255]
     
 -- PPU Logic
 
@@ -327,16 +337,20 @@ render screenX = do
     -- liftIO . putStr $ " " ++ show bgPixel
     setPixel (toW16 screenX, toW16 screenY) color
 
+preRender :: StateT R2C02 IO ()
+preRender = mapM_ render [0..255]
 
 handleVisibleScanline :: StateT R2C02 IO ()
 handleVisibleScanline = do
     cycle <- getCycle
     when (cycle == 1) preRenderBackground
+    when (cycle == 1) preCheck0SpriteHit
+    when (cycle == 1) preRender
     when (cycle == 257) preRenderSprites
     when (cycle == 257) incFineY
     when (cycle == 257) transferX
-    when (cycle >= 1 && cycle < 257) (render $ cycle - 1)
     when (cycle >= 1 && cycle < 257) checkSprite0Hit
+    --when (cycle >= 1 && cycle < 257) (render $ cycle - 1)
 
 
 handleEndOfFrame :: StateT R2C02 IO ()
@@ -352,10 +366,13 @@ handleEndOfFrame = do
 handlePreRender :: StateT R2C02 IO ()
 handlePreRender = do
     cycle <- getCycle
-    when (cycle == 1) (setSTATUSFlag S_VERTICAL_BLANK False)
-    when (cycle == 1) (setSTATUSFlag S_SPRITE_ZERO_HIT False)
-    when (cycle == 1) (setSprite0X (-1))
-    when (cycle == 1) (setSprite0Alpha 0)
+    when (cycle == 1) (do 
+        setSTATUSFlag S_VERTICAL_BLANK False
+        setSTATUSFlag S_SPRITE_ZERO_HIT False
+        setSprite0X (-1)
+        setSprite0HitPosition (-1)
+        setSprite0Alpha 0
+        )
     when (cycle == 304) transferY
 
 tick :: StateT R2C02 IO ()

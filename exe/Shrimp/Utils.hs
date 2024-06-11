@@ -162,14 +162,14 @@ takeShift8 :: Integer -> Int -> Word64 -> Word64
 takeShift8 t s x = (x .&. (2 ^ t - 1)) .<<. s
 
 
-timeIt :: IO a -> IO a
+timeIt :: (MonadIO m) => m a -> m a
 timeIt action = do
-    before <- getCPUTime
+    before <- liftIO getCPUTime
     output <- action
-    after <- getCPUTime
+    after <- liftIO getCPUTime
     let diff = after - before
     let microseconds = div diff 1000000
-    putStrLn $ "CPU Time difference: " ++ show microseconds ++ " microseconds"
+    liftIO . putStrLn $ "CPU Time difference: " ++ show microseconds ++ " microseconds"
     return output
 
 
