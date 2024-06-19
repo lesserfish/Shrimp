@@ -8,7 +8,7 @@ https://github.com/lesserfish/Shrimp/assets/73536889/a9b3af14-4ef6-4c25-a511-703
 
 
 
-It currently only supports Mapper0, has no audio, and is not very fast (~ 40 FPS). Quite honestly, I have no bloody idea how to optimize this and might just rewrite the entire thing in Rust.
+It currently only supports Mapper0, has no audio, and is not very fast (~ 40 FPS). Quite honestly, I have no bloody idea how to optimize this and ~~might just rewrite the entire thing in Rust.~~ [~~](https://github.com/lesserfish/Coral)
 
 ## Roadmaps:
 
